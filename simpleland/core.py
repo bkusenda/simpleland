@@ -6,21 +6,18 @@ import pymunk
 from pymunk import Vec2d
 
 from .common import (PhysicsConfig, SLBody, SLCircle, SLClock, SLVector, SLSpace,
-                               SLEvent, SLLine, SLObject, SLPoint, SLPolygon,
-                               SLMoveEvent, SLMechanicalEvent, FollowBehaviour, SLPlayerCollisionEvent, SLViewEvent)
+                               SLEvent, SLLine, SLObject, SLPolygon,
+                               SLMoveEvent, SLMechanicalEvent, SLPlayerCollisionEvent, SLViewEvent, Singleton)
 from .player import SLPlayer
 from .utils import gen_id
 from .object_manager import SLObjectManager
 
-
-
-class SLEventManager(object):
+class SLEventManager(metaclass=Singleton):
     """
     Contains references to all game events
     """
 
     def __init__(self):
-        super().__init__()
         self.__events: Dict[str, SLEvent] = {}
 
     def add_update(self, e: SLEvent):
@@ -39,6 +36,15 @@ class SLEventManager(object):
     def remove_event_by_id(self, id):
         del self.__events[id]
 
+    def get_snapshot(self):
+        results = {}
+        for k,o in self.__events.items():
+            results[k]= o.get_snapshot()
+        return results
+
+    def load_snapshot(self,data):
+        for k,o in data.items():
+            self.__events[k].load_snapshot(o)
 
 class SLPhysicsEngine:
     """
@@ -52,18 +58,16 @@ class SLPhysicsEngine:
         self.space.damping = self.config.space_damping
         self.events = []
 
-    def add_player_collision_event(self, player: SLPlayer, obj: SLObject):
+    def enable_collision_detection(self, callback):
 
-        player.get_object().set_collision_type(1)
-        obj.set_collision_type(2)
 
-        h = self.space.add_collision_handler(1, 2)
+        h = self.space.add_collision_handler(1, 1)
 
-        def pre_solve(arbiter, space, data):
-            self.add_event(SLPlayerCollisionEvent(player.uid, obj))
+        def begin(arbiter, space, data):
+            callback(arbiter,space,data)
             return True
 
-        h.pre_solve = pre_solve
+        h.begin = begin
 
     def add_event(self, event: SLEvent):
         self.events.append(event)
@@ -102,8 +106,8 @@ class SLPhysicsEngine:
         return []
 
     def process_view_event(self, e: SLViewEvent):
-        e.object.get_viewer().distance += e.distance_diff
-        e.object.get_viewer().angle = e.angle_diff
+        e.object.get_camera().distance += e.distance_diff
+        e.object.get_camera().angle = e.angle_diff
         return []
 
     def update(self, event_manager: SLEventManager, object_manager: SLObjectManager):

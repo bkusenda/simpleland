@@ -1,5 +1,4 @@
 import uuid
 
-
-def gen_id(prefix=None):
-    return uuid.uuid1()
+def gen_id() -> str:
+    return str(uuid.uuid1())

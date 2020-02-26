@@ -5,15 +5,16 @@ import numpy as np
 import pygame
 
 
-from simpleland.common import (FollowBehaviour, PhysicsConfig, SLBody,
+from simpleland.common import (PhysicsConfig, SLBase, SLBody,
                                SLCircle, SLClock, SLEvent, SLLine, SLAdminEvent,
                                SLMechanicalEvent, SLMoveEvent, SLObject,
-                               SLPlayerCollisionEvent, SLPoint, SLPolygon,
+                               SLPlayerCollisionEvent, SLPolygon,
                                SLSpace, SLVector, SLViewEvent)
 
 from simpleland.utils import gen_id
 
-class SLPlayer(object):
+
+class SLPlayer(SLBase):
 
     def __init__(self, uid=0):
         """
@@ -41,15 +42,6 @@ class SLPlayer(object):
     def get_object(self) -> SLObject:
         return self._obj
 
-    def pull_input_events(self) -> List[SLEvent]:
-        raise NotImplementedError
-
-    def add_event(self, event: SLEvent):
-        raise NotImplementedError
-
-    def clear_events(self):
-        raise NotImplementedError
-
 
 class SLHumanPlayer(SLPlayer):
 
@@ -58,7 +50,7 @@ class SLHumanPlayer(SLPlayer):
 
         :return:
         """
-        super(SLHumanPlayer, self).__init__()        
+        super(SLHumanPlayer, self).__init__()
         self.blocking_player = True
         self.block_sleep_secs = 0.01
         self.ready = False
@@ -146,7 +138,7 @@ class SLHumanPlayer(SLPlayer):
 class SLAgentPlayer(SLPlayer):
 
     def __init__(self):
-        super(SLAgentPlayer, self).__init__()        
+        super(SLAgentPlayer, self).__init__()
         """
 
         :return:
@@ -154,7 +146,6 @@ class SLAgentPlayer(SLPlayer):
         self.blocking_player = True
         self.block_sleep_secs = 0.00
         self.ready = False
-        self.events = []
 
     def pull_input_events(self) -> List[SLEvent]:
         return self.events

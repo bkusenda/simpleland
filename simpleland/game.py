@@ -1,15 +1,41 @@
 from typing import Set
 
-from .common import (FollowBehaviour, PhysicsConfig, SLAdminEvent, SLBody,
+from .common import (PhysicsConfig, SLAdminEvent, SLBody,
                      SLCircle, SLClock, SLEvent, SLLine, SLMechanicalEvent,
-                     SLMoveEvent, SLObject, SLPlayerCollisionEvent, SLPoint,
+                     SLMoveEvent, SLObject, SLPlayerCollisionEvent,
                      SLPolygon, SLRewardEvent, SLSpace, SLVector, SLViewEvent)
 from .core import SLEventManager, SLPhysicsEngine
 from .object_manager import SLObjectManager
 from .player import SLPlayer, SLPlayerManager
 from .renderer import SLRenderer
 from .utils import gen_id
+from pymunk import Vec2d
 
+import json
+from uuid import UUID
+
+class StateEncoder(json.JSONEncoder):
+    def default(self, obj): # pylint: disable=E0202
+        if type(obj) == Vec2d:
+            return {
+                "_type": "Vec2d",
+                "x":obj.x,
+                "y":obj.y}
+        return json.JSONEncoder.default(self, obj)
+
+
+class StateDecoder(json.JSONDecoder):
+
+    def __init__(self, *args, **kwargs):
+        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
+
+    def object_hook(self, obj): # pylint: disable=E0202
+        if '_type' not in obj:
+            return obj
+        type = obj['_type']
+        if type == 'Vec2d':
+            return Vec2d(obj['x'],obj['y'])
+        return obj
 
 class SLGame:
 
@@ -44,12 +70,6 @@ class SLGame:
                     self.change_game_state("QUITING")
                     events_to_remove.append(e)
 
-            if type(e) == SLPlayerCollisionEvent:
-                e: SLPlayerCollisionEvent = e
-                self.player_manager.get_player(e.player_id).apply_health_update(-1.0)
-                new_events.append(SLRewardEvent(e.player_id, -1))
-                events_to_remove.append(e)
-
         for e in events_to_remove:
             self.event_manager.remove_event_by_id(e.get_id())
 
@@ -75,50 +95,6 @@ class SLGame:
     def get_new_player_location(self):
         return SLVector.zero()
 
-    def pull_physical_events(self):
-        return self.physics_engine.pull_events()
-
-    def get_behavior_events(self):
-        """
-        TODO: Relocate me
-        :return:
-        """
-        events = []
-        for obj in self.object_manager.get_all_objects():
-            for behavior in obj.behavior_list:
-                if type(behavior) == FollowBehaviour:
-                    behavior: FollowBehaviour = behavior
-                    target_pos: SLPoint = behavior.obj.get_body().position
-                    obj_pos = obj.get_body().position
-                    direction = obj_pos - target_pos
-                    self.direction = direction
-                    distance = obj_pos.get_distance(target_pos)
-                    if distance > 0:
-                        new_direction = direction / distance * -1
-
-                        events.append(SLMechanicalEvent(obj,
-                                                        direction=new_direction,
-                                                        orientation_diff=0.0))
-        return events
-
-    def physics_update(self, event_manager: SLEventManager):
-        self.physics_engine.update(event_manager, self.object_manager)
-
-    def get_step_reward(self):
-        # TODO: need to make this so it works for multiple users,
-        # TODO: events should expire!
-        step_reward = 0
-        events_to_remove = []
-        for e in self.event_manager.get_events():
-            if type(e) == SLRewardEvent:
-                e: SLRewardEvent = e
-                step_reward += e.reward
-                events_to_remove.append(e)
-
-        for e in events_to_remove:
-            self.event_manager.remove_event_by_id(e.get_id())
-        return step_reward
-
     def quit(self):
         pass
 
@@ -128,29 +104,32 @@ class SLGame:
     def step(self):
         # Get Input From Players
         self.event_manager.add_events(self.player_manager.pull_events())
-        self.event_manager.add_events(self.pull_physical_events())
-        self.event_manager.add_events(self.get_behavior_events())
+        self.event_manager.add_events(self.physics_engine.pull_events())
 
         self.check_game_events()
-        self.physics_update(self.event_manager)
+        self.physics_engine.update(self.event_manager, self.object_manager)
 
-    def manual_player_action_step(self, action_set: Set[int], puid: str):
-        # this should be handled on client side
-        player = self.player_manager.get_player(puid)
-        player.add_input(action_set)
-        self.step()
-        # player.process_frame(self.universe)
-        obs = player.renderer.get_observation()
-        step_reward = self.get_step_reward()
-        done = self.game_state == "QUITING"
-        return obs, step_reward, done
+    # def manual_player_action_step(self, action_set: Set[int], puid: str):
+    #     # this should be handled on client side
+    #     player = self.player_manager.get_player(puid)
+    #     player.add_input(action_set)
+    #     self.step()
+    #     # player.process_frame(self.universe)
+    #     obs = player.renderer.get_observation()
+    #     # step_reward = self.get_step_reward()
+    #     done = self.game_state == "QUITING"
+    #     return obs, step_reward, done
 
-    def run(self, obj: SLObject, renderer: SLRenderer, max_frames = None):
+    def run(self, obj: SLObject, renderer: SLRenderer, max_steps = None):
         """
 
         :return:
         """
+        import json
         self.start()
+
+
+        step_counter = 0
 
         while self.game_state == "RUNNING":
             """
@@ -158,6 +137,20 @@ class SLGame:
             self.step()
             renderer.process_frame(obj,self.object_manager)
             renderer.render_frame()
+
+            obj_man_snapshot = self.object_manager.get_snapshot()
+            print(obj_man_snapshot)
+            event_man_snapshot =  self.event_manager.get_snapshot()
+            encoded_as_st = json.dumps(obj_man_snapshot, indent=4, cls=StateEncoder)
+            #print(encoded_as_st)
+            results = json.loads(encoded_as_st,cls=StateDecoder)
+            self.object_manager.clear_objects()
+            self.object_manager.load_snapshot(results)
+
+            step_counter += 1
+            if max_steps and step_counter > max_steps:
+                self.game_state = "QUITING"
+
 
 
 

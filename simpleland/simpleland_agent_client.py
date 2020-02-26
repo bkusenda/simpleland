@@ -2,7 +2,7 @@ import numpy as np
 from gym import spaces
 from gym import Env
 from typing import Tuple
-from simpleland.core import SLUniverse, SLPoint, SLShapeFactory, SLItemFactory, SLBody, \
+from simpleland.core import SLUniverse, SLVector, SLShapeFactory, SLItemFactory, SLBody, \
     FollowBehaviour, SLEntity, SLViewer, SLPlayer
 from simpleland.game import SLGame
 from simpleland.physics import SLPymunkPhysicsEngine
@@ -17,29 +17,29 @@ def join_game(resolution) -> Tuple[SLGame, SLPlayer]:
     physics_engine = SLPymunkPhysicsEngine()
 
     player_object = SLEntity(SLBody(mass=8, moment=30), viewer=SLViewer(distance=12))
-    player_object.set_position(SLPoint(10, 10))
+    player_object.set_position(SLVector(10, 10))
 
     SLShapeFactory.attach_psquare(player_object, 1)
 
     box = SLItemFactory.box(
         body=SLBody(mass=11, moment=1),
-        position=SLPoint(2, 2),
+        position=SLVector(2, 2),
         size=1)
 
     # triangle = SLItemFactory.triangle(
     #     body=SLBody(mass=11, moment=1),
-    #     position=SLPoint(4, 4),
+    #     position=SLVector(4, 4),
     #     size=1)
 
     hostile_object = SLEntity(SLBody(mass=50, moment=1))
-    hostile_object.set_position(position=SLPoint(6, 6))
+    hostile_object.set_position(position=SLVector(6, 6))
     hostile_object.attach_behavior(FollowBehaviour(player_object))
     SLShapeFactory.attach_circle(hostile_object, 1)
 
     items = []
 
     # for i in range(0, 10):
-    #     pos = SLPoint(random.randint(0, 10), random.randint(0, 10))
+    #     pos = SLVector(random.randint(0, 10), random.randint(0, 10))
     #     item = SLItemFactory.box(body=SLBody(mass=11, moment=1),
     #                              position=pos,
     #                              size=1)
@@ -47,7 +47,7 @@ def join_game(resolution) -> Tuple[SLGame, SLPlayer]:
     #     items.append(item)
 
     wall = SLItemFactory.border(physics_engine.space.static_body,
-                                SLPoint(0, 0),
+                                SLVector(0, 0),
                                 size=20)
 
     universe = SLUniverse(physics_engine)

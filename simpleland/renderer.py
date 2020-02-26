@@ -84,7 +84,7 @@ class SLRenderer:
                     screen_view_center,
                     angle,
                     center):
-        obj_pos = obj.get_body().position
+        obj_pos = obj.get_body().position + circle.offset # Doesn't work with offset
         obj_location = (obj_pos - center)
         obj_location = obj_location.rotated(angle)
         p = screen_factor * (obj_location + screen_view_center)
@@ -169,7 +169,7 @@ class SLRenderer:
         console_log = []
 
 
-        self.update_view(view_obj.get_viewer().get_distance())
+        self.update_view(view_obj.get_camera().get_distance())
         center = view_obj.get_body().position
         angle = view_obj.get_body().angle
 
