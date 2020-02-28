@@ -158,7 +158,7 @@ class SLRenderer:
 
     # TODO: Clean this up
     def process_frame(self,
-                    view_obj:SLObject,
+                    obj_id:str,
                     object_manager: SLObjectManager,
                     additional_data: Dict[str, Any]={},
                     show_console=False):
@@ -167,6 +167,7 @@ class SLRenderer:
             self.on_init()
         self._display_surf.fill((0, 0, 0))
         console_log = []
+        view_obj = object_manager.get_by_id(obj_id)
 
 
         self.update_view(view_obj.get_camera().get_distance())

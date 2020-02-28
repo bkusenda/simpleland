@@ -13,6 +13,7 @@ from pymunk import Vec2d
 
 import json
 from uuid import UUID
+import json
 
 class StateEncoder(json.JSONEncoder):
     def default(self, obj): # pylint: disable=E0202
@@ -46,6 +47,7 @@ class SLGame:
         self.event_manager = SLEventManager()
         self.renderer = SLRenderer()
         self.game_state = "NOT_READY"
+        self.step_counter = 0
 
 
     def change_game_state(self, new_state):
@@ -57,7 +59,6 @@ class SLGame:
             self.change_game_state("READY")
         else:
             print("State must be NOT_READY, current state is %s" % self.game_state)
-
         self.change_game_state("RUNNING")
 
     def check_game_events(self):
@@ -80,34 +81,14 @@ class SLGame:
             self.object_manager.add(obj)
             self.physics_engine.add_object(obj)
 
-    def attach_static_objects(self, objs):
-        for obj in objs:
-            self.object_manager.add(obj)
-            self.physics_engine.add_static_object(obj)
-
     def get_object_manager(self) -> SLObjectManager:
-        """
-
-        :return:
-        """
         return self.object_manager
-
-    def get_new_player_location(self):
-        return SLVector.zero()
 
     def quit(self):
         pass
 
     def add_player(self, player: SLPlayer):
         self.player_manager.add_player(player)
-
-    def step(self):
-        # Get Input From Players
-        self.event_manager.add_events(self.player_manager.pull_events())
-        self.event_manager.add_events(self.physics_engine.pull_events())
-
-        self.check_game_events()
-        self.physics_engine.update(self.event_manager, self.object_manager)
 
     # def manual_player_action_step(self, action_set: Set[int], puid: str):
     #     # this should be handled on client side
@@ -120,68 +101,78 @@ class SLGame:
     #     done = self.game_state == "QUITING"
     #     return obs, step_reward, done
 
-    def run(self, obj: SLObject, renderer: SLRenderer, max_steps = None):
+    def get_game_snapshot(self):
+        return {
+            'object_manager': self.object_manager.get_snapshot(),
+            'event_manager': self.event_manager.get_snapshot()
+        }
+        
+
+    def load_game_snapshot(self,data):
+        self.event_manager.load_snapshot(data['event_manager'])
+        new_objs = self.object_manager.load_snapshot(data['object_manager'])
+        for o in new_objs:
+            self.physics_engine.add_object(o)
+
+
+    def step(self):
+        # self.event_manager.add_events(self.player_manager.pull_events())
+        # self.event_manager.add_events(self.physics_engine.pull_events())
+
+        # self.check_game_events()
+        self.physics_engine.apply_events(self.event_manager, self.object_manager)
+        self.physics_engine.update(self.object_manager)
+        self.step_counter+=1
+        # print("Step: {}".format(self.step_counter))
+
+    def run(self, obj_id: str, renderer: SLRenderer, max_steps = None):
         """
 
         :return:
         """
-        import json
         self.start()
 
 
         step_counter = 0
+        remove_objs = False
 
         while self.game_state == "RUNNING":
             """
             """
-            self.step()
-            renderer.process_frame(obj,self.object_manager)
-            renderer.render_frame()
 
+            # Get Input From Players
+            self.event_manager.add_events(self.player_manager.pull_events())
+            self.event_manager.add_events(self.physics_engine.pull_events())
+
+            self.check_game_events()
+            self.physics_engine.apply_events(self.event_manager, self.object_manager)
+            self.physics_engine.update(
+                self.event_manager, 
+                self.object_manager)
+
+            # Send Recieve Data (Network stuff eventually)
             obj_man_snapshot = self.object_manager.get_snapshot()
-            print(obj_man_snapshot)
-            event_man_snapshot =  self.event_manager.get_snapshot()
-            encoded_as_st = json.dumps(obj_man_snapshot, indent=4, cls=StateEncoder)
-            #print(encoded_as_st)
-            results = json.loads(encoded_as_st,cls=StateDecoder)
-            self.object_manager.clear_objects()
+            encoded_as_st = json.dumps(obj_man_snapshot, 
+                indent= 4, 
+                cls= StateEncoder)
+
+            # Clear data test
+            if remove_objs:
+                for o in self.object_manager.get_all_objects():
+                    self.physics_engine.remove_object(o)
+                self.object_manager.clear_objects()
+
+            results = json.loads(encoded_as_st, cls=StateDecoder)
             self.object_manager.load_snapshot(results)
 
+            if remove_objs:
+                for o in self.object_manager.get_all_objects():
+                    self.physics_engine.add_object(o)
+            
+            # Render
+            renderer.process_frame(obj_id,self.object_manager)
+            renderer.render_frame()
+            
             step_counter += 1
             if max_steps and step_counter > max_steps:
                 self.game_state = "QUITING"
-
-
-
-
-
-    # def process_frame(self, universe: SLUniverse):
-    #     """
-
-    #     :return:
-    #     """
-    #     additional_info = {'console info': "health:%s" % self.health}
-    #     self.renderer.process_frame(
-    #         SLViewState(self.get_object(), universe), 
-    #         additional_info)
-
-    # def quit(self):
-    #     self.renderer.quit()
-
-
-    #     def process_frame(self, universe: SLUniverse):
-    #     """
-
-    #     :return:
-    #     """
-    #     additional_info = {'console info': "health:%s" % self.health}
-    #     self.renderer.process_frame(SLViewState(self.get_object(), universe), additional_info)
-
-
-    # def process_frame(self, universe: SLUniverse):
-    #     """
-
-    #     :return:
-    #     """
-    #     self.renderer.render_frame(SLViewState(self.get_object(), universe))
-    #     self.ready = True

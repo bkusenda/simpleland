@@ -16,13 +16,14 @@ def get_dict_snapshot(obj, exclude_keys = {}):
             continue
         if issubclass(type(v), SLBase):
             data[k] = v.get_snapshot()
-        elif v is None or isinstance(v, (int, float, str)):
+        elif v is None or isinstance(v, (int, float, str, SLVector)):
             data[k] = v
         elif type(v) is list:
             data[k] = []
             for vv in v:
                 data[k].append(get_dict_snapshot(vv))
         else:
+            
             pass
             #print("Skipping snapshotting of:{} with value {}".format(k, v))
     return {"_type":_type,"data": data}
@@ -81,34 +82,23 @@ class GameConfig(SLBase):
         self.clock_factor = 1.0
 
 SLSpace = pymunk.Space
+SLBody = pymunk.Body
 
-class SLBody(SLBase, pymunk.Body):
+def state_to_dict(state):
+    new_state={}
+    for k,tuplist in state.items():
+        new_state[k] ={}
+        for kk,vv in tuplist:
+            new_state[k][kk] = vv
+    return new_state
 
-    @classmethod
-    def build_from_dict(cls,dict_data):
-        print(dict_data)
-        if dict_data['body_type'] == 2:
-            print("here")
-            body = SLBody(body_type = pymunk.Body.STATIC)
-        else:
-            body = SLBody(dict_data['data']['init'])
-        return body.load_snapshot(dict_data)
-
-    def __init__(self,*args, **kwargs):
-        self.id = gen_id()
-        super(SLBody,self).__init__(*args,**kwargs)
-
-    def get_id(self):
-        return self.id
-
-    def get_snapshot(self):
-        return {
-            "_type":type(self).__name__,
-            "body_type": self.body_type,
-            "data":self.__getstate__()}
-
-    def load_snapshot(self, data):
-        self.__setstate__(data['data'])
+def dict_to_state(data):
+    state={}
+    for k,d in data.items():
+        state[k] =[]
+        for kk,vv in d.items():
+            state[k].append((kk,vv))
+    return state
 
 class SLShape(pymunk.Shape, SLBase):
 
@@ -125,81 +115,69 @@ class SLShape(pymunk.Shape, SLBase):
     def get_object_id(self):
         return self.object_id
 
-    def get_snapshot(self, exclude_keys={'_body'}):
-        pass
-
-    def load_snapshot(self, data):
-        pass
-
     def get_common_info(self):
         dict_data = get_dict_snapshot(self, exclude_keys={"_body"})
-        params={}
-        params['sensor'] = self.sensor
-        params['collision_type'] = self.collision_type
-        params['filter'] = self.filter
-        params['elasticity'] = self.elasticity
-        params['friction'] = self.friction
-        params['surface_velocity'] = self.surface_velocity
-        dict_data['params'] = params
+        dict_data['state'] = state_to_dict(self.__getstate__())
+        del dict_data['state']['init']['body'] 
         return dict_data
 
 
 class SLLine(SLShape, pymunk.Segment):
 
     def __init__(self,body:SLBody,a,b,radius,**kwargs):
-        self.body_id = body.get_id()
         pymunk.Segment.__init__(self,body,a,b,radius, **kwargs)
         SLShape.__init__(self)
     
     def get_snapshot(self):
         data = self.get_common_info()
-        data['params'].update({
+        data['params'] = {
                     "a":self.a,
                     "b":self.b,
-                    "radius": self.radius})
+                    "radius": self.radius}
         return data
         
 class SLPolygon(SLShape, pymunk.Poly):
 
     def __init__(self, body, vertices,**kwargs):
-        self.body_id = body.get_id()
         pymunk.Poly.__init__(self,body, vertices,**kwargs)
         SLShape.__init__(self)
     
     def get_snapshot(self):
         data = self.get_common_info()
-        data['params'].update({
+        data['params'] = {
                 "vertices":[v for v in self.get_vertices()],
-            })
+            }
         return data
 
 class SLCircle(SLShape, pymunk.Circle):
 
-    def __init__(self, *args,**kwargs):
-        pymunk.Circle.__init__(self,*args,**kwargs)
+    def __init__(self, body,radius,**kwargs):
+        pymunk.Circle.__init__(self,body,radius,**kwargs)
         SLShape.__init__(self)
 
     def get_snapshot(self):
         data = self.get_common_info()
-        data['params'].update({"radius": self.radius})
+        data['params'] = {"radius": self.radius}
         return data
 
 def get_shape_from_dict(body,dict_data):
-    cls = globals()[dict_data['_type']]
-    instance = cls(body, **dict_data['data']['params'])
-    load_dict_snapshot(instance,dict_data['data'])
-    return instance
+    if dict_data['_type'] == 'SLLine':
+        shape = SLLine(body, **dict_data['params'])
+    else:
+        cls = globals()[dict_data['_type']]
+        shape = cls(body, **dict_data['params'])
+    
+    shape.load_snapshot(dict_data)
+    gen_data = dict_data['state']['general']
+    shape.collision_type = gen_data['collision_type']  
+    shape.filter = gen_data['filter']
+    shape.elasticity = gen_data['elasticity']
+    shape.friction = gen_data['friction']
+    shape.surface_velocity = gen_data['surface_velocity']
+    return shape
 
 
 class SLShapeGroup(SLBase):
-
-
-    @classmethod
-    def build_from_dict(cls,body,dict_data):
-        shape_group = SLShapeGroup()
-        for k,v in dict_data.items():
-            shape_group.add(get_shape_from_dict(body,v))
-        return shape_group
 
     def __init__(self):
         self._shapes:Dict[str,SLShape]={}
@@ -233,23 +211,40 @@ class SLObject(SLBase):
     @classmethod
     def build_from_dict(cls,dict_data):
         data = dict_data['data']
+        
+        # body_data = state_to_dict(dict_data['body'])
+        # print(body_data)
+        
+        # body = SLBody(**body_data['init'])
+        # body.position = body_data['general']['position']
+        # body.force = body_data['general']['force']
+        # body.velocity = body_data['general']['velocity']
+        # body.torque = body_data['general']['torque']
 
-        body = SLBody.build_from_dict(data['body'])
-        shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
-        obj = SLObject()
-        obj.load_snapshot(dict_data)
-        obj.body = body
-        obj.shape_group = shape_group
+        body = SLBody()
+
+        body.__setstate__(dict_data['body'])
+        # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
+        obj = SLObject(body=body, obj_id=data['id'])
+        load_dict_snapshot(obj, dict_data, exclude_keys={"body"})
+
+        for k,v in data['shape_group'].items():
+            obj.add_shape(get_shape_from_dict(body,v))
+
+        if data['camera'] :
+            obj.camera = SLCamera(**data['camera']['data'])
+        obj.get_snapshot()
         return obj
         
 
     def __init__(self,
-                 body=None,
+                 body:SLBody=None,
+                 obj_id= None,
                  camera=None):
-        """
-
-        """
-        self.id = gen_id()
+        if  obj_id is None:
+            self.id = gen_id()
+        else:
+            self.id = obj_id
         self.camera = camera
         self.body: SLBody = body
         self.shape_group: SLShapeGroup = SLShapeGroup()
@@ -282,67 +277,89 @@ class SLObject(SLBase):
     def get_camera(self) -> SLCamera:
         return self.camera
 
+    def get_snapshot(self):
+        data = get_dict_snapshot(self, exclude_keys={'body'})
+        data['body'] = self.body.__getstate__()
+        return data
+
+    def load_snapshot(self, data):
+        load_dict_snapshot(self, data, exclude_keys={"body"})
+        body_data = state_to_dict(data['body'])
+
+        # This breaks things
+        #self.body.__setstate__(data['body'])
+        self.body.position = body_data['general']['position']
+        self.body.force = body_data['general']['force']
+        self.body.velocity = body_data['general']['velocity']
+        self.body.torque = body_data['general']['torque']
+
+
+def build_event_from_dict(data_dict):
+    cls = globals()[data_dict['_type']]
+    event = cls(**data_dict['data'])
+    return event
 
 class SLEvent(SLBase):
 
-    def __init__(self):
-        """
-
-        """
-        self.__id = gen_id()
+    def __init__(self, id=None):
+        if id == None:
+            self.id = gen_id()
+        else:
+            self.id = id
 
     def get_id(self):
-        return self.__id
+        return self.id
 
 
 class SLRewardEvent(SLEvent):
 
-    def __init__(self, puid, reward=0):
-        super().__init__()
-        self.puid = puid
+    def __init__(self, reward=0, id = None):
+        super(SLRewardEvent, self).__init__(id)
         self.reward = reward
 
 
 class SLPlayerCollisionEvent(SLEvent):
 
-    def __init__(self, player_id, obj):
-        super().__init__()
+    def __init__(self, player_id, obj, id=None):
+        super(SLPlayerCollisionEvent,self).__init__(id)
         self.player_id = player_id
         self.obj = obj
 
 
 class SLMechanicalEvent(SLEvent):
 
-    def __init__(self, obj: SLObject,
-                 direction: SLVector = SLVector.zero(),
-                 orientation_diff: float = 0.0):
-        super().__init__()
-        self.obj = obj
+    def __init__(self, obj_id: str,
+                 direction: SLVector ,
+                 orientation_diff: float = 0.0,
+                 id=None):
+        super(SLMechanicalEvent,self).__init__(id)
+        self.obj_id = obj_id
         self.direction = direction
         self.orientation_diff = orientation_diff
 
     def __str__(self):
-        return "object: %s, direction: %s" % (self.obj, self.direction)
+        return "obj_id: %s, direction: %s" % (self.obj_id, self.direction)
 
 
 class SLMoveEvent(SLEvent):
 
-    def __init__(self, obj: SLObject,
-                 direction: SLVector = SLVector.zero(),
-                 orientation_diff: float = 0.0):
-        super().__init__()
-        self.obj = obj
+    def __init__(self, obj_id: str,
+                 direction: SLVector,
+                 orientation_diff: float = 0.0, 
+                 id=None):
+        super(SLMoveEvent, self).__init__(id)
+        self.obj_id = obj_id
         self.direction = direction
         self.orientation_diff = orientation_diff
 
     def __str__(self):
-        return "object: %s, direction: %s" % (self.obj, self.direction)
+        return "obj_id: %s, direction: %s" % (self.obj_id, self.direction)
 
 
 class SLAdminEvent(SLEvent):
 
-    def __init__(self, value):
-        super().__init__()
+    def __init__(self, value, id=None):
+        super(SLAdminEvent, self).__init__(id)
         self.value = value
 
     def __str__(self):
@@ -352,12 +369,13 @@ class SLAdminEvent(SLEvent):
 
 class SLViewEvent(SLEvent):
 
-    def __init__(self, obj: SLObject,
+    def __init__(self, obj_id: str,
                  distance_diff: float = 0,
                  center_diff: SLVector = SLVector.zero(),
-                 orientation_diff: float = 0.0):
-        super().__init__()
-        self.object = obj
+                 orientation_diff: float = 0.0, 
+                 id=None):
+        super(SLViewEvent, self).__init__(id)
+        self.obj_id = obj_id
         self.distance_diff = distance_diff
         self.center_diff = center_diff
         self.angle_diff = orientation_diff

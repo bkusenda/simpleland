@@ -29,8 +29,8 @@ class SLObjectManager(metaclass=Singleton):
     def clear_objects(self):
         self.objects:Dict[str,SLObject] = {}
 
-    def get(self, id)->SLObject:
-        return self.objects[id]
+    def get_by_id(self, obj_id)->SLObject:
+        return self.objects[obj_id]
 
     def get_all_objects(self) -> List[SLObject]:
         return list(self.objects.values())
@@ -42,8 +42,13 @@ class SLObjectManager(metaclass=Singleton):
         return results
 
     def load_snapshot(self,data):
+        new_objs = []
         for k,o_data in data.items():
             if k in self.objects:
                 self.objects[k].load_snapshot(o_data)
             else:
-                self.objects[k] = SLObject.build_from_dict(o_data)
+                new_obj = SLObject.build_from_dict(o_data)
+                self.objects[k] = new_obj
+                new_objs.append(new_obj)
+        return new_objs
+

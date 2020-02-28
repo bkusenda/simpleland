@@ -3,7 +3,7 @@ from typing import Tuple
 
 import numpy as np
 
-from simpleland.common import (SLBody, SLObject, SLVector, SLShape, SLCamera)
+from simpleland.common import (SLObject, SLVector, SLShape, SLCamera, SLBody)
 from simpleland.core import SLPhysicsEngine
 from simpleland.game import SLGame
 from simpleland.itemfactory import SLItemFactory, SLShapeFactory
@@ -32,7 +32,7 @@ def start_game(resolution):
     # Create Game
     game = SLGame()
 
-        # Create Wall
+    #     # Create Wall
     wall = SLItemFactory.border(SLBody(body_type=pymunk.Body.STATIC),
                                 SLVector(0, 0),
                                 size=20)
@@ -55,12 +55,12 @@ def start_game(resolution):
 
 
 
-
     # Add objects to game
-    game.attach_static_objects([wall])
+    # game.attach_static_objects([wall])
     # game.attach_objects([box])
     game.attach_objects([hostile_object])
     game.attach_objects([player_object])
+    game.attach_objects([wall])
 
     # Add Player to game
     game.add_player(player)
@@ -68,8 +68,9 @@ def start_game(resolution):
     def collision_callback(arbiter:pymunk.Arbiter,space,data):
         for s in arbiter.shapes:
             s:SLShape = s
-            o = game.object_manager.get(s.get_object_id())
+            o = game.object_manager.get_by_id(s.get_object_id())
             o.set_energy(o.get_energy() - 1)
+            # print("hi {}".format(s.get_object_id()))
             #print(o.get_snapshot())
 
     game.physics_engine.enable_collision_detection(collision_callback)
@@ -79,9 +80,7 @@ def start_game(resolution):
     renderer.on_init()
 
     # Run Game
-    game.run(player.get_object(), renderer=renderer, max_steps=None)
-
-
+    game.run(player.get_object_id(), renderer=renderer, max_steps=None)
 
 def main():
     start_game(resolution=(640, 480))

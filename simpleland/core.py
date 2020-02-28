@@ -11,6 +11,7 @@ from .common import (PhysicsConfig, SLBody, SLCircle, SLClock, SLVector, SLSpace
 from .player import SLPlayer
 from .utils import gen_id
 from .object_manager import SLObjectManager
+from .common import build_event_from_dict
 
 class SLEventManager(metaclass=Singleton):
     """
@@ -18,33 +19,39 @@ class SLEventManager(metaclass=Singleton):
     """
 
     def __init__(self):
-        self.__events: Dict[str, SLEvent] = {}
+        self.events: Dict[str, SLEvent] = {}
 
     def add_update(self, e: SLEvent):
-        self.__events[e.get_id()] = e
+        self.events[e.get_id()] = e
 
     def add_events(self, events: List[SLEvent]):
         for e in events:
             self.add_update(e)
 
     def get_events(self):
-        return list(self.__events.values())
+        return list(self.events.values())
 
     def get_event_by_id(self, id):
-        return self.__events[id]
+        return self.events[id]
 
     def remove_event_by_id(self, id):
-        del self.__events[id]
+        del self.events[id]
+
+    def clear(self):
+        self.events: Dict[str, SLEvent] = {}
 
     def get_snapshot(self):
         results = {}
-        for k,o in self.__events.items():
+        for k,o in self.events.items():
             results[k]= o.get_snapshot()
         return results
 
     def load_snapshot(self,data):
-        for k,o in data.items():
-            self.__events[k].load_snapshot(o)
+        for k,e_data in data.items():
+            if k in self.events:
+                self.events[k].load_snapshot(e_data)
+            else:
+                self.events[k] = build_event_from_dict(e_data)
 
 class SLPhysicsEngine:
     """
@@ -58,8 +65,9 @@ class SLPhysicsEngine:
         self.space.damping = self.config.space_damping
         self.events = []
 
-    def enable_collision_detection(self, callback):
+        self.dt = 1. / self.config.fps
 
+    def enable_collision_detection(self, callback):
 
         h = self.space.add_collision_handler(1, 1)
 
@@ -83,48 +91,51 @@ class SLPhysicsEngine:
     def add_object(self, obj: SLObject):
         self.space.add(obj.get_body(), obj.get_shapes())
 
-    def add_static_object(self, obj: SLObject):
-        self.space.add(obj.get_shapes())
+    def remove_object(self,obj):
+        self.space.remove(obj.get_shapes())
+        self.space.remove(obj.get_body())
 
-    def process_mechanical_event(self, e: SLMechanicalEvent) -> List[SLEvent]:
+    def process_mechanical_event(self, e: SLMechanicalEvent, om: SLObjectManager) -> List[SLEvent]:
         direction_delta = e.direction * self.config.velocity_multiplier * self.config.clock_multiplier
-        body = e.obj.get_body()
+        obj = om.get_by_id(e.obj_id)
+        body = obj.get_body()
 
         direction_delta = direction_delta.rotated(-1 * body.angle)
         body.apply_impulse_at_world_point(direction_delta, body.position)
         body.angular_velocity += e.orientation_diff * self.config.orientation_multiplier
-
         return []
 
-    def process_move_event(self, e: SLMoveEvent) -> List[SLEvent]:
+    def process_move_event(self, e: SLMoveEvent,om: SLObjectManager) -> List[SLEvent]:
         direction_delta = e.direction * self.config.velocity_multiplier * self.config.clock_multiplier
-        body = e.obj.get_body()
+        obj = om.get_by_id(e.obj_id())
+        body = obj.get_body()
 
         direction_delta = direction_delta.rotated(-1 * body.angle)
         body.position += direction_delta
         body.angle += e.orientation_diff * self.config.orientation_multiplier
         return []
 
-    def process_view_event(self, e: SLViewEvent):
-        e.object.get_camera().distance += e.distance_diff
-        e.object.get_camera().angle = e.angle_diff
+    def process_view_event(self, e: SLViewEvent,om: SLObjectManager):
+        obj = om.get_by_id(e.obj_id)
+        obj.get_camera().distance += e.distance_diff
+        obj.get_camera().angle = e.angle_diff
         return []
 
-    def update(self, event_manager: SLEventManager, object_manager: SLObjectManager):
+    def apply_events(self, em: SLEventManager, om: SLObjectManager, remove_processed = True):
         # self.get_collision_events(event_store,object_manager)
         new_events: List[SLEvent] = []
         done = False
         events_to_remove: List[SLEvent] = []
-        for event in event_manager.get_events():
+        for event in em.get_events():
             result_events: List[SLEvent] = []
             if type(event) == SLMechanicalEvent:
-                result_events = self.process_mechanical_event(event)
+                result_events = self.process_mechanical_event(event,om)
                 events_to_remove.append(event)
             elif type(event) == SLMoveEvent:
-                result_events = self.process_move_event(event)
+                result_events = self.process_move_event(event,om)
                 events_to_remove.append(event)
             elif type(event) == SLViewEvent:
-                result_events = self.process_view_event(event)
+                result_events = self.process_view_event(event,om)
                 events_to_remove.append(event)
 
             new_events.extend(result_events)
@@ -132,42 +143,15 @@ class SLPhysicsEngine:
             # Check if process time is exceeded?
             if done:
                 break
-        for event in events_to_remove:
-            event_manager.remove_event_by_id(event.get_id())
+        if remove_processed:
+            for event in events_to_remove:
+                em.remove_event_by_id(event.get_id())
 
         # After processed so we don't just continue processing events for ever
-        event_manager.add_events(new_events)
-
-        # Update physics
-        fps = self.config.fps
-        dt = 1. / fps
-        self.space.step(dt)
-
-        self.clock.tick(fps)
+        em.add_events(new_events)
 
 
-# class SLUniverse(object):
+    def update(self, om: SLObjectManager):
 
-#     def __init__(self, physics_engine: SLPhysicsEngine):
-#         """
-
-#         """
-        
-#         self.physics_engine = physics_engine
-#         self.direction: Vec2d = None  # TODO: Temp for testing
-
-
-    # def get_direction(self)->Vec2d:
-    #     return numpy.array([self.direction.x, self.direction.y])
-
-
-
-
-# class SLViewState(object):
-
-#     def __init__(self, obj: SLObject, universe: SLUniverse):
-#         """
-
-#         """
-#         self.obj = obj
-#         self.universe = universe
+        self.space.step(self.dt)
+        self.clock.tick(self.config.fps)

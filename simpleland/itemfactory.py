@@ -21,7 +21,7 @@ class SLShapeFactory(object):
         body = obj.get_body()
         inertia = pymunk.moment_for_circle(body.mass, 0, radius, pos)
         body.moment = inertia
-        circle = SLCircle(body, radius, pos)
+        circle = SLCircle(body, radius = radius, offset= pos)
         obj.add_shape(circle)
 
     @classmethod

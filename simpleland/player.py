@@ -5,8 +5,8 @@ import numpy as np
 import pygame
 
 
-from simpleland.common import (PhysicsConfig, SLBase, SLBody,
-                               SLCircle, SLClock, SLEvent, SLLine, SLAdminEvent,
+from simpleland.common import (PhysicsConfig, SLBase,                               
+                                SLCircle, SLClock, SLEvent, SLLine, SLAdminEvent,
                                SLMechanicalEvent, SLMoveEvent, SLObject,
                                SLPlayerCollisionEvent, SLPolygon,
                                SLSpace, SLVector, SLViewEvent)
@@ -16,15 +16,16 @@ from simpleland.utils import gen_id
 
 class SLPlayer(SLBase):
 
-    def __init__(self, uid=0):
+    def __init__(self, uid=None):
         """
 
         :return:
         """
         self.uid = uid
-        self._obj = None
+        self.obj_id = None
         self.health = 0.0
         self.last_health_diff = 0.0
+        self.events=[]
 
     def get_health(self):
         return self.health
@@ -32,18 +33,31 @@ class SLPlayer(SLBase):
     def add_input(self, input):
         raise NotImplementedError
 
-    def apply_health_update(self, health_diff):
-        self.last_health_diff = health_diff
-        self.health += health_diff
-
     def attach_object(self, obj: SLObject):
-        self._obj = obj
+        self.obj_id = obj.get_id()
 
-    def get_object(self) -> SLObject:
-        return self._obj
+    def get_object_id(self) -> str:
+        return self.obj_id
+    
+    def pull_input_events(self) -> List[SLEvent]:
+        return []
+    
 
 
 class SLHumanPlayer(SLPlayer):
+
+
+
+    @classmethod
+    def build_from_dict(cls,data_dict):
+        data = data_dict['data']
+        player = cls()
+        player.uid = data['uid']
+        player.obj_id = data['obj_id']
+        player.health = data['health']
+        player.last_health_diff = data['last_health_diff']
+        return player
+
 
     def __init__(self):
         """
@@ -88,10 +102,10 @@ class SLHumanPlayer(SLPlayer):
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # print("here %s" % event.button)
                 if event.button == 4:
-                    view_event = SLViewEvent(self.get_object(), 1, SLVector.zero())
+                    view_event = SLViewEvent(self.get_object_id(), 1, SLVector.zero())
                     events.append(view_event)
                 elif event.button == 5:
-                    view_event = SLViewEvent(self.get_object(), -1, SLVector.zero())
+                    view_event = SLViewEvent(self.get_object_id(), -1, SLVector.zero())
                     events.append(view_event)
 
         keys = pygame.key.get_pressed()
@@ -104,7 +118,7 @@ class SLHumanPlayer(SLPlayer):
             obj_orientation_diff = 1
 
         if obj_orientation_diff is not None:
-            events.append(SLMechanicalEvent(self.get_object(), orientation_diff=obj_orientation_diff * move_speed))
+            events.append(SLMechanicalEvent(self.get_object_id(), direction=SLVector.zero(), orientation_diff=obj_orientation_diff * move_speed))
 
         # Object Movement
         force = 0.5
@@ -129,7 +143,7 @@ class SLHumanPlayer(SLPlayer):
         mag = float(np.sqrt(direction.dot(direction)))
         if mag != 0:
             direction = ((1.0 / mag) * force * direction)
-            events.append(SLMechanicalEvent(self.get_object(), direction))
+            events.append(SLMechanicalEvent(self.get_object_id(), direction))
             # print("Adding movement_event %s" % direction_event)
 
         return events
@@ -172,7 +186,7 @@ class SLAgentPlayer(SLPlayer):
             obj_orientation_diff = 1
 
         if obj_orientation_diff is not None:
-            events.append(SLMechanicalEvent(self.get_object(), orientation_diff=obj_orientation_diff * move_speed))
+            events.append(SLMechanicalEvent(self.get_object_id(), orientation_diff=obj_orientation_diff * move_speed))
 
         # Object Movement
         force = 0.5
@@ -192,7 +206,7 @@ class SLAgentPlayer(SLPlayer):
         mag = float(np.sqrt(direction.dot(direction)))
         if mag != 0:
             direction = ((1.0 / mag) * force * direction)
-            events.append(SLMechanicalEvent(self.get_object(), direction))
+            events.append(SLMechanicalEvent(self.get_object_id(), direction))
 
         return events
 
