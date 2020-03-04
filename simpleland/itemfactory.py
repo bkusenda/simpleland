@@ -7,7 +7,7 @@ from pymunk import Vec2d
 
 from .common import (PhysicsConfig, SLBody,
                                SLCircle, SLClock, SLEvent, SLLine,
-                               SLMechanicalEvent, SLMoveEvent, SLObject,
+                               SLMechanicalEvent, SLObject,
                                SLPlayerCollisionEvent, SLPolygon,
                                SLSpace, SLVector, SLViewEvent)
 from .player import SLPlayer

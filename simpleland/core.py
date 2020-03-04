@@ -7,7 +7,7 @@ from pymunk import Vec2d
 
 from .common import (PhysicsConfig, SLBody, SLCircle, SLClock, SLVector, SLSpace,
                                SLEvent, SLLine, SLObject, SLPolygon,
-                               SLMoveEvent, SLMechanicalEvent, SLPlayerCollisionEvent, SLViewEvent, Singleton)
+                               SLMechanicalEvent, SLPlayerCollisionEvent, SLViewEvent, Singleton)
 from .player import SLPlayer
 from .utils import gen_id
 from .object_manager import SLObjectManager
@@ -41,9 +41,10 @@ class SLEventManager(metaclass=Singleton):
         self.events: Dict[str, SLEvent] = {}
 
     def get_snapshot(self):
+        events = self.get_events()
         results = {}
-        for k,o in self.events.items():
-            results[k]= o.get_snapshot()
+        for e in events:
+            results[e.get_id()]= e.get_snapshot()
         return results
 
     def load_snapshot(self,data):
@@ -65,7 +66,7 @@ class SLPhysicsEngine:
         self.space.damping = self.config.space_damping
         self.events = []
 
-        self.dt = 1. / self.config.fps
+        #self.dt = 1. / self.config.steps_per_second
 
     def enable_collision_detection(self, callback):
 
@@ -103,22 +104,12 @@ class SLPhysicsEngine:
         direction_delta = direction_delta.rotated(-1 * body.angle)
         body.apply_impulse_at_world_point(direction_delta, body.position)
         body.angular_velocity += e.orientation_diff * self.config.orientation_multiplier
-        return []
-
-    def process_move_event(self, e: SLMoveEvent,om: SLObjectManager) -> List[SLEvent]:
-        direction_delta = e.direction * self.config.velocity_multiplier * self.config.clock_multiplier
-        obj = om.get_by_id(e.obj_id())
-        body = obj.get_body()
-
-        direction_delta = direction_delta.rotated(-1 * body.angle)
-        body.position += direction_delta
-        body.angle += e.orientation_diff * self.config.orientation_multiplier
+        #body._set_angular_velocity(body.angular_velocity + e.orientation_diff * self.config.orientation_multiplier)
         return []
 
     def process_view_event(self, e: SLViewEvent,om: SLObjectManager):
         obj = om.get_by_id(e.obj_id)
         obj.get_camera().distance += e.distance_diff
-        obj.get_camera().angle = e.angle_diff
         return []
 
     def apply_events(self, em: SLEventManager, om: SLObjectManager, remove_processed = True):
@@ -130,9 +121,6 @@ class SLPhysicsEngine:
             result_events: List[SLEvent] = []
             if type(event) == SLMechanicalEvent:
                 result_events = self.process_mechanical_event(event,om)
-                events_to_remove.append(event)
-            elif type(event) == SLMoveEvent:
-                result_events = self.process_move_event(event,om)
                 events_to_remove.append(event)
             elif type(event) == SLViewEvent:
                 result_events = self.process_view_event(event,om)
@@ -150,8 +138,9 @@ class SLPhysicsEngine:
         # After processed so we don't just continue processing events for ever
         em.add_events(new_events)
 
+    def update(self, om: SLObjectManager, steps_per_second:float):
+        self.space.step(1.0/steps_per_second)
 
-    def update(self, om: SLObjectManager):
+    def tick(self, steps_per_second):
+        self.clock.tick(steps_per_second)
 
-        self.space.step(self.dt)
-        self.clock.tick(self.config.fps)

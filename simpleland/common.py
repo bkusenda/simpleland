@@ -3,6 +3,7 @@ import pygame
 from pygame.time import Clock
 from .utils import gen_id
 from typing import List, Dict
+import time
 
 SLClock: Clock = pygame.time.Clock
 
@@ -43,6 +44,40 @@ def load_dict_snapshot(obj, dict_data, exclude_keys={}):
             pass
            # print("Skipping loading of:{} with value {}".format(k, v))
 
+
+class SimClock:
+    
+    def __init__(self):
+        self.resolution = 1000# milliseconds
+        self.start_time = self._current_time()
+        self.last_tick = self.start_time
+
+    def _current_time(self):
+        return time.time() * self.resolution
+
+    def get_start_time(self):
+        return self.start_time
+
+    def tick(self, ticks_per_second = 60):
+        expected_diff = (1.0/ticks_per_second) * 1000
+        tick_diff = self.get_time() - self.last_tick
+        delay_seconds = (expected_diff - tick_diff)/self.resolution
+        if delay_seconds < 0:
+            delay_seconds = 0
+        #print("Delay in seconds = {} ".format(delay_seconds))
+        time.sleep(delay_seconds)
+        self.last_tick = self.get_time()
+
+    def set_time(self,time):
+        self.start_time = time
+        self.last_tick = self.get_time()
+
+    def reset(self):
+        self.start_time = self._current_time()
+
+    def get_time(self):
+        return self._current_time() - self.start_time
+
 # source: https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
 class Singleton(type):
     _instances = {}
@@ -68,16 +103,16 @@ class PlayerConfig(SLBase):
 
 class PhysicsConfig(SLBase):
     def __init__(self):
-        self.velocity_multiplier = 10.0
-        self.orientation_multiplier = 2.0
+        self.velocity_multiplier = 5.0
+        self.orientation_multiplier = 1.0
         self.space_damping = 0.5
-        self.fps = 60
+        self.steps_per_second = 60
         self.clock_multiplier = 1
 
 class GameConfig(SLBase):
 
     def __init__(self):
-        self.move_speed = 2
+        self.move_speed = 1
         self.keep_moving = 0
         self.clock_factor = 1.0
 
@@ -208,6 +243,9 @@ class SLCamera(SLBase):
 
 class SLObject(SLBase):
 
+
+
+
     @classmethod
     def build_from_dict(cls,dict_data):
         data = dict_data['data']
@@ -225,7 +263,7 @@ class SLObject(SLBase):
 
         body.__setstate__(dict_data['body'])
         # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
-        obj = SLObject(body=body, obj_id=data['id'])
+        obj = SLObject(body=body, id=data['id'])
         load_dict_snapshot(obj, dict_data, exclude_keys={"body"})
 
         for k,v in data['shape_group'].items():
@@ -233,18 +271,17 @@ class SLObject(SLBase):
 
         if data['camera'] :
             obj.camera = SLCamera(**data['camera']['data'])
-        obj.get_snapshot()
         return obj
         
 
     def __init__(self,
                  body:SLBody=None,
-                 obj_id= None,
+                 id= None,
                  camera=None):
-        if  obj_id is None:
+        if id is None:
             self.id = gen_id()
         else:
-            self.id = obj_id
+            self.id = id
         self.camera = camera
         self.body: SLBody = body
         self.shape_group: SLShapeGroup = SLShapeGroup()
@@ -289,10 +326,57 @@ class SLObject(SLBase):
         # This breaks things
         #self.body.__setstate__(data['body'])
         self.body.position = body_data['general']['position']
-        self.body.force = body_data['general']['force']
+        # self.body.force = body_data['general']['force']
         self.body.velocity = body_data['general']['velocity']
-        self.body.torque = body_data['general']['torque']
+        self.body.angle = body_data['general']['angle']
+        self.body.moment = body_data['general']['moment']
+        self.body.rotation_vector = body_data['general']['rotation_vector']
 
+
+        # self.body.torque = body_data['general']['torque']
+        self.body.angular_velocity = body_data['general']['angular_velocity']
+
+def build_interpolated_object(obj_1:SLObject,obj_2:SLObject,fraction=0.5):
+    
+    b1 = obj_1.get_body()
+    b2 = obj_2.get_body()
+    # print("--")
+    # print(b1.position)
+    # print(b2.position)
+    # print(fraction)
+    pos_x = (b2.position.x - b1.position.x) * fraction + b1.position.x
+    pos_y = (b2.position.y - b1.position.y) * fraction + b1.position.y
+    b_new = SLBody()
+
+    # b_new._set_position(SLVector(pos_x,pos_y))
+    b_new.position = SLVector(pos_x,pos_y)
+    # print(pos_x)
+    # print(pos_y)
+
+    force_x = (b2.force.x - b1.force.x) * fraction + b1.force.x
+    force_y = (b2.force.y - b1.force.y) * fraction + b1.force.y
+    b_new.force = SLVector(force_x,force_y)
+
+    b_new.angle = (b2.angle - b1.angle) * fraction + b1.angle
+
+    b_new.velocity.x = (b2.velocity.x - b1.velocity.x) * fraction + b1.velocity.x
+    b_new.velocity.y = (b2.velocity.y - b1.velocity.y) * fraction + b1.velocity.y
+
+    b_new.angular_velocity = (b2.angular_velocity - b1.angular_velocity) * fraction + b1.angular_velocity
+    # b_new.angular_velocity.y = (b2.angular_velocity.y - b1.angular_velocity.y) * fraction + b1.angular_velocity.y
+
+    # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
+    obj = SLObject(body=b_new, id=obj_1.get_id())
+    #load_dict_snapshot(obj, obj_1.get_snapshot(), exclude_keys={"body"})
+
+    #TODO: COPY??
+    for shape in obj_1.shape_group.get_shapes():
+        obj.add_shape(get_shape_from_dict(b_new,shape.get_snapshot()))
+
+    if obj_2.get_camera() is not None:
+        camera_dist = (obj_2.get_camera().distance - obj_1.get_camera().distance) * fraction + obj_1.get_camera().distance
+        obj.camera = SLCamera(distance=camera_dist)
+    return obj
 
 def build_event_from_dict(data_dict):
     cls = globals()[data_dict['_type']]
@@ -302,7 +386,7 @@ def build_event_from_dict(data_dict):
 class SLEvent(SLBase):
 
     def __init__(self, id=None):
-        if id == None:
+        if id is None:
             self.id = gen_id()
         else:
             self.id = id
@@ -310,13 +394,11 @@ class SLEvent(SLBase):
     def get_id(self):
         return self.id
 
-
 class SLRewardEvent(SLEvent):
 
     def __init__(self, reward=0, id = None):
         super(SLRewardEvent, self).__init__(id)
         self.reward = reward
-
 
 class SLPlayerCollisionEvent(SLEvent):
 
@@ -324,7 +406,6 @@ class SLPlayerCollisionEvent(SLEvent):
         super(SLPlayerCollisionEvent,self).__init__(id)
         self.player_id = player_id
         self.obj = obj
-
 
 class SLMechanicalEvent(SLEvent):
 
@@ -336,25 +417,6 @@ class SLMechanicalEvent(SLEvent):
         self.obj_id = obj_id
         self.direction = direction
         self.orientation_diff = orientation_diff
-
-    def __str__(self):
-        return "obj_id: %s, direction: %s" % (self.obj_id, self.direction)
-
-
-class SLMoveEvent(SLEvent):
-
-    def __init__(self, obj_id: str,
-                 direction: SLVector,
-                 orientation_diff: float = 0.0, 
-                 id=None):
-        super(SLMoveEvent, self).__init__(id)
-        self.obj_id = obj_id
-        self.direction = direction
-        self.orientation_diff = orientation_diff
-
-    def __str__(self):
-        return "obj_id: %s, direction: %s" % (self.obj_id, self.direction)
-
 
 class SLAdminEvent(SLEvent):
 
@@ -378,4 +440,4 @@ class SLViewEvent(SLEvent):
         self.obj_id = obj_id
         self.distance_diff = distance_diff
         self.center_diff = center_diff
-        self.angle_diff = orientation_diff
+        self.orientation_diff = orientation_diff

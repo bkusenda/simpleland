@@ -7,7 +7,7 @@ from pymunk import Vec2d
 
 from .common import (PhysicsConfig, SLBody, SLCircle, SLClock, SLVector, SLSpace,
                                SLEvent, SLLine, SLObject, SLPolygon,
-                               SLMoveEvent, SLMechanicalEvent, SLPlayerCollisionEvent, SLViewEvent, Singleton)
+                               SLMechanicalEvent, SLPlayerCollisionEvent, SLViewEvent, Singleton)
 from .player import SLPlayer
 from .utils import gen_id
 
@@ -18,9 +18,6 @@ class SLObjectManager(metaclass=Singleton):
     """
 
     def __init__(self):
-        """
-
-        """
         self.objects:Dict[str,SLObject] = {}
 
     def add(self, obj: SLObject):
@@ -30,15 +27,16 @@ class SLObjectManager(metaclass=Singleton):
         self.objects:Dict[str,SLObject] = {}
 
     def get_by_id(self, obj_id)->SLObject:
-        return self.objects[obj_id]
+        return self.objects.get(obj_id,None)
 
     def get_all_objects(self) -> List[SLObject]:
         return list(self.objects.values())
 
     def get_snapshot(self):
+        objs = self.get_all_objects()
         results = {}
-        for k,o in self.objects.items():
-            results[k]= o.get_snapshot()
+        for o in objs:
+            results[o.get_id()]= o.get_snapshot()
         return results
 
     def load_snapshot(self,data):

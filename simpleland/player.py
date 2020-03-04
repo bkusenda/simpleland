@@ -7,9 +7,9 @@ import pygame
 
 from simpleland.common import (PhysicsConfig, SLBase,                               
                                 SLCircle, SLClock, SLEvent, SLLine, SLAdminEvent,
-                               SLMechanicalEvent, SLMoveEvent, SLObject,
+                               SLMechanicalEvent, SLObject,
                                SLPlayerCollisionEvent, SLPolygon,
-                               SLSpace, SLVector, SLViewEvent)
+                               SLSpace, SLVector, SLViewEvent, get_dict_snapshot, load_dict_snapshot)
 
 from simpleland.utils import gen_id
 
@@ -27,6 +27,9 @@ class SLPlayer(SLBase):
         self.last_health_diff = 0.0
         self.events=[]
 
+    def get_id(self):
+        return self.uid    
+
     def get_health(self):
         return self.health
 
@@ -42,6 +45,11 @@ class SLPlayer(SLBase):
     def pull_input_events(self) -> List[SLEvent]:
         return []
     
+    def get_snapshot(self):
+        return get_dict_snapshot(self, exclude_keys={'events'})
+
+    def load_snapshot(self, data):
+        load_dict_snapshot(self, data, exclude_keys={"events"})
 
 
 class SLHumanPlayer(SLPlayer):
@@ -186,7 +194,7 @@ class SLAgentPlayer(SLPlayer):
             obj_orientation_diff = 1
 
         if obj_orientation_diff is not None:
-            events.append(SLMechanicalEvent(self.get_object_id(), orientation_diff=obj_orientation_diff * move_speed))
+            events.append(SLMechanicalEvent(self.get_object_id(), direction=SLVector.zero(), orientation_diff=obj_orientation_diff * move_speed))
 
         # Object Movement
         force = 0.5
@@ -232,3 +240,21 @@ class SLPlayerManager(object):
         for player in self.players_map.values():
             all_player_events.extend(player.pull_input_events())
         return all_player_events
+
+    def get_snapshot(self):
+        players = list(self.players_map.values())
+        results = {}
+        for p in players:
+            results[p.get_id()]= p.get_snapshot()
+        return results
+
+    def load_snapshot(self,data):
+        new_players = []
+        for k,p_data in data.items():
+            if k in self.players_map:
+                self.players_map[k].load_snapshot(p_data)
+            else:
+                new_p = SLHumanPlayer.build_from_dict(p_data)
+                self.players_map[k] = new_p
+                new_players.append(new_p)
+        return new_players
