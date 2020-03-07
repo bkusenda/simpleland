@@ -5,14 +5,11 @@ import numpy as np
 import pygame
 
 
-from simpleland.common import (PhysicsConfig, SLBase,                               
-                                SLCircle, SLClock, SLEvent, SLLine, SLAdminEvent,
-                               SLMechanicalEvent, SLObject,
-                               SLPlayerCollisionEvent, SLPolygon,
-                               SLSpace, SLVector, SLViewEvent, get_dict_snapshot, load_dict_snapshot)
-
-from simpleland.utils import gen_id
-
+from .common import (get_dict_snapshot, load_dict_snapshot, PhysicsConfig, SLBody, SLCircle, SLClock, SLLine,
+                     SLObject, SLPolygon, SLSpace, SLVector, SimClock, SLBase)
+from .utils import gen_id
+from .event_manager import (SLAdminEvent, SLEventManager, SLMechanicalEvent,
+                            SLPeriodicEvent, SLViewEvent, SLEvent)
 
 class SLPlayer(SLBase):
 
@@ -74,7 +71,7 @@ class SLHumanPlayer(SLPlayer):
         """
         super(SLHumanPlayer, self).__init__()
         self.blocking_player = True
-        self.block_sleep_secs = 0.01
+        #self.block_sleep_secs = 0.01
         self.ready = False
 
     def pull_input_events(self) -> List[SLEvent]:
@@ -84,7 +81,7 @@ class SLHumanPlayer(SLPlayer):
         if self.blocking_player and self.ready:
             done = False
             while not done:
-                time.sleep(self.block_sleep_secs)
+                #time.sleep(self.block_sleep_secs)
                 events = self._pull_input_events()
                 done = len(events) > 0
         else:
@@ -156,6 +153,71 @@ class SLHumanPlayer(SLPlayer):
 
         return events
 
+
+    def _pull_input_events_old(self) -> List[SLEvent]:
+        """
+
+        :param action:
+        :return:
+        """
+        # print("Getting action from player")
+
+        events: List[SLEvent] = []
+
+        for event in pygame.event.get():
+            # print("%s" % event.type)
+            if event.type == pygame.QUIT:
+                admin_event = SLAdminEvent('QUIT')
+                events.append(admin_event)
+                print("Adding admin_event (via pygame_event) %s" % admin_event)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                # print("here %s" % event.button)
+                if event.button == 4:
+                    view_event = SLViewEvent(self.get_object_id(), 1, SLVector.zero())
+                    events.append(view_event)
+                elif event.button == 5:
+                    view_event = SLViewEvent(self.get_object_id(), -1, SLVector.zero())
+                    events.append(view_event)
+
+        keys = pygame.key.get_pressed()
+
+        move_speed = 0.02
+        obj_orientation_diff = None
+        if keys[pygame.K_q]:
+            obj_orientation_diff = -1
+        elif keys[pygame.K_e]:
+            obj_orientation_diff = 1
+
+        if obj_orientation_diff is not None:
+            events.append(SLMechanicalEvent(self.get_object_id(), direction=SLVector.zero(), orientation_diff=obj_orientation_diff * move_speed))
+
+        # Object Movement
+        force = 0.5
+        direction = SLVector.zero()
+        if keys[pygame.K_w]:
+            direction += SLVector(0, 1)
+
+        if keys[pygame.K_s]:
+            direction += SLVector(0, -1)
+
+        if keys[pygame.K_a]:
+            direction += SLVector(-1, 0)
+
+        if keys[pygame.K_d]:
+            direction += SLVector(1, 0)
+
+        if keys[pygame.K_ESCAPE]:
+            admin_event = SLAdminEvent('QUIT')
+            events.append(admin_event)
+            print("Adding admin_event %s" % admin_event)
+
+        mag = float(np.sqrt(direction.dot(direction)))
+        if mag != 0:
+            direction = ((1.0 / mag) * force * direction)
+            events.append(SLMechanicalEvent(self.get_object_id(), direction))
+            # print("Adding movement_event %s" % direction_event)
+
+        return events
 
 class SLAgentPlayer(SLPlayer):
 

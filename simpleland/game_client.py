@@ -50,7 +50,7 @@ def send_request(request_data , server_address):
         sock.close()
     return json.loads(data, cls=StateDecoder)
 
-SNAPSHOT_LOG_SIZE = 100
+SNAPSHOT_LOG_SIZE = 30
 
 from multiprocessing import Queue
 LATENCY_LOG_SIZE = 100
@@ -64,6 +64,8 @@ def interpolate_snapshots(snapshot_1, snapshot_2, lookup_time):
         return snapshot_2
     if snapshot_2 is None:
         return snapshot_1
+    if snapshot_1 is None and snapshot_2 is None:
+        return None
     time1 = snapshot_1['snapshot']['snapshot_time_ms']
     time2 = snapshot_2['snapshot']['snapshot_time_ms']
     new_snapshot = {}
@@ -76,15 +78,19 @@ def interpolate_snapshots(snapshot_1, snapshot_2, lookup_time):
     new_snapshot['snapshot']['player_manager'] = snapshot_1['snapshot']['player_manager']
     new_snapshot['snapshot']['object_manager'] = {}
     fraction = (lookup_time - time1)/(time2-time1)
-    for k, obj_data_1 in snapshot_1['snapshot']['object_manager'].items():
-            obj_data_2 = snapshot_2['snapshot']['object_manager'][k]
+    om1 = snapshot_1['snapshot']['object_manager']
+    om2 = snapshot_2['snapshot']['object_manager']
+    for k, obj_data_1 in om1.items():
+            if k not in om2:
+                continue
+            obj_data_2 = om2[k]
             obj_1 = SLObject.build_from_dict(obj_data_1)
             obj_2 = SLObject.build_from_dict(obj_data_2)
             new_obj = build_interpolated_object(obj_1, obj_2, fraction)
             new_snapshot['snapshot']['object_manager'][k] = new_obj.get_snapshot()
     return new_snapshot
 
-class GameClient:
+class ClientConnector:
     # TODO, change to client + server connection
 
     def __init__(self, server_address = ('localhost', 10000)):
@@ -93,12 +99,14 @@ class GameClient:
         self.outgoing_buffer:Queue = Queue()# state buffer
         self.running = True
         self.client_id = None
-        self.ticks_per_second = 20
+
         self.latency_log = [None for i in range(LATENCY_LOG_SIZE)]
         self.last_latency_ms = None
         self.request_counter =0
+        self.absolute_server_time = None
 
-        self.clock = SimClock()
+        self.clock = SimClock() # clock for controlling network tick speed
+        self.ticks_per_second = 40
 
     def add_latency(self,latency: float):
         self.latency_log[self.request_counter % LATENCY_LOG_SIZE] = latency
@@ -111,10 +119,10 @@ class GameClient:
         print("Starting connection to server")
 
         while self.running:
-            #print("tick")
             request_info = {
                 'client_id' : "" if self.client_id is None else self.client_id,
-                'last_latency_ms' : self.last_latency_ms
+                'last_latency_ms' : self.last_latency_ms,
+                'message':"FULL_UPDATE"
             }
 
             # Get items:
@@ -136,7 +144,6 @@ class GameClient:
                     'items': outgoing_items},
                 self.server_address)
 
-
             # Log latency
             last_latency_ms = (time.time() * 1000) - start_time
             self.add_latency(last_latency_ms)
@@ -145,35 +152,33 @@ class GameClient:
 
             # set clock
             # todo, check for drift and add latency
-            if self.request_counter == 0:
+            if self.request_counter == 0 or self.absolute_server_time is None:
                 absolute_server_time = (time.time()*1000) - float(response_info['server_time_ms'])
-                self.clock.set_time(absolute_server_time)
+                self.absolute_server_time =  absolute_server_time
             
             self.client_id = response_info['client_id']
             if response_info['message'] == 'UPDATE':
                 self.incomming_buffer.put(response)
             self.request_counter +=1
             self.clock.tick(self.ticks_per_second)
-
         
-class GameManager:
+class GameClient:
 
-    def __init__(self, client: GameClient):
+    def __init__(self, connector: ClientConnector):
         self.game:SLGame = SLGame()
         self.game.start()
         self.snapshot_manager = SnapshotManager(SNAPSHOT_LOG_SIZE)
-        self.client = client
-        self.clock = self.client.clock
-        self.render_delay_in_ms = 100
+        self.connector = connector
+        self.render_delay_in_ms = 200
         self.frames_per_second = 60
 
     def load_response_data(self):
         done = False
         while (not done):
-            if self.client.incomming_buffer.qsize() ==0:
+            if self.connector.incomming_buffer.qsize() ==0:
                 incomming_data = None
             else:
-                incomming_data = self.client.incomming_buffer.get()
+                incomming_data = self.connector.incomming_buffer.get()
             if incomming_data is None:
                 done = True
                 break
@@ -198,37 +203,41 @@ class GameManager:
 
         while self.game.game_state == "RUNNING":
 
-            # Get Input From Players
-            self.game.check_game_events()
+            # Process Any Local Events
+            self.game.process_all_events(self.game.clock.get_time())
+
+            if self.connector.absolute_server_time is not None:
+                self.game.clock.set_time(self.connector.absolute_server_time)
+
+            # Get Input Events and put in output buffer
             if player is not None:
                 self.game.event_manager.add_events(player.pull_input_events())
-            self.game.event_manager.add_events(self.game.physics_engine.pull_events())
 
             event_snapshot = self.game.event_manager.get_snapshot()
-            if self.client.outgoing_buffer.qsize() < 3:
-                self.client.outgoing_buffer.put(event_snapshot)
+            if self.connector.outgoing_buffer.qsize() < 3:
+                self.connector.outgoing_buffer.put(event_snapshot)
+
+            # Clear Events after sending to Server 
+            # TODO: add support for selective removal of events. eg keep local events  like quite request
             self.game.event_manager.clear()
 
             # Get Game Snapshot
             self.load_response_data()
 
-            snapshot_found = False
-            while(not snapshot_found):
-                lookup_snapshot_time_ms = self.clock.get_time() - self.render_delay_in_ms
-                prev_snapshot, next_snapshot = self.snapshot_manager.get_snapshot_pair_by_id(lookup_snapshot_time_ms)
-                server_data = interpolate_snapshots(prev_snapshot, next_snapshot,lookup_snapshot_time_ms)
-                snapshot_found = True
 
+            # Load Snapshot
+            lookup_snapshot_time_ms = self.game.clock.get_time() - self.render_delay_in_ms
+            prev_snapshot, next_snapshot = self.snapshot_manager.get_snapshot_pair_by_id(lookup_snapshot_time_ms)
+            server_data = interpolate_snapshots(prev_snapshot, next_snapshot,lookup_snapshot_time_ms)
+            if server_data is None:
+                max_snapshot_id, server_data = self.snapshot_manager.get_latest_snapshot()
+                print("expected {} received {}".format(lookup_snapshot_time_ms,max_snapshot_id))
+            # If Snapshot exists
             if server_data is not None:
+                # print("newSnap")
                 snapshot = server_data['snapshot']
                 server_info = server_data['info']
-                if snapshot is not None:
-                    if 'object_manager' in snapshot:
-                        self.game.object_manager.clear_objects()
-                        self.game.object_manager.load_snapshot(snapshot['object_manager'])
-                    if 'player_manager' in snapshot:
-                        self.game.player_manager.load_snapshot(snapshot['player_manager'])
-
+                self.game.update_game_state(snapshot)
                 if server_info['player_id'] != "":
                     player = self.game.player_manager.get_player(server_info['player_id'])
 
@@ -238,21 +247,19 @@ class GameManager:
                     player.get_object_id(),
                     self.game.object_manager)
                 renderer.render_frame()
-            self.game.physics_engine.tick(self.frames_per_second)
+            self.game.clock.tick(self.frames_per_second)
             step_counter += 1
 
 
 import threading
 
 def main():
-    game_client = GameClient()
-    client_thread =threading.Thread(target=game_client.start_connection, args=())
-    client_thread.daemon = True
-    client_thread.start()
+    connector = ClientConnector()
+    connector_thread =threading.Thread(target=connector.start_connection, args=())
+    connector_thread.daemon = True
+    connector_thread.start()
 
-    game_manager = GameManager(client=game_client)
-
-
+    game_manager = GameClient(connector=connector)
     game_manager.run(resolution=(640, 480))
 
 

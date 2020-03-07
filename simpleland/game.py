@@ -1,19 +1,19 @@
-from typing import Set
+import json
+from typing import List, Set
+from uuid import UUID
 
-from .common import (PhysicsConfig, SLAdminEvent, SLBody,
-                     SLCircle, SLClock, SLEvent, SLLine, SLMechanicalEvent,
-                     SLObject, SLPlayerCollisionEvent,
-                     SLPolygon, SLRewardEvent, SLSpace, SLVector, SLViewEvent)
-from .core import SLEventManager, SLPhysicsEngine
+from pymunk import Vec2d
+
+from .common import (PhysicsConfig, SLBody, SLCircle, SLClock, SLLine,
+                     SLObject, SLPolygon, SLSpace, SLVector, SimClock)
+from .core import SLPhysicsEngine
+from .event_manager import (SLEvent, SLAdminEvent, SLEventManager, SLMechanicalEvent,
+                            SLPeriodicEvent, SLViewEvent)
 from .object_manager import SLObjectManager
 from .player import SLPlayer, SLPlayerManager
 from .renderer import SLRenderer
 from .utils import gen_id
-from pymunk import Vec2d
 
-import json
-from uuid import UUID
-import json
 
 class StateEncoder(json.JSONEncoder):
     def default(self, obj): # pylint: disable=E0202
@@ -41,8 +41,9 @@ class StateDecoder(json.JSONDecoder):
 class SLGame:
 
     def __init__(self):
+        self.clock = SimClock()
         self.object_manager = SLObjectManager()
-        self.physics_engine = SLPhysicsEngine()
+        self.physics_engine = SLPhysicsEngine(self.clock)
         self.player_manager = SLPlayerManager()
         self.event_manager = SLEventManager()
         self.renderer = SLRenderer()
@@ -60,26 +61,81 @@ class SLGame:
         else:
             print("State must be NOT_READY, current state is %s" % self.game_state)
         self.change_game_state("RUNNING")
+    
+    def update_game_state(self,snapshot):
+        if snapshot is None:
+            return
 
-    def check_game_events(self):
+        if 'object_manager' in snapshot:
+            #self.game.object_manager.clear_objects()
+            new_objs, removed_objs = self.object_manager.load_snapshot(snapshot['object_manager'])
+            for obj in removed_objs:
+                self.purge_object(obj)
+                #self.physics_engine.remove_object(obj)
+            
+            for obj in new_objs:
+                self.physics_engine.add_object(obj)
+        if 'player_manager' in snapshot:
+            self.player_manager.load_snapshot(snapshot['player_manager'])
+
+    def process_all_events(self, game_time):
         new_events = []
         events_to_remove = []
         for e in self.event_manager.get_events():
+            result_events = []
             if type(e) == SLAdminEvent:
                 e: SLAdminEvent = e
                 if e.value == 'QUIT':
                     self.change_game_state("QUITING")
                     events_to_remove.append(e)
+            elif type(e) == SLMechanicalEvent:
+                result_events = self.process_mechanical_event(e)
+                events_to_remove.append(e)
+            elif type(e) == SLViewEvent:
+                result_events = self.process_view_event(e)
+                events_to_remove.append(e)
+            elif type(e) == SLPeriodicEvent:
+                e: SLPeriodicEvent = e
+                result_events, remove_event = e.run(game_time,self.object_manager)
+                # NOT REMOVED
+                if remove_event:
+                    events_to_remove.append(e)
+
+            new_events.extend(result_events)
 
         for e in events_to_remove:
             self.event_manager.remove_event_by_id(e.get_id())
 
         self.event_manager.add_events(new_events)
 
+    def process_mechanical_event(self, e: SLMechanicalEvent) -> List[SLEvent]:
+        direction_delta = e.direction * self.physics_engine.config.velocity_multiplier * self.physics_engine.config.clock_multiplier
+        obj = self.get_object_manager().get_by_id(e.obj_id)
+        body = obj.get_body()
+
+        direction_delta = direction_delta.rotated(-1 * body.angle)
+        body.apply_impulse_at_world_point(direction_delta, body.position)
+        body.angular_velocity += e.orientation_diff * self.physics_engine.config.orientation_multiplier
+        return []
+
+    def process_view_event(self, e: SLViewEvent):
+        obj = self.get_object_manager().get_by_id(e.obj_id)
+        obj.get_camera().distance += e.distance_diff
+        return []
+
     def attach_objects(self, objs):
         for obj in objs:
             self.object_manager.add(obj)
             self.physics_engine.add_object(obj)
+    
+    def remove_object(self,obj:SLObject):
+        obj.delete(self.clock.get_time())
+        self.physics_engine.remove_object(obj)
+        print("Deleting:{}".format(obj.is_deleted))
+
+    def purge_object(self,obj:SLObject):
+        self.physics_engine.remove_object(obj)
+        self.object_manager.remove_by_id(obj.get_id())
 
     def get_object_manager(self) -> SLObjectManager:
         return self.object_manager
@@ -106,64 +162,3 @@ class SLGame:
         new_objs = self.object_manager.load_snapshot(data['object_manager'])
         for o in new_objs:
             self.physics_engine.add_object(o)
-
-
-    # def step(self):
-    #     self.event_manager.add_events(self.player_manager.pull_events())
-    #     self.event_manager.add_events(self.physics_engine.pull_events())
-
-    #     self.check_game_events()
-    #     self.physics_engine.apply_events(self.event_manager, self.object_manager)
-    #     self.step_counter+=1
-
-    # def run(self, obj_id: str, renderer: SLRenderer, max_steps = None):
-    #     """
-
-    #     :return:
-    #     """
-    #     self.start()
-
-
-    #     step_counter = 0
-    #     remove_objs = False
-
-    #     while self.game_state == "RUNNING":
-    #         """
-    #         """
-
-    #         # Get Input From Players
-    #         self.event_manager.add_events(self.player_manager.pull_events())
-    #         self.event_manager.add_events(self.physics_engine.pull_events())
-
-    #         self.check_game_events()
-    #         self.physics_engine.apply_events(self.event_manager, self.object_manager)
-    #         self.physics_engine.update(
-    #             self.event_manager, 
-    #             self.object_manager)
-
-    #         # Send Recieve Data (Network stuff eventually)
-    #         obj_man_snapshot = self.object_manager.get_snapshot()
-    #         encoded_as_st = json.dumps(obj_man_snapshot, 
-    #             indent= 4, 
-    #             cls= StateEncoder)
-
-    #         # Clear data test
-    #         if remove_objs:
-    #             for o in self.object_manager.get_all_objects():
-    #                 self.physics_engine.remove_object(o)
-    #             self.object_manager.clear_objects()
-
-    #         results = json.loads(encoded_as_st, cls=StateDecoder)
-    #         self.object_manager.load_snapshot(results)
-
-    #         if remove_objs:
-    #             for o in self.object_manager.get_all_objects():
-    #                 self.physics_engine.add_object(o)
-            
-    #         # Render
-    #         renderer.process_frame(obj_id,self.object_manager)
-    #         renderer.render_frame()
-            
-    #         step_counter += 1
-    #         if max_steps and step_counter > max_steps:
-    #             self.game_state = "QUITING"

@@ -47,26 +47,33 @@ def load_dict_snapshot(obj, dict_data, exclude_keys={}):
 
 class SimClock:
     
-    def __init__(self):
+    def __init__(self, start_time= None):
         self.resolution = 1000# milliseconds
-        self.start_time = self._current_time()
-        self.last_tick = self.start_time
+        self.start_time = self._current_time() if start_time is None else start_time
+        # self.last_tick = self.start_time
+        self.pygame_clock = SLClock()
 
     def _current_time(self):
         return time.time() * self.resolution
+    
+    def copy(self):
+        return SimClock(self.start_time)
 
     def get_start_time(self):
         return self.start_time
+    
+    def tick(self,ticks_per_second):
+        return self.pygame_clock.tick(ticks_per_second)
 
-    def tick(self, ticks_per_second = 60):
-        expected_diff = (1.0/ticks_per_second) * 1000
-        tick_diff = self.get_time() - self.last_tick
-        delay_seconds = (expected_diff - tick_diff)/self.resolution
-        if delay_seconds < 0:
-            delay_seconds = 0
-        #print("Delay in seconds = {} ".format(delay_seconds))
-        time.sleep(delay_seconds)
-        self.last_tick = self.get_time()
+    # def tick(self, ticks_per_second = 60):
+    #     expected_diff = (1.0/ticks_per_second) * 1000
+    #     tick_diff = self.get_time() - self.last_tick
+    #     delay_seconds = (expected_diff - tick_diff)/self.resolution
+    #     if delay_seconds < 0:
+    #         delay_seconds = 0
+    #     #print("Delay in seconds = {} ".format(delay_seconds))
+    #     time.sleep(delay_seconds)
+    #     self.last_tick = self.get_time()
 
     def set_time(self,time):
         self.start_time = time
@@ -243,25 +250,14 @@ class SLCamera(SLBase):
 
 class SLObject(SLBase):
 
-
-
-
     @classmethod
     def build_from_dict(cls,dict_data):
         data = dict_data['data']
         
-        # body_data = state_to_dict(dict_data['body'])
-        # print(body_data)
-        
-        # body = SLBody(**body_data['init'])
-        # body.position = body_data['general']['position']
-        # body.force = body_data['general']['force']
-        # body.velocity = body_data['general']['velocity']
-        # body.torque = body_data['general']['torque']
 
         body = SLBody()
 
-        body.__setstate__(dict_data['body'])
+        body.__setstate__(dict_to_state(dict_data['body']))
         # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
         obj = SLObject(body=body, id=data['id'])
         load_dict_snapshot(obj, dict_data, exclude_keys={"body"})
@@ -273,10 +269,10 @@ class SLObject(SLBase):
             obj.camera = SLCamera(**data['camera']['data'])
         return obj
         
-
     def __init__(self,
                  body:SLBody=None,
                  id= None,
+                 data = None,
                  camera=None):
         if id is None:
             self.id = gen_id()
@@ -284,15 +280,22 @@ class SLObject(SLBase):
             self.id = id
         self.camera = camera
         self.body: SLBody = body
-        self.shape_group: SLShapeGroup = SLShapeGroup()
-        self.energy = 100
-        self.health = 100
 
-    def get_energy(self):
-        return self.energy
+        self.shape_group: SLShapeGroup = SLShapeGroup()
+        self.data = {} if data is None else data
+        self.last_change = None
+        self.is_deleted = False
+
+    def get_data_value(self,k, default_value=None):
+        return self.data.get(k,default_value)
     
-    def set_energy(self,energy):
-        self.energy = energy
+    def delete(self,time_stamp):
+        self.is_deleted = True
+        self.last_change = time_stamp
+    
+    def set_data_value(self,k,value,time_stamp):
+        self.data[k] = value
+        self.last_change = time_stamp
 
     def get_body(self) -> SLBody:
         return self.body
@@ -314,14 +317,29 @@ class SLObject(SLBase):
     def get_camera(self) -> SLCamera:
         return self.camera
 
+    def get_last_change(self):
+        if self.body.last_change is None and self.last_change is None:
+            return None
+        if self.body.last_change is None:
+            return self.last_change
+        if self.last_change is None:
+            return None
+        if self.body.last_change > self.last_change:
+            return self.body.last_change
+        return self.last_change
+
     def get_snapshot(self):
-        data = get_dict_snapshot(self, exclude_keys={'body'})
-        data['body'] = self.body.__getstate__()
+        data = get_dict_snapshot(self, exclude_keys={'body','on_change_func'})
+        data['body'] = state_to_dict(self.body.__getstate__())
+        data['data']['last_change']= self.get_last_change()
+        # print(data['body']['special'].keys())
+        del data['body']['special']['_velocity_func']
+        del data['body']['special']['_position_func']
         return data
 
     def load_snapshot(self, data):
         load_dict_snapshot(self, data, exclude_keys={"body"})
-        body_data = state_to_dict(data['body'])
+        body_data = data['body']
 
         # This breaks things
         #self.body.__setstate__(data['body'])
@@ -329,8 +347,8 @@ class SLObject(SLBase):
         # self.body.force = body_data['general']['force']
         self.body.velocity = body_data['general']['velocity']
         self.body.angle = body_data['general']['angle']
-        self.body.moment = body_data['general']['moment']
-        self.body.rotation_vector = body_data['general']['rotation_vector']
+        #self.body.moment = body_data['general']['moment']
+        #self.body.rotation_vector = body_data['general']['rotation_vector']
 
 
         # self.body.torque = body_data['general']['torque']
@@ -347,6 +365,7 @@ def build_interpolated_object(obj_1:SLObject,obj_2:SLObject,fraction=0.5):
     pos_x = (b2.position.x - b1.position.x) * fraction + b1.position.x
     pos_y = (b2.position.y - b1.position.y) * fraction + b1.position.y
     b_new = SLBody()
+    b_new.last_change = b1.last_change
 
     # b_new._set_position(SLVector(pos_x,pos_y))
     b_new.position = SLVector(pos_x,pos_y)
@@ -366,7 +385,9 @@ def build_interpolated_object(obj_1:SLObject,obj_2:SLObject,fraction=0.5):
     # b_new.angular_velocity.y = (b2.angular_velocity.y - b1.angular_velocity.y) * fraction + b1.angular_velocity.y
 
     # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
-    obj = SLObject(body=b_new, id=obj_1.get_id())
+    obj = SLObject(body=b_new, id=obj_1.get_id(),data=obj_1.data)
+    obj.is_deleted = obj_1.is_deleted
+    obj.last_change = obj_1.last_change
     #load_dict_snapshot(obj, obj_1.get_snapshot(), exclude_keys={"body"})
 
     #TODO: COPY??
@@ -377,67 +398,3 @@ def build_interpolated_object(obj_1:SLObject,obj_2:SLObject,fraction=0.5):
         camera_dist = (obj_2.get_camera().distance - obj_1.get_camera().distance) * fraction + obj_1.get_camera().distance
         obj.camera = SLCamera(distance=camera_dist)
     return obj
-
-def build_event_from_dict(data_dict):
-    cls = globals()[data_dict['_type']]
-    event = cls(**data_dict['data'])
-    return event
-
-class SLEvent(SLBase):
-
-    def __init__(self, id=None):
-        if id is None:
-            self.id = gen_id()
-        else:
-            self.id = id
-
-    def get_id(self):
-        return self.id
-
-class SLRewardEvent(SLEvent):
-
-    def __init__(self, reward=0, id = None):
-        super(SLRewardEvent, self).__init__(id)
-        self.reward = reward
-
-class SLPlayerCollisionEvent(SLEvent):
-
-    def __init__(self, player_id, obj, id=None):
-        super(SLPlayerCollisionEvent,self).__init__(id)
-        self.player_id = player_id
-        self.obj = obj
-
-class SLMechanicalEvent(SLEvent):
-
-    def __init__(self, obj_id: str,
-                 direction: SLVector ,
-                 orientation_diff: float = 0.0,
-                 id=None):
-        super(SLMechanicalEvent,self).__init__(id)
-        self.obj_id = obj_id
-        self.direction = direction
-        self.orientation_diff = orientation_diff
-
-class SLAdminEvent(SLEvent):
-
-    def __init__(self, value, id=None):
-        super(SLAdminEvent, self).__init__(id)
-        self.value = value
-
-    def __str__(self):
-        return "%s" % self.value
-# http://www.dcs.gla.ac.uk/~pat/52233/slides/Geometry1x1.pdf
-
-
-class SLViewEvent(SLEvent):
-
-    def __init__(self, obj_id: str,
-                 distance_diff: float = 0,
-                 center_diff: SLVector = SLVector.zero(),
-                 orientation_diff: float = 0.0, 
-                 id=None):
-        super(SLViewEvent, self).__init__(id)
-        self.obj_id = obj_id
-        self.distance_diff = distance_diff
-        self.center_diff = center_diff
-        self.orientation_diff = orientation_diff

@@ -6,10 +6,10 @@ import pymunk
 from pymunk import Vec2d
 
 from .common import (PhysicsConfig, SLBody,
-                               SLCircle, SLClock, SLEvent, SLLine,
-                               SLMechanicalEvent, SLObject,
-                               SLPlayerCollisionEvent, SLPolygon,
-                               SLSpace, SLVector, SLViewEvent)
+                               SLCircle, SLClock, SLLine,
+                               SLObject,
+                               SLPolygon,
+                               SLSpace, SLVector)
 from .player import SLPlayer
 from .utils import gen_id
 
