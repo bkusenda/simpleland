@@ -5,7 +5,7 @@ import pygame
 import pymunk
 from pymunk import Vec2d
 
-from .common import (PhysicsConfig, SLBody,
+from .common import (SLBody,
                                SLCircle, SLClock, SLLine,
                                SLObject,
                                SLPolygon,

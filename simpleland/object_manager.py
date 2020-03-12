@@ -5,58 +5,80 @@ import pygame
 import pymunk
 from pymunk import Vec2d
 
-from .common import (PhysicsConfig, Singleton, SLBody, SLCircle, SLClock,
-                     SLLine, SLObject, SLPolygon, SLSpace, SLVector)
+from .common import (Singleton, SLBody, SLCircle, SLClock,
+                     SLLine, SLObject, SLPolygon, SLSpace, SLVector, SLExtendedObject)
 from .utils import gen_id
 
 class SLObjectManager:
-    """
-    Contains references to all game objects
-    """
 
-    def __init__(self):
-        self.objects:Dict[str,SLObject] = {}
+    def __init__(self, history_size):
+        self.history_size = 10
+        self.objects:Dict[str,SLExtendedObject] = {}
 
-    def add(self, obj: SLObject):
-        self.objects[obj.get_id()] = obj
+    def add(self,timestamp, obj: SLObject):
+        extObj = self.objects.get(obj.get_id(), SLExtendedObject(self.history_size))
+        extObj.add(timestamp,obj)
+        self.objects[obj.get_id()] = extObj
+    
+    def link_to_latest(self,timestamp, k):
+        # Only useful when not using physics. 
+        # dumb client or if history isn't needed
+        extObj = self.objects[k]
+        extObj.link_to_latest(timestamp)
 
     def clear_objects(self):
-        self.objects:Dict[str,SLObject] = {}
+        self.objects:Dict[str,SLExtendedObject] = {}
 
-    def get_by_id(self, obj_id)->SLObject:
-        return self.objects.get(obj_id,None)
+    def get_latest_by_id(self, obj_id)->SLObject:
+        ext_obj = self.objects.get(obj_id,None)
+        if ext_obj is None:
+            print("no such object with id {}".format(obj_id))
+            return None, None
+        else:
+            return ext_obj.get_latest()
 
-    def remove_by_id(self, obj_id)->SLObject:
+    def get_by_id(self, obj_id, timestamp)->SLObject:
+        ext_obj = self.objects.get(obj_id,None)
+        if ext_obj is None:
+            print("no such object with id {}".format(obj_id))
+            return None
+        else:
+            return ext_obj.get_interpolated(timestamp)
+
+    def remove_by_id(self, obj_id):
         self.objects[obj_id]
         del self.objects[obj_id]
 
-    def get_all_objects(self) -> List[SLObject]:
-        return list(self.objects.values())
+    def get_objects_for_timestamp(self,timestamp):
+        valid_objs = {}
+        for k,eo in self.objects.items():
+            o = eo.get_interpolated(timestamp)
+            if o is not None and not o.is_deleted:
+                valid_objs[k] = o
+        return valid_objs
 
-    def get_snapshot(self):
-        objs = self.get_all_objects()
-        results = {}
-        for o in objs:
-            results[o.get_id()]= o.get_snapshot()
-        return results
+    def get_objects_latest(self)->SLObject:
+        objs = {}
+        for k,eo in self.objects.items():
+            t,o = eo.get_latest()
+            objs[k] = o
+        return objs
 
-    def set_last_change(self,timestamp):
-        objs = list(self.objects.values())
-        for obj in objs:
-            obj.set_last_change(timestamp)
+    def load_snapshot_from_data(self,timestamp, data):
+        snapshot_keys = set()
+        for odata in data:
+            new_obj = SLObject.build_from_dict(odata)
+            self.add(timestamp, new_obj)
+            snapshot_keys.add(new_obj.get_id())
+        not_updated_keys = snapshot_keys - self.objects.keys()
 
-    def load_snapshot(self,data):
-        new_objs = []
-        removed_objs = []
-        for k,o_data in data.items():
-            is_deleted = o_data['data']['is_deleted']
-            if k in self.objects:
-                if is_deleted:
-                    removed_objs.append(self.objects[k])
-                else:
-                    self.objects[k].load_snapshot(o_data)
-            elif not is_deleted:
-                new_obj = SLObject.build_from_dict(o_data)
-                self.objects[k] = new_obj
-                new_objs.append(new_obj)
-        return new_objs, removed_objs
+        # link objs not in update
+        for k in not_updated_keys:
+            self.link_to_latest(timestamp,k)
+
+    def get_snapshot_update(self,changed_since):
+        snapshot_list = []
+        for obj in list(self.get_objects_latest().values()):
+            if obj.get_last_change() >= changed_since:
+                snapshot_list.append(obj.get_snapshot())
+        return snapshot_list

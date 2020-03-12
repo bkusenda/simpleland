@@ -4,16 +4,16 @@ from uuid import UUID
 
 from pymunk import Vec2d
 
-from .common import (PhysicsConfig, SLBody, SLCircle, SLClock, SLLine,
-                     SLObject, SLPolygon, SLSpace, SLVector, SimClock)
-from .core import SLPhysicsEngine
+from .common import (SLBody, SLCircle, SLClock, SLLine,
+                     SLObject, SLPolygon, SLSpace, SLVector, SimClock, SLExtendedObject)
+from .physics_engine import SLPhysicsEngine
 from .event_manager import (SLEvent, SLAdminEvent, SLEventManager, SLMechanicalEvent,
                             SLPeriodicEvent, SLViewEvent)
 from .object_manager import SLObjectManager
 from .player import SLPlayer, SLPlayerManager
 from .renderer import SLRenderer
 from .utils import gen_id
-
+from .config import GameConfig
 
 class StateEncoder(json.JSONEncoder):
     def default(self, obj): # pylint: disable=E0202
@@ -40,45 +40,44 @@ class StateDecoder(json.JSONDecoder):
 
 class SLGame:
 
-    def __init__(self):
+    def __init__(self, config=None):
+        self.config = GameConfig()
         self.clock = SimClock()
-        self.object_manager = SLObjectManager()
-        self.physics_engine = SLPhysicsEngine(self.clock)
-        self.player_manager = SLPlayerManager()
-        self.event_manager = SLEventManager()
+        self.object_manager = SLObjectManager(200)
+        self.physics_engine = SLPhysicsEngine(self.clock, self.config)
+        self.player_manager = SLPlayerManager(self.config)
+        self.event_manager = SLEventManager(self.config)
         self.renderer = SLRenderer()
-        self.game_state = "NOT_READY"
+        self.game_state = "RUNNING"
         self.step_counter = 0
+        self.tick_rate = 60#steps per second
+        self.physics_tick_rate = self.tick_rate  #steps per second
         self.id = gen_id()
+        self.last_position_lookup = {}
 
     def change_game_state(self, new_state):
         self.game_state = new_state
-        return True
 
-    def start(self):
-        if self.game_state == "NOT_READY":
-            self.change_game_state("READY")
-        else:
-            print("State must be NOT_READY, current state is %s" % self.game_state)
-        self.change_game_state("RUNNING")
+    def create_snapshot(self,last_update_timestamp):
+        snapshot_timestamp = self.clock.get_time()
+        om_snapshot = self.object_manager.get_snapshot_update(last_update_timestamp)
+        # print("SNAPSHOT: {} SIZE: {}".format(last_update_timestamp,len(om_snapshot)))
+        pm_snapshot = self.player_manager.get_snapshot() # TODO, updates since
+        return snapshot_timestamp, {
+            'object_manager':om_snapshot,
+            'player_manager':pm_snapshot,
+            'snapshot_timestamp':snapshot_timestamp}
     
-    def update_game_state(self,snapshot):
-        if snapshot is None:
-            return
-
+    def load_snapshot(self,snapshot):
+        snapshot_timestamp = snapshot['snapshot_timestamp']
         if 'object_manager' in snapshot:
-            #self.game.object_manager.clear_objects()
-            new_objs, removed_objs = self.object_manager.load_snapshot(snapshot['object_manager'])
-            for obj in removed_objs:
-                self.purge_object(obj)
-                #self.physics_engine.remove_object(obj)
-            
-            for obj in new_objs:
-                self.physics_engine.add_object(obj)
+            self.object_manager.load_snapshot_from_data(
+                snapshot_timestamp,
+                snapshot['object_manager'])
         if 'player_manager' in snapshot:
             self.player_manager.load_snapshot(snapshot['player_manager'])
 
-    def process_all_events(self, game_time):
+    def process_events(self):
         new_events = []
         events_to_remove = []
         for e in self.event_manager.get_events():
@@ -96,7 +95,7 @@ class SLGame:
                 events_to_remove.append(e)
             elif type(e) == SLPeriodicEvent:
                 e: SLPeriodicEvent = e
-                result_events, remove_event = e.run(game_time,self.object_manager)
+                result_events, remove_event = e.run(self.clock.get_time(),self.object_manager)
                 # NOT REMOVED
                 if remove_event:
                     events_to_remove.append(e)
@@ -110,55 +109,66 @@ class SLGame:
 
     def process_mechanical_event(self, e: SLMechanicalEvent) -> List[SLEvent]:
         direction_delta = e.direction * self.physics_engine.config.velocity_multiplier * self.physics_engine.config.clock_multiplier
-        obj = self.get_object_manager().get_by_id(e.obj_id)
+        t, obj = self.get_object_manager().get_latest_by_id(e.obj_id)
+        if obj is None:
+            return []
+        obj.set_last_change(self.clock.get_time())
         body = obj.get_body()
 
         direction_delta = direction_delta.rotated(-1 * body.angle)
         body.apply_impulse_at_world_point(direction_delta, body.position)
-        body.angular_velocity += e.orientation_diff * self.physics_engine.config.orientation_multiplier
+        # body.angle += 0.1 * (e.orientation_diff * self.physics_engine.config.orientation_multiplier)
+        body.angular_velocity += (e.orientation_diff * self.physics_engine.config.orientation_multiplier)
+
+        if body.angular_velocity > 2:
+            body.angular_velocity = 2
+        elif body.angular_velocity < -2:
+            body.angular_velocity = -2
         return []
 
     def process_view_event(self, e: SLViewEvent):
-        obj = self.get_object_manager().get_by_id(e.obj_id)
+        t, obj = self.get_object_manager().get_latest_by_id(e.obj_id)
+        obj.set_last_change(self.clock.get_time())
         obj.get_camera().distance += e.distance_diff
         return []
 
-    def attach_objects(self, objs):
-        for obj in objs:
-            self.object_manager.add(obj)
-            self.physics_engine.add_object(obj)
-    
+    def apply_physics(self):
+
+        self.physics_engine.update(self.physics_tick_rate)
+
+        # Check for changes in position or angle and log change time
+        new_position_lookup = {}
+        for k,o in self.object_manager.get_objects_latest().items():
+            angle = o.get_body().angle
+            position = o.get_body().position
+            current_position = {'angle':angle,'position':position}
+
+            last_position = self.last_position_lookup.get(k,None)
+            if last_position is not None:
+                if ((last_position['angle'] != current_position['angle'] ) or
+                (last_position['position'] != current_position['position'])):
+                    o.set_last_change(self.clock.get_time())
+            new_position_lookup[k] = current_position
+        self.last_position_lookup = new_position_lookup
+            
+
+    def add_object(self,obj):
+        obj.set_last_change(self.clock.get_time())
+        self.object_manager.add(self.clock.get_time(), obj)
+        self.physics_engine.add_object(obj)
+
     def remove_object(self,obj:SLObject):
-        obj.delete(self.clock.get_time())
+        # Marks as deleted, but not removed completely
+        obj.delete()
+        obj.set_last_change(self.clock.get_time())
         self.physics_engine.remove_object(obj)
         print("Deleting:{}".format(obj.is_deleted))
 
-    def purge_object(self,obj:SLObject):
-        self.physics_engine.remove_object(obj)
-        self.object_manager.remove_by_id(obj.get_id())
-
-    def get_object_manager(self) -> SLObjectManager:
-        return self.object_manager
-
-    def quit(self):
-        pass
+    def tick(self):
+        self.clock.tick(self.tick_rate)
 
     def add_player(self, player: SLPlayer):
         self.player_manager.add_player(player)
 
-    # def manual_player_action_step(self, action_set: Set[int], puid: str):
-    #     # this should be handled on client side
-    #     player = self.player_manager.get_player(puid)
-    #     player.add_input(action_set)
-    #     self.step()
-    #     # player.process_frame(self.universe)
-    #     obs = player.renderer.get_observation()
-    #     # step_reward = self.get_step_reward()
-    #     done = self.game_state == "QUITING"
-    #     return obs, step_reward, done
-        
-
-    def load_game_snapshot(self,data):
-        new_objs = self.object_manager.load_snapshot(data['object_manager'])
-        for o in new_objs:
-            self.physics_engine.add_object(o)
+    def get_object_manager(self) -> SLObjectManager:
+        return self.object_manager

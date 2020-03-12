@@ -5,7 +5,7 @@ import pygame
 import pymunk
 from pymunk import Vec2d
 
-from .common import (PhysicsConfig, SLBody, SLCircle, SLClock, SLVector, SLSpace,
+from .common import (SLBody, SLCircle, SLClock, SLVector, SLSpace,
                                SLLine, SLObject, SLPolygon, SLBase)
 from .utils import gen_id
 from .object_manager import SLObjectManager
@@ -54,6 +54,27 @@ class SLPeriodicEvent(SLBase):
             self.last_run = game_time
 
         return [], False
+
+
+class SLSoundEvent(SLBase):
+
+    def __init__(self,
+                func, 
+                id=None, 
+                exection_time=None, 
+                sound_id = None,
+                data={}):
+        if id is None:
+            self.id = gen_id()
+        else:
+            self.id = id
+        self.exection_time = exection_time
+        self.data=data
+        self.sound_id = sound_id
+
+    def get_id(self):
+        return self.id
+
 
 class SLCollisionEvent(SLBase):
 
@@ -118,7 +139,9 @@ class SLEventManager:
     Contains references to all game events
     """
 
-    def __init__(self):
+    def __init__(self,config=None):
+        self.config = {} if config is None else config
+
         self.events: Dict[str, SLEvent] = {}
 
     def add_event(self, e: SLEvent):

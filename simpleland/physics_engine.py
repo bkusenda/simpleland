@@ -6,46 +6,48 @@ import pymunk
 from pymunk import Vec2d
 
 
-from .common import (PhysicsConfig, SLBody, SLCircle, SLClock, SLLine,
+from .common import (SLBody, SLCircle, SLClock, SLLine,
                      SLObject, SLPolygon, SLSpace, SLVector, SimClock)
 from .player import SLPlayer
 from .utils import gen_id
 from .object_manager import SLObjectManager
+from .config import PhysicsConfig
 
 class SLPhysicsEngine:
     """
     Handles physics events and collision
     """
 
-    def __init__(self,clock:SimClock):
+    def __init__(self,clock:SimClock,config=None):
+        self.config = {} if config is None else config
         self.clock = clock
         self.config = PhysicsConfig()
         self.space = SLSpace()
         self.space.damping = self.config.space_damping
 
     def enable_collision_detection(self, callback):
-
         h = self.space.add_collision_handler(1, 1)
-
         def begin(arbiter, space, data):
-            callback(arbiter,space,data)
-            return True
-
+            return callback(arbiter,space,data)
         h.begin = begin
 
     def add_object(self, obj: SLObject):
         body = obj.body
         body.last_change = self.clock.get_time()
-        def velocity_callback(body:SLBody, gravity, damping, dt):
-            init_v = body.velocity
-            if init_v.length < 0.5:
-                body.velocity = SLVector(0.0,0.0)
-            pymunk.Body.update_velocity(body, gravity, damping, dt)
-            new_v = body.velocity
-            if init_v != new_v:
-                body.last_change = self.clock.get_time()
-        body.velocity_func = velocity_callback
 
+        def limit_velocity(b, gravity, damping, dt):
+            max_velocity = self.config.default_max_velocity
+            if b.velocity.length < self.config.default_min_velocity:
+                b.velocity = SLVector(0.0,0.0)
+            pymunk.Body.update_velocity(b, gravity, damping, dt)
+            l = b.velocity.length
+            scale = 1
+            if l > max_velocity:
+                scale = max_velocity / l
+            b.velocity = b.velocity * scale
+        
+        body.velocity_func = limit_velocity
+        
 
         def position_callback(body:SLBody, dt):
             init_p = body.position
@@ -53,6 +55,7 @@ class SLPhysicsEngine:
             new_p = body.position
             if init_p != new_p:
                 body.last_change = self.clock.get_time()
+
         body.position_func = position_callback
         self.space.add(obj.get_body(), obj.get_shapes())
 
@@ -60,5 +63,5 @@ class SLPhysicsEngine:
         self.space.remove(obj.get_shapes())
         self.space.remove(obj.get_body())
 
-    def update(self, om: SLObjectManager, steps_per_second:float):
-        self.space.step(1.0/steps_per_second)
+    def update(self,tick_rate:float):
+        self.space.step(1.0/tick_rate)

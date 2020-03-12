@@ -5,7 +5,7 @@ import numpy as np
 import pygame
 
 
-from .common import (get_dict_snapshot, load_dict_snapshot, PhysicsConfig, SLBody, SLCircle, SLClock, SLLine,
+from .common import (get_dict_snapshot, load_dict_snapshot, SLBody, SLCircle, SLClock, SLLine,
                      SLObject, SLPolygon, SLSpace, SLVector, SimClock, SLBase)
 from .utils import gen_id
 from .event_manager import (SLAdminEvent, SLEventManager, SLMechanicalEvent,
@@ -181,7 +181,7 @@ class SLHumanPlayer(SLPlayer):
 
         keys = pygame.key.get_pressed()
 
-        move_speed = 0.02
+        move_speed = 1
         obj_orientation_diff = None
         if keys[pygame.K_q]:
             obj_orientation_diff = -1
@@ -189,7 +189,9 @@ class SLHumanPlayer(SLPlayer):
             obj_orientation_diff = 1
 
         if obj_orientation_diff is not None:
-            events.append(SLMechanicalEvent(self.get_object_id(), direction=SLVector.zero(), orientation_diff=obj_orientation_diff * move_speed))
+            events.append(SLMechanicalEvent(self.get_object_id(), 
+                    direction=SLVector.zero(),
+                    orientation_diff=obj_orientation_diff * move_speed))
 
         # Object Movement
         force = 0.5
@@ -201,10 +203,10 @@ class SLHumanPlayer(SLPlayer):
             direction += SLVector(0, -1)
 
         if keys[pygame.K_a]:
-            direction += SLVector(-1, 0)
+            direction += SLVector(-0.5, 0)
 
         if keys[pygame.K_d]:
-            direction += SLVector(1, 0)
+            direction += SLVector(0.5, 0)
 
         if keys[pygame.K_ESCAPE]:
             admin_event = SLAdminEvent('QUIT')
@@ -283,7 +285,8 @@ class SLAgentPlayer(SLPlayer):
 
 class SLPlayerManager(object):
 
-    def __init__(self):
+    def __init__(self,config=None):
+        self.config = {} if config is None else config
         self.players_map: Dict[str, SLPlayer] = {}
 
     def add_player(self, player: SLPlayer):

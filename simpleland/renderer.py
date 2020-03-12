@@ -36,6 +36,23 @@ class SLRenderer:
         self.view_height = 30.0
         self.view_width = self.view_height * self.aspect_ratio
         self.center = SLVector.zero()
+        self.image_assets = {}
+        self.load_assets()
+        self.resize_images()
+        self.render_shapes = False
+
+    def load_assets(self):
+        self.image_assets['1'] = pygame.image.load(r'assets/redfighter0006.png')
+        self.image_assets['2'] = pygame.image.load(r'assets/ship2.png')
+        self.image_assets['energy1'] = pygame.image.load(r'assets/energy1.png') 
+        self.image_assets['astroid1'] = pygame.image.load(r'assets/astroid1.png') 
+        self.image_assets['astroid2'] = pygame.image.load(r'assets/astroid2.png') 
+
+    def resize_images(self):
+        new_assets = {}
+        for k, v in self.image_assets.items():
+            new_assets[k] = pygame.transform.scale(v,(50,50))
+        self.image_assets = new_assets
 
     def update_view(self, view_height):
         self.view_height = max(view_height, 0.001)
@@ -82,6 +99,7 @@ class SLRenderer:
                     color,
                     screen_factor,
                     screen_view_center,
+                    display_angle,
                     angle,
                     center):
         obj_pos = obj.get_body().position + circle.offset # Doesn't work with offset
@@ -89,12 +107,17 @@ class SLRenderer:
         obj_location = obj_location.rotated(angle)
         p = screen_factor * (obj_location + screen_view_center)
         p = to_pygame(p, self._display_surf)
-
+        size = int(circle.radius * screen_factor[0])
         pygame.draw.circle(self._display_surf,
                            color,
                            p,
-                           int(circle.radius * screen_factor[0]),
+                           size,
                            1)
+        # image_size = int(circle.radius)            
+        # image = pygame.transform.scale(self.ship_image,(size*4,size*4))
+        # image = pygame.transform.rotate(image,display_angle)
+        # image_loc = (p[0],p[1] - 40)
+        # self._display_surf.blit(image,image_loc)
 
     def draw_polygon(self,
                      obj: SLObject,
@@ -103,8 +126,10 @@ class SLRenderer:
                      screen_factor,
                      screen_view_center,
                      angle,
+                     display_angle,
                      center):
         obj_pos = obj.get_body().position
+
         verts = shape.get_vertices()
         new_verts = []
         for v in verts:
@@ -113,65 +138,86 @@ class SLRenderer:
             p = screen_factor * (obj_location + screen_view_center)
             p = to_pygame(p, self._display_surf)
             new_verts.append(p)
-
         pygame.draw.polygon(self._display_surf,
-                            color,
-                            new_verts,
-                            1)
+                color,
+                new_verts,
+                1)
 
-    def draw_object(self, center, obj, angle, screen_factor, screen_view_center, color=None):
+    def draw_object(self, center, obj, angle, screen_factor, screen_view_center, display_angle, color=None):
 
         color = (255, 50, 50)
 
         body_angle = obj.get_body().angle
 
-        for i, shape in enumerate(obj.get_shapes()):
-            if i == 1:
-                color = (100, 200, 200)
-            else:
-                color = (255, 50, 50)
+        image_id = obj.get_data_value("image")
+        image_used = image_id is not None and image_id in self.image_assets
+        if image_used:
+            obj_pos = obj.get_body().position
+            image = self.image_assets[image_id].copy()
+            image = pygame.transform.scale(image,(50,50))
 
-            if type(shape) == SLLine:
-                self.draw_line(obj,
-                               shape,
-                               color,
-                               screen_factor,
-                               screen_view_center,
-                               angle,
-                               center)
-            elif type(shape) == SLCircle:
-                self.draw_circle(obj,
-                                 shape,
-                                 color,
-                                 screen_factor,
-                                 screen_view_center,
-                                 angle,
-                                 center)
-            elif type(shape) == SLPolygon:
-                self.draw_polygon(obj,
-                                  shape,
-                                  color,
-                                  screen_factor,
-                                  screen_view_center,
-                                  angle,
-                                  center)
+            image = pygame.transform.rotate(image,angle * 57.2957795)
+
+            offset = SLVector(1.20,-1.30).rotated(-angle) 
+
+            image_loc = screen_factor *((obj_pos- center - offset).rotated(angle)  + screen_view_center)
+            image_loc = to_pygame(image_loc, self._display_surf)
+            self._display_surf.blit(image,image_loc)
+
+        if not image_used or self.render_shapes:
+            for i, shape in enumerate(obj.get_shapes()):
+                if i == 1:
+                    color = (100, 200, 200)
+                else:
+                    color = (255, 50, 50)
+
+                if type(shape) == SLLine:
+                    self.draw_line(obj,
+                                shape,
+                                color,
+                                screen_factor,
+                                screen_view_center,
+                                angle,
+                                center)
+                elif type(shape) == SLCircle:
+                    self.draw_circle(obj,
+                                    shape,
+                                    color,
+                                    screen_factor,
+                                    screen_view_center,
+                                    display_angle,
+                                    angle,
+                                    center)
+                elif type(shape) == SLPolygon:
+                    self.draw_polygon(obj,
+                                    shape,
+                                    color,
+                                    screen_factor,
+                                    screen_view_center,
+                                    angle = angle,
+                                    display_angle=body_angle,
+                                    center=center)
 
     # TODO: Clean this up
     def process_frame(self,
+                    render_time,
                     obj_id:str,
                     object_manager: SLObjectManager,
                     additional_data: Dict[str, Any]={},
                     show_console=False):
+        # import pdb;pdb.set_trace()
 
         if not self.initialized:
             self.on_init()
         self._display_surf.fill((0, 0, 0))
         console_log = []
-        view_obj = object_manager.get_by_id(obj_id)
+        view_obj = object_manager.get_by_id(obj_id, render_time)
+        #t, view_obj = object_manager.get_latest_by_id(obj_id)
+        #print(view_obj)
         if view_obj == None:
-            return
-
-
+            print(object_manager.objects[obj_id].timestamps)
+            raise Exception("No View Object {} at render_time {}".format(obj_id,render_time))
+            
         self.update_view(view_obj.get_camera().get_distance())
         center = view_obj.get_body().position
         angle = view_obj.get_body().angle
@@ -180,12 +226,14 @@ class SLRenderer:
 
         screen_view_center = SLVector(self.view_width, self.view_height) / 2.0
 
-        self.draw_object(center, view_obj, 0, screen_factor, screen_view_center)
-
-        for obj in object_manager.get_all_objects():
-            if obj.get_id() == view_obj.get_id():
+        self.draw_object(center, view_obj, 0, screen_factor, screen_view_center,angle)
+        render_obj_dict = object_manager.get_objects_for_timestamp(render_time)
+        for k, obj in render_obj_dict.items():
+            if k == view_obj.get_id():
                 continue
-            self.draw_object(center, obj, angle, screen_factor, screen_view_center)
+            elif abs((center - obj.get_body().position).length) > 20 and obj.get_data_value('type') != 'static':
+                continue
+            self.draw_object(center, obj, angle, screen_factor, screen_view_center, display_angle=angle)
 
         if show_console:
             console_log.append("object orientation: %s" % angle)

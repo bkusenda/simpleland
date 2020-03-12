@@ -7,3 +7,4 @@ __pycache__
 .env
 *.tar
 notebooks/data
+.mypy_cache/

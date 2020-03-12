@@ -50,8 +50,9 @@ class SimClock:
     def __init__(self, start_time= None):
         self.resolution = 1000# milliseconds
         self.start_time = self._current_time() if start_time is None else start_time
-        # self.last_tick = self.start_time
         self.pygame_clock = SLClock()
+        self.tick_time = self.get_exact_time()
+        self.tick_counter = 0
 
     def _current_time(self):
         return time.time() * self.resolution
@@ -62,27 +63,26 @@ class SimClock:
     def get_start_time(self):
         return self.start_time
     
-    def tick(self,ticks_per_second):
-        return self.pygame_clock.tick(ticks_per_second)
+    def tick(self,tick_rate):
+        self.pygame_clock.tick(tick_rate)
+        self.tick_time = self.get_exact_time()
+        self.tick_counter +=1
+        return self.tick_time
 
-    # def tick(self, ticks_per_second = 60):
-    #     expected_diff = (1.0/ticks_per_second) * 1000
-    #     tick_diff = self.get_time() - self.last_tick
-    #     delay_seconds = (expected_diff - tick_diff)/self.resolution
-    #     if delay_seconds < 0:
-    #         delay_seconds = 0
-    #     #print("Delay in seconds = {} ".format(delay_seconds))
-    #     time.sleep(delay_seconds)
-    #     self.last_tick = self.get_time()
+    def get_time(self):
+        return self.tick_time
 
-    def set_time(self,time):
+    def get_tick_counter(self):
+        return self.tick_counter
+
+    def set_absolute_time(self,time):
         self.start_time = time
-        self.last_tick = self.get_time()
+        self.tick_time = self.get_exact_time()
 
     def reset(self):
         self.start_time = self._current_time()
 
-    def get_time(self):
+    def get_exact_time(self):
         return self._current_time() - self.start_time
 
 # source: https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
@@ -107,21 +107,6 @@ class PlayerConfig(SLBase):
     def __init__(self):
         """
         """
-
-class PhysicsConfig(SLBase):
-    def __init__(self):
-        self.velocity_multiplier = 5.0
-        self.orientation_multiplier = 1.0
-        self.space_damping = 0.5
-        self.steps_per_second = 60
-        self.clock_multiplier = 1
-
-class GameConfig(SLBase):
-
-    def __init__(self):
-        self.move_speed = 1
-        self.keep_moving = 0
-        self.clock_factor = 1.0
 
 SLSpace = pymunk.Space
 SLBody = pymunk.Body
@@ -218,6 +203,65 @@ def get_shape_from_dict(body,dict_data):
     shape.surface_velocity = gen_data['surface_velocity']
     return shape
 
+class TimeLoggingContainer:
+
+    def __init__(self, log_size):
+        self.log_size = log_size
+        self.log = [None for i in range(log_size)]
+        self.timestamps = [None for i in range(log_size)]
+        self.counter = 0
+
+    def get_id(self):
+        timestamp, obj = self.get_latest()
+        return obj.get_id()
+
+
+    def add(self,timestamp, obj):
+        self.log[self.counter % self.log_size] = obj
+        self.timestamps[self.counter % self.log_size] = timestamp
+        self.counter +=1
+    
+    def link_to_latest(self,timestamp):
+        self.add(timestamp,self.get_latest())
+
+    def get_bordering_timestamps(self, timestamp):
+        #TODO binary search is faster
+        timestamp_lookup = {v:i for i,v in enumerate(self.timestamps)}
+        lst = sorted([i for i in self.timestamps if i is not None])
+        next_idx = None
+        previous_idx = None
+        for i,v in enumerate(lst):
+            if v >= timestamp:
+                next_idx = v
+                break
+            elif v< timestamp:
+                previous_idx = lst[i]
+        return (timestamp_lookup.get(previous_idx,None), 
+                previous_idx, 
+                timestamp_lookup.get(next_idx,None), 
+                next_idx)
+    
+    def get_pair_by_timestamp(self, timestamp):
+        prev_idx,prev_timestamp, next_idx, next_timestamp = self.get_bordering_timestamps(timestamp)
+        next_obj = None if next_idx is None else self.log[next_idx]
+        prev_obj = None if prev_idx is None else self.log[prev_idx]
+        return prev_obj, prev_timestamp, next_obj, next_timestamp
+
+    def get_prev_entry(self,timestamp):
+        prev_obj, prev_timestamp, next_obj, next_timestamp = self.get_pair_by_timestamp(timestamp)
+        return prev_timestamp, prev_obj
+
+    def get_next_entry(self,timestamp):
+        prev_obj, prev_timestamp, next_obj, next_timestamp = self.get_pair_by_timestamp(timestamp)
+        return next_timestamp, next_obj
+
+    def get_latest(self):
+        if self.counter == 0:
+            return None, None
+        lastest_counter = self.counter-1
+        obj = self.log[lastest_counter % self.log_size]
+        timestamp = self.timestamps[lastest_counter % self.log_size]
+        return timestamp, obj
 
 class SLShapeGroup(SLBase):
 
@@ -264,6 +308,10 @@ class SLObject(SLBase):
 
         for k,v in data['shape_group'].items():
             obj.add_shape(get_shape_from_dict(body,v))
+        
+        # print(data)
+        if "data" in data:
+            obj.data = data['data']
 
         if data['camera'] :
             obj.camera = SLCamera(**data['camera']['data'])
@@ -289,13 +337,11 @@ class SLObject(SLBase):
     def get_data_value(self,k, default_value=None):
         return self.data.get(k,default_value)
     
-    def delete(self,time_stamp):
+    def delete(self):
         self.is_deleted = True
-        self.last_change = time_stamp
     
-    def set_data_value(self,k,value,time_stamp):
+    def set_data_value(self,k,value):
         self.data[k] = value
-        self.last_change = time_stamp
 
     def get_body(self) -> SLBody:
         return self.body
@@ -317,6 +363,9 @@ class SLObject(SLBase):
     def get_camera(self) -> SLCamera:
         return self.camera
 
+    def set_last_change(self,timestamp):
+        self.last_change = timestamp
+
     def get_last_change(self):
         if self.body.last_change is None and self.last_change is None:
             return None
@@ -332,6 +381,17 @@ class SLObject(SLBase):
         data = get_dict_snapshot(self, exclude_keys={'body','on_change_func'})
         data['body'] = state_to_dict(self.body.__getstate__())
         data['data']['last_change']= self.get_last_change()
+        data['data']['data'] = self.data
+        # print(data['body']['special'].keys())
+        del data['body']['special']['_velocity_func']
+        del data['body']['special']['_position_func']
+        return data
+
+    def get_snapshot_struct(self):
+        data = get_dict_snapshot(self, exclude_keys={'body','on_change_func'})
+        data['body'] = state_to_dict(self.body.__getstate__())
+        data['data']['last_change']= self.get_last_change()
+        data['data']['data'] = self.data
         # print(data['body']['special'].keys())
         del data['body']['special']['_velocity_func']
         del data['body']['special']['_position_func']
@@ -398,3 +458,26 @@ def build_interpolated_object(obj_1:SLObject,obj_2:SLObject,fraction=0.5):
         camera_dist = (obj_2.get_camera().distance - obj_1.get_camera().distance) * fraction + obj_1.get_camera().distance
         obj.camera = SLCamera(distance=camera_dist)
     return obj
+
+class SLExtendedObject(TimeLoggingContainer):
+
+    def add(self,timestamp, obj:SLObject):
+        super().add(timestamp,obj)
+  
+    def get_interpolated(self, timestamp):
+        prev_obj, prev_timestamp, next_obj, next_timestamp = self.get_pair_by_timestamp(timestamp)
+        if prev_obj is None:
+            return None
+        if next_obj is None:
+            return prev_obj
+
+        if next_timestamp-prev_timestamp  ==0:
+            return prev_obj
+
+        fraction = (timestamp - prev_timestamp)/(next_timestamp-prev_timestamp)
+        return build_interpolated_object(prev_obj, next_obj, fraction)
+
+    # def copy_to(self,timestamp):
+    #     t, o = self.get_latest()
+    #     new_o = SLObject.build_from_dict(o.get_snapshot())
+    #     self.add(timestamp,self.get_latest())
