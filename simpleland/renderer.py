@@ -9,6 +9,7 @@ import numpy as np
 import os
 
 from .config import RendererConfig
+from .asset_manager import AssetManager
 
 def to_pygame(p, surface):
     """Convenience method to convert pymunk coordinates to pygame surface
@@ -25,9 +26,10 @@ def to_pygame(p, surface):
 
 class SLRenderer:
 
-    def __init__(self, config: RendererConfig):
+    def __init__(self, config: RendererConfig, asset_manager: AssetManager):
         #os.environ['SDL_AUDIODRIVER'] = 'dsp'
         # os.environ["SDL_VIDEODRIVER"] = "dummy"
+        self.asset_manager = asset_manager
         self.config = config
         self.format = config.format
         self._running = True
@@ -41,44 +43,38 @@ class SLRenderer:
         self.view_height = 60.0
         self.view_width = self.view_height * self.aspect_ratio
         self.center = SLVector.zero()
-        self.image_assets = {}
-        self.sound_assets = {}
         self.initialize()
-        self.load_assets()
         self.update_audio()
         self.update_images()
 
-    def load_assets(self):
-        self.image_assets['1'] = pygame.image.load(r'assets/redfighter0006.png')
-        self.image_assets['2'] = pygame.image.load(r'assets/ship2.png')
-        self.image_assets['energy1'] = pygame.image.load(r'assets/energy1.png') 
-        self.image_assets['astroid1'] = pygame.image.load(r'assets/astroid1.png') 
-        self.image_assets['astroid2'] = pygame.image.load(r'assets/astroid2.png') 
-        self.sound_assets['bleep1'] = pygame.mixer.Sound('assets/sounds/bleep.wav')
-        self.sound_assets['bleep2'] = pygame.mixer.Sound('assets/sounds/bleep2.wav')
-    
     def update_audio(self):
-        for k,v in self.sound_assets.items():
+        for k,v in self.asset_manager.sound_assets.items():
             v.set_volume(0.06)
-    def play_sounds(self, sound_ids):
-        for sid in sound_ids:
-            self.sound_assets[sid].play()
 
     def update_images(self):
         new_assets = {}
-        for k, v in self.image_assets.items():
+        for k, v in self.asset_manager.image_assets.items():
             print("current size {}".format(v.get_rect().size))
 
             new_assets[k] = pygame.transform.scale(v,(200,200))
-        self.image_assets = new_assets
+        self.asset_manager.image_assets = new_assets
+
+    def play_sounds(self, sound_ids):
+        for sid in sound_ids:
+            self.asset_manager.sound_assets[sid].play()
+
+    def get_image_by_id(self, image_id):
+        return self.asset_manager.image_assets.get(image_id)
 
     def update_view(self, view_height):
         self.view_height = max(view_height, 0.001)
         self.view_width = self.view_height * self.aspect_ratio
 
     def initialize(self):
-        pygame.mixer.pre_init(22100, -16, 2, 512)
+        pygame.mixer.pre_init(  22100, -16, 2, 512)
         pygame.init()
+        self.asset_manager.load_assets()
+        # pygame.mixer.init(frequency=)
         # pygame.mixer.init(44100, -16,2,2048)
         self._display_surf = pygame.display.set_mode(self.size)  # , pygame.HWSURFACE | pygame.DOUBLEBUF)
         self.initialized = True
@@ -170,11 +166,11 @@ class SLRenderer:
         body_angle = obj.get_body().angle
 
         image_id = obj.get_data_value("image")
-        image_used = image_id is not None and image_id in self.image_assets
+        image_used = image_id is not None
         if image_used:
             obj_pos = obj.get_body().position
             body_w,body_h = obj.get_body().size
-            image = self.image_assets[image_id].copy()
+            image = self.get_image_by_id(image_id)
             image_size = int(2.5*body_w*screen_factor[0]),int(2.5*body_h*screen_factor[1])
             
             if image_size[0]> 5000:

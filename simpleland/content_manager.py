@@ -5,6 +5,7 @@ import logging
 import math
 import random
 import socketserver
+import struct
 import threading
 import time
 from multiprocessing import Queue
@@ -15,9 +16,9 @@ import numpy as np
 import pymunk
 from pymunk import Vec2d
 
-from simpleland.common import (SimClock, SLBody, SLCamera,
-                               SLCircle, SLClock, SLLine, SLObject, SLPolygon,
-                               SLShape, SLSpace, SLVector, TimeLoggingContainer)
+from simpleland.common import (SimClock, SLBody, SLCamera, SLCircle, SLClock,
+                               SLLine, SLObject, SLPolygon, SLShape, SLSpace,
+                               SLVector, TimeLoggingContainer)
 from simpleland.event_manager import SLPeriodicEvent, SLSoundEvent
 from simpleland.game import SLGame, StateDecoder, StateEncoder
 from simpleland.itemfactory import SLItemFactory, SLShapeFactory
@@ -26,38 +27,15 @@ from simpleland.physics_engine import SLPhysicsEngine
 from simpleland.player import SLAgentPlayer, SLHumanPlayer, SLPlayer
 from simpleland.renderer import SLRenderer
 from simpleland.utils import gen_id
-import struct
+import pygame
 
-LATENCY_LOG_SIZE = 100
-SNAPSHOT_LOG_SIZE = 10 #DO I NEED THIS AT ALL?  Perhapse for replays it will be useful
-
-class ClientInfo:
-
-    def __init__(self, client_id):
-        self.id = client_id
-        self.last_snapshot_time_ms = 0
-        self.latency_history = [None for i in range(LATENCY_LOG_SIZE)]
-        self.player_id = None
-        self.conn_info = None
-        self.request_counter = 0
-        self.unconfirmed_messages = set()
-    
-    def add_latency(self,latency: float):
-        self.latency_history[self.request_counter % LATENCY_LOG_SIZE] = latency
-        self.request_counter +=1
-
-    def avg(self):
-        vals = [i for i in self.latency_history if i is not None]
-        return math.fsum(vals)/len(vals)
-
-    def get_id(self):
-        return self.id
-from simpleland.config import ServerConfig
-
-class ContentLoader:
+class ContentManager:
 
     def __init__(self,game:SLGame):
         self.game = game
+        self.image_assets={}
+        self.sound_assets={}
+
 
     def load_level(self, level_id =1):
         print("Starting Game")
@@ -84,7 +62,7 @@ class ContentLoader:
             SLShapeFactory.attach_circle(o,1)
             self.game.add_object(o)
 
-        for i in range(100):
+        for i in range(3):
             o = SLObject(SLBody(body_type=pymunk.Body.STATIC))
             o.set_position(position=SLVector(
                 random.random() * 80 - 40,
@@ -170,7 +148,7 @@ class ContentLoader:
             t, obj = om.get_latest_by_id(data['obj_id'])
             if obj is None:
                 return [], True
-            new_energy = obj.get_data_value("energy") - 20
+            new_energy = obj.get_data_value("energy") - 10
             if new_energy <= 0:
                 om.remove_by_id(obj.get_id())
                 return [], True
@@ -186,6 +164,3 @@ class ContentLoader:
 
         self.game.event_manager.add_event(decay_event)
         return player
-
-
-

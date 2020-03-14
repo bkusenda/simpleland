@@ -13,7 +13,7 @@ from simpleland.game import SLGame, StateDecoder, StateEncoder
 from simpleland.itemfactory import SLItemFactory, SLShapeFactory
 from simpleland.player import SLAgentPlayer, SLHumanPlayer, SLPlayer
 from simpleland.renderer import SLRenderer
-
+from simpleland.asset_manager import AssetManager
 from pymunk import Vec2d
 import pymunk
 
@@ -160,7 +160,7 @@ class GameClient:
         self.config = config
         self.game:SLGame = SLGame(config)
         self.connector = connector
-        self.render_delay_in_ms = 25 #tick gap + latency
+        self.render_delay_in_ms = 100 #tick gap + latency
         self.frames_per_second = config
 
         # RL Agent will be different
@@ -265,7 +265,9 @@ def main():
 
     game = SLGame(config)
 
-    renderer = SLRenderer(config.renderer)
+    asset_manager = AssetManager()
+
+    renderer = SLRenderer(config.renderer, asset_manager=asset_manager)
     game_client = GameClient(
         game = game, 
         renderer=renderer,

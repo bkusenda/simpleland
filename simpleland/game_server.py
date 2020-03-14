@@ -26,7 +26,7 @@ from simpleland.physics_engine import SLPhysicsEngine
 from simpleland.player import SLAgentPlayer, SLHumanPlayer, SLPlayer
 from simpleland.renderer import SLRenderer
 from simpleland.utils import gen_id
-from simpleland.content_loader import ContentLoader
+from simpleland.content_manager import ContentManager
 import struct
 
 LATENCY_LOG_SIZE = 100
@@ -57,11 +57,11 @@ from simpleland.config import ServerConfig
 
 class GameServer:
 
-    def __init__(self,content_loader:ContentLoader, game:SLGame, config: ServerConfig):
+    def __init__(self,content_manager:ContentManager, game:SLGame, config: ServerConfig):
         self.config = config
         self.game = game
-        self.content_loader = content_loader
-        self.content_loader.load_level()
+        self.content_manager = content_manager
+        self.content_manager.load_level()
         self.clients = {}
         self.steps_per_second = 60
 
@@ -75,7 +75,7 @@ class GameServer:
     
     def get_player(self, client):
         if client.player_id is None:
-            player = self.content_loader.new_player()
+            player = self.content_manager.new_player()
             client.player_id = player.get_id()
         else:
             player = self.get_player_by_id(client.player_id)
@@ -192,9 +192,9 @@ if __name__ == "__main__":
 
     game = SLGame(config)
 
-    content_loader = ContentLoader(game)
+    content_manager = ContentManager(game)
 
-    gameserver = GameServer(content_loader=content_loader, game = game, config = config.server)
+    gameserver = GameServer(content_manager=content_manager, game = game, config = config.server)
 
     server = GameUDPServer((HOST, PORT), UDPHandler, gameserver=gameserver)
 
