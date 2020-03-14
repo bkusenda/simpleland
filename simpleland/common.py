@@ -413,6 +413,8 @@ class SLObject(SLBase):
 
         # self.body.torque = body_data['general']['torque']
         self.body.angular_velocity = body_data['general']['angular_velocity']
+        print(self.body.size)
+
 
 def build_interpolated_object(obj_1:SLObject,obj_2:SLObject,fraction=0.5):
     
@@ -426,6 +428,7 @@ def build_interpolated_object(obj_1:SLObject,obj_2:SLObject,fraction=0.5):
     pos_y = (b2.position.y - b1.position.y) * fraction + b1.position.y
     b_new = SLBody()
     b_new.last_change = b1.last_change
+    b_new.size = b1.size
 
     # b_new._set_position(SLVector(pos_x,pos_y))
     b_new.position = SLVector(pos_x,pos_y)

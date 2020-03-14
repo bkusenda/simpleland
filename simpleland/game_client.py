@@ -42,7 +42,6 @@ def receive_data(sock):
 def send_request(request_data , server_address):
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
     try:
         data_st = json.dumps(request_data, cls=StateEncoder)
         # Send data
@@ -146,27 +145,30 @@ class ClientConnector:
 
         while self.running:
             self.create_request()
-        
+
+from simpleland.config import GameConfig, ClientConfig  
+
+
 class GameClient:
 
-    def __init__(self, connector: ClientConnector):
-        self.game:SLGame = SLGame()
-        # self.snapshot_manager = SnapshotManager(SNAPSHOT_LOG_SIZE)
+    def __init__(self, 
+            game: SLGame, 
+            renderer: SLRenderer, 
+            config: ClientConfig, 
+            connector: ClientConnector):
+
+        self.config = config
+        self.game:SLGame = SLGame(config)
         self.connector = connector
         self.render_delay_in_ms = 25 #tick gap + latency
-        self.frames_per_second = 60
+        self.frames_per_second = config
+
         # RL Agent will be different
 
         self.server_info_history = TimeLoggingContainer(100)
         self.player:SLHumanPlayer = None #TODO: move to history data managed for rendering consistency
         self.step_counter = 0
-        self.renderer = None
-
-    def init_renderer(self,resolution):
-        os.environ['SDL_AUDIODRIVER'] = 'dsp'
-        # os.environ["SDL_VIDEODRIVER"] = "dummy"
-        self.renderer = SLRenderer(resolution)
-        self.renderer.on_init()
+        self.renderer = renderer
 
     def load_response_data(self):
         done = False
@@ -186,8 +188,6 @@ class GameClient:
 
     def run_step(self):
             # Process Any Local Events
-
-        self.game.process_events()
 
         if self.connector.absolute_server_time is not None:
             self.game.clock.set_absolute_time(self.connector.absolute_server_time)
@@ -223,7 +223,9 @@ class GameClient:
                 self.player.get_object_id(),
                 self.game.object_manager)
             self.renderer.render_frame()
-        self.game.clock.tick(self.frames_per_second)
+        self.renderer.play_sounds(self.game.get_sound_events(render_time))
+        self.game.process_events()
+        self.game.clock.tick(self.config.frames_per_second)
         self.step_counter += 1
 
     def run(self):
@@ -234,23 +236,41 @@ class GameClient:
 from simpleland.utils import gen_id
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--resolution", default="640x480",help="resolution eg, 640x480")
+    parser.add_argument("--resolution", default="640x480",help="resolution eg, [f,640x480]")
     parser.add_argument("--hostname", default="localhost",help="hostname or ip, default is localhost")
     parser.add_argument("--port", default=10001, help="port")
     parser.add_argument("--client_id", default=gen_id(), help="user id, default is random")
+    parser.add_argument("--render_shapes", action='store_true', help="render actual shapes")
 
     args = parser.parse_args()
 
+    config = GameConfig()
 
-    res_string = args.resolution.split("x")
-    resolution = (int(res_string[0]), int(res_string[1]))
+    if args.resolution == 'f':
+        import pygame
+        pygame.init()
+        infoObject = pygame.display.Info()
+        config.renderer.resolution = (infoObject.current_w, infoObject.current_h)
+    else:
+        res_string = args.resolution.split("x")
+        config.renderer.resolution = (int(res_string[0]), int(res_string[1]))
+
     connector = ClientConnector(client_id = args.client_id, server_address=(args.hostname,args.port))
     connector_thread =threading.Thread(target=connector.start_connection, args=())
     connector_thread.daemon = True
     connector_thread.start()
 
-    game_client = GameClient(connector=connector)
-    game_client.init_renderer(resolution=resolution)
+    config.renderer.render_shapes = args.render_shapes
+
+
+    game = SLGame(config)
+
+    renderer = SLRenderer(config.renderer)
+    game_client = GameClient(
+        game = game, 
+        renderer=renderer,
+        config = config.client,
+        connector=connector)
 
     game_client.run()
 

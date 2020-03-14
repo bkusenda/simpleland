@@ -18,8 +18,8 @@ class SLPhysicsEngine:
     Handles physics events and collision
     """
 
-    def __init__(self,clock:SimClock,config=None):
-        self.config = {} if config is None else config
+    def __init__(self,clock:SimClock,config:PhysicsConfig):
+        self.config = config
         self.clock = clock
         self.config = PhysicsConfig()
         self.space = SLSpace()

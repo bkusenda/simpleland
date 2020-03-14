@@ -18,26 +18,31 @@ def build_event_from_dict(data_dict):
 
 class SLEvent(SLBase):
 
-    def __init__(self, id=None):
+    def __init__(self, 
+                id=None,
+                creation_time=None,
+                is_client_event=False,
+                is_realtime_event=True):
         if id is None:
             self.id = gen_id()
         else:
             self.id = id
+        self.is_client_event = is_client_event
+        self.is_realtime_event = is_realtime_event
 
     def get_id(self):
         return self.id
 
-class SLPeriodicEvent(SLBase):
+class SLPeriodicEvent(SLEvent):
 
     def __init__(self,
                 func, 
                 id=None, 
                 execution_interval=None, 
-                data={}):
-        if id is None:
-            self.id = gen_id()
-        else:
-            self.id = id
+                data={},
+                **kwargs):
+
+        super(SLPeriodicEvent,self).__init__(id,**kwargs)
         self.execution_interval = execution_interval
         self.last_run = None
         self.data=data
@@ -56,46 +61,41 @@ class SLPeriodicEvent(SLBase):
         return [], False
 
 
-class SLSoundEvent(SLBase):
+class SLSoundEvent(SLEvent):
 
     def __init__(self,
-                func, 
                 id=None, 
-                exection_time=None, 
+                creation_time=None, 
                 sound_id = None,
-                data={}):
-        if id is None:
-            self.id = gen_id()
-        else:
-            self.id = id
-        self.exection_time = exection_time
-        self.data=data
+                is_client_event=True,
+                is_realtime_event=False,
+                **kwargs):
+        super(SLSoundEvent,self).__init__(id,
+            is_client_event=is_client_event,
+            is_realtime_event=is_realtime_event,
+            **kwargs)
+        self.creation_time = creation_time
         self.sound_id = sound_id
 
     def get_id(self):
         return self.id
 
+class SLInputEvent(SLEvent):
 
-class SLCollisionEvent(SLBase):
+    @classmethod
+    def build_from_dict(cls,dict_data):
+        return cls(
+            player_id = dict_data['player_id'],
+            input_id = dict_data['input_id'],
+            id = dict_data['id'])
 
-    def __init__(self,
-                func, 
-                shapes,
-                id=None, 
-                data={}):
-        if id is None:
-            self.id = gen_id()
-        else:
-            self.id = id
-        self.shapes = shapes
-        self.data=data
-        self.func = func
-
-    def get_id(self):
-        return self.id
-
-    def run(self,om:SLObjectManager):
-        return self.func(self,self.data,om)
+    def __init__(self, 
+                player_id: str,
+                input_id: int ,
+                id=None):
+        super(SLInputEvent,self).__init__(id)
+        self.player_id = player_id
+        self.input_id = input_id
 
 class SLMechanicalEvent(SLEvent):
 
@@ -104,21 +104,23 @@ class SLMechanicalEvent(SLEvent):
         return cls(obj_id = dict_data['obj_id'],
             direction = dict_data['direction'],
             orientation_diff = dict_data['orientation_diff'],
-            id = dict_data['id'])
+            id = dict_data['id'],
+            kwargs = dict_data)
 
     def __init__(self, obj_id: str,
                  direction: SLVector ,
                  orientation_diff: float = 0.0,
-                 id=None):
-        super(SLMechanicalEvent,self).__init__(id)
+                 id=None,
+                 **kwargs):
+        super(SLMechanicalEvent,self).__init__(id,**kwargs)
         self.obj_id = obj_id
         self.direction = direction
         self.orientation_diff = orientation_diff
 
 class SLAdminEvent(SLEvent):
 
-    def __init__(self, value, id=None):
-        super(SLAdminEvent, self).__init__(id)
+    def __init__(self, value, id=None, **kwargs):
+        super(SLAdminEvent, self).__init__(id,**kwargs)
         self.value = value
 
 class SLViewEvent(SLEvent):
@@ -127,8 +129,9 @@ class SLViewEvent(SLEvent):
                  distance_diff: float = 0,
                  center_diff: SLVector = None,
                  orientation_diff: float = 0.0, 
-                 id=None):
-        super(SLViewEvent, self).__init__(id)
+                 id=None,
+                 **kwargs):
+        super(SLViewEvent, self).__init__(id, **kwargs)
         self.obj_id = obj_id
         self.distance_diff = distance_diff
         self.center_diff =  SLVector.zero() if center_diff is None else center_diff
@@ -164,14 +167,23 @@ class SLEventManager:
         self.events: Dict[str, SLEvent] = {}
 
     def get_snapshot(self):
-        events = self.get_events()
-        results = {}
+        events = list(self.get_events())
+        results = []
         for e in events:
-            results[e.get_id()]= e.get_snapshot()
+            results.append(e.get_snapshot())
+        return results
+
+    def get_snapshot_for_client(self,timestamp):
+        events = list(self.get_events())
+        results = []
+        for e in events:
+            if e.is_client_event and e.creation_time >= timestamp: 
+                results.append(e.get_snapshot())
         return results
 
     def load_snapshot(self,data):
-        for k,e_data in data.items():
+        for e_data in data:
+            k = e_data['data']['id']
             if k in self.events:
                 self.events[k].load_snapshot(e_data)
             else:

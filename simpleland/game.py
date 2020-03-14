@@ -8,7 +8,7 @@ from .common import (SLBody, SLCircle, SLClock, SLLine,
                      SLObject, SLPolygon, SLSpace, SLVector, SimClock, SLExtendedObject)
 from .physics_engine import SLPhysicsEngine
 from .event_manager import (SLEvent, SLAdminEvent, SLEventManager, SLMechanicalEvent,
-                            SLPeriodicEvent, SLViewEvent)
+                            SLPeriodicEvent, SLViewEvent, SLSoundEvent)
 from .object_manager import SLObjectManager
 from .player import SLPlayer, SLPlayerManager
 from .renderer import SLRenderer
@@ -37,17 +37,16 @@ class StateDecoder(json.JSONDecoder):
         if type == 'Vec2d':
             return Vec2d(obj['x'],obj['y'])
         return obj
-
+import pygame
 class SLGame:
 
     def __init__(self, config=None):
-        self.config = GameConfig()
+        self.config = config
         self.clock = SimClock()
         self.object_manager = SLObjectManager(200)
         self.physics_engine = SLPhysicsEngine(self.clock, self.config)
         self.player_manager = SLPlayerManager(self.config)
         self.event_manager = SLEventManager(self.config)
-        self.renderer = SLRenderer()
         self.game_state = "RUNNING"
         self.step_counter = 0
         self.tick_rate = 60#steps per second
@@ -61,21 +60,41 @@ class SLGame:
     def create_snapshot(self,last_update_timestamp):
         snapshot_timestamp = self.clock.get_time()
         om_snapshot = self.object_manager.get_snapshot_update(last_update_timestamp)
-        # print("SNAPSHOT: {} SIZE: {}".format(last_update_timestamp,len(om_snapshot)))
         pm_snapshot = self.player_manager.get_snapshot() # TODO, updates since
+        em_snapshot = self.event_manager.get_snapshot_for_client(last_update_timestamp)
         return snapshot_timestamp, {
-            'object_manager':om_snapshot,
-            'player_manager':pm_snapshot,
-            'snapshot_timestamp':snapshot_timestamp}
+            'om':om_snapshot,
+            'pm':pm_snapshot,
+            'em': em_snapshot,
+            'timestamp':snapshot_timestamp,
+            }
     
     def load_snapshot(self,snapshot):
-        snapshot_timestamp = snapshot['snapshot_timestamp']
-        if 'object_manager' in snapshot:
+        snapshot_timestamp = snapshot['timestamp']
+        if 'om' in snapshot:
             self.object_manager.load_snapshot_from_data(
                 snapshot_timestamp,
-                snapshot['object_manager'])
-        if 'player_manager' in snapshot:
-            self.player_manager.load_snapshot(snapshot['player_manager'])
+                snapshot['om'])
+        if 'pm' in snapshot:
+            self.player_manager.load_snapshot(snapshot['pm'])
+        if 'em' in snapshot:
+            self.event_manager.load_snapshot(snapshot['em'])
+
+
+    def get_sound_events(self,render_time):
+        events_to_remove = []
+        sound_ids = []
+        for e in self.event_manager.get_events():
+            if e.is_client_event and not e.is_realtime_event:
+                result_events = []
+                if type(e) == SLSoundEvent:
+                    e:SLSoundEvent = e
+                    sound_ids.append(e.sound_id);
+                    events_to_remove.append(e)
+        
+        for e in events_to_remove:
+            self.event_manager.remove_event_by_id(e.get_id())
+        return sound_ids
 
     def process_events(self):
         new_events = []

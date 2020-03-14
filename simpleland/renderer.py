@@ -6,7 +6,9 @@ from .common import SLVector, SLObject, SLLine, SLCircle, SLPolygon
 from .object_manager import SLObjectManager
 from PIL import Image
 import numpy as np
+import os
 
+from .config import RendererConfig
 
 def to_pygame(p, surface):
     """Convenience method to convert pymunk coordinates to pygame surface
@@ -19,27 +21,32 @@ def to_pygame(p, surface):
     return int(p[0]), surface.get_height() - int(p[1])
 
 
+
+
 class SLRenderer:
 
-    def __init__(self, resolution=(640, 480), format='RGB', save_observation=False):
-        self.format = format
+    def __init__(self, config: RendererConfig):
+        #os.environ['SDL_AUDIODRIVER'] = 'dsp'
+        # os.environ["SDL_VIDEODRIVER"] = "dummy"
+        self.config = config
+        self.format = config.format
         self._running = True
         self._display_surf = None
-        self.size = self.width, self.height = resolution
-        self.resolution = resolution
+        self.size = self.width, self.height = config.resolution
         self.aspect_ratio = (self.width * 1.0) / self.height
         self.initialized = False
         self.frame_cache = None
-        self.save_observation = save_observation
 
         # These will be source object properties eventually
-        self.view_height = 30.0
+        self.view_height = 60.0
         self.view_width = self.view_height * self.aspect_ratio
         self.center = SLVector.zero()
         self.image_assets = {}
+        self.sound_assets = {}
+        self.initialize()
         self.load_assets()
-        self.resize_images()
-        self.render_shapes = False
+        self.update_audio()
+        self.update_images()
 
     def load_assets(self):
         self.image_assets['1'] = pygame.image.load(r'assets/redfighter0006.png')
@@ -47,19 +54,32 @@ class SLRenderer:
         self.image_assets['energy1'] = pygame.image.load(r'assets/energy1.png') 
         self.image_assets['astroid1'] = pygame.image.load(r'assets/astroid1.png') 
         self.image_assets['astroid2'] = pygame.image.load(r'assets/astroid2.png') 
+        self.sound_assets['bleep1'] = pygame.mixer.Sound('assets/sounds/bleep.wav')
+        self.sound_assets['bleep2'] = pygame.mixer.Sound('assets/sounds/bleep2.wav')
+    
+    def update_audio(self):
+        for k,v in self.sound_assets.items():
+            v.set_volume(0.06)
+    def play_sounds(self, sound_ids):
+        for sid in sound_ids:
+            self.sound_assets[sid].play()
 
-    def resize_images(self):
+    def update_images(self):
         new_assets = {}
         for k, v in self.image_assets.items():
-            new_assets[k] = pygame.transform.scale(v,(50,50))
+            print("current size {}".format(v.get_rect().size))
+
+            new_assets[k] = pygame.transform.scale(v,(200,200))
         self.image_assets = new_assets
 
     def update_view(self, view_height):
         self.view_height = max(view_height, 0.001)
         self.view_width = self.view_height * self.aspect_ratio
 
-    def on_init(self):
+    def initialize(self):
+        pygame.mixer.pre_init(22100, -16, 2, 512)
         pygame.init()
+        # pygame.mixer.init(44100, -16,2,2048)
         self._display_surf = pygame.display.set_mode(self.size)  # , pygame.HWSURFACE | pygame.DOUBLEBUF)
         self.initialized = True
 
@@ -153,8 +173,15 @@ class SLRenderer:
         image_used = image_id is not None and image_id in self.image_assets
         if image_used:
             obj_pos = obj.get_body().position
+            body_w,body_h = obj.get_body().size
             image = self.image_assets[image_id].copy()
-            image = pygame.transform.scale(image,(50,50))
+            image_size = int(2.5*body_w*screen_factor[0]),int(2.5*body_h*screen_factor[1])
+            
+            if image_size[0]> 5000:
+                print("zoom out/ to close {}".format(image_size))
+            
+            image = pygame.transform.scale(image,image_size)
+                
 
             image = pygame.transform.rotate(image,angle * 57.2957795)
 
@@ -164,7 +191,7 @@ class SLRenderer:
             image_loc = to_pygame(image_loc, self._display_surf)
             self._display_surf.blit(image,image_loc)
 
-        if not image_used or self.render_shapes:
+        if not image_used or self.config.render_shapes:
             for i, shape in enumerate(obj.get_shapes()):
                 if i == 1:
                     color = (100, 200, 200)
@@ -203,22 +230,17 @@ class SLRenderer:
                     render_time,
                     obj_id:str,
                     object_manager: SLObjectManager,
-                    additional_data: Dict[str, Any]={},
-                    show_console=False):
+                    additional_data: Dict[str, Any]={}):
         # import pdb;pdb.set_trace()
-
-        if not self.initialized:
-            self.on_init()
         self._display_surf.fill((0, 0, 0))
         console_log = []
         view_obj = object_manager.get_by_id(obj_id, render_time)
-        #t, view_obj = object_manager.get_latest_by_id(obj_id)
-        #print(view_obj)
         if view_obj == None:
             print(object_manager.objects[obj_id].timestamps)
             raise Exception("No View Object {} at render_time {}".format(obj_id,render_time))
-            
-        self.update_view(view_obj.get_camera().get_distance())
+        
+        # TODO: make max customizeable 
+        self.update_view(max(view_obj.get_camera().get_distance(),1))
         center = view_obj.get_body().position
         angle = view_obj.get_body().angle
 
@@ -231,11 +253,11 @@ class SLRenderer:
         for k, obj in render_obj_dict.items():
             if k == view_obj.get_id():
                 continue
-            elif abs((center - obj.get_body().position).length) > 20 and obj.get_data_value('type') != 'static':
+            elif abs((center - obj.get_body().position).length) > view_obj.get_camera().get_distance() and obj.get_data_value('type') != 'static':
                 continue
             self.draw_object(center, obj, angle, screen_factor, screen_view_center, display_angle=angle)
 
-        if show_console:
+        if self.config.show_console:
             console_log.append("object orientation: %s" % angle)
             console_log.append("     actual center: %s" % center)
             console_log.append("     screen center: %s" % screen_view_center)
@@ -246,7 +268,7 @@ class SLRenderer:
             self.render_to_console(console_log, 0, 0)
 
     def render_frame(self):
-        if self.save_observation and self.frame_cache is None:
+        if self.config.save_observation and self.config.frame_cache is None:
             self.get_observation()
         frame = self.frame_cache
         self.frame_cache = None
@@ -256,7 +278,7 @@ class SLRenderer:
     def get_observation(self):
 
         img_st = pygame.image.tostring(self._display_surf, self.format)
-        data = Image.frombytes(self.format, self.resolution, img_st)
+        data = Image.frombytes(self.format, self.config.resolution, img_st)
         np_data = np.array(data)
 
         # cache
