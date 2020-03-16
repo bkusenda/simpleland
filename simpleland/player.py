@@ -13,22 +13,24 @@ from .event_manager import (SLAdminEvent, SLEventManager, SLMechanicalEvent,
 
 class SLPlayer(SLBase):
 
-    def __init__(self, uid=None):
+    def __init__(self, uid=None, data=None):
         """
 
         :return:
         """
         self.uid = uid
         self.obj_id = None
-        self.health = 0.0
-        self.last_health_diff = 0.0
         self.events=[]
+        self.data = {} if data is None else data
 
     def get_id(self):
         return self.uid    
 
-    def get_health(self):
-        return self.health
+    def get_data_value(self,k, default_value=None):
+        return self.data.get(k,default_value)
+    
+    def set_data_value(self,k,value):
+        self.data[k] = value
 
     def add_input(self, input):
         raise NotImplementedError
@@ -43,7 +45,8 @@ class SLPlayer(SLBase):
         return []
     
     def get_snapshot(self):
-        return get_dict_snapshot(self, exclude_keys={'events'})
+        data =  get_dict_snapshot(self, exclude_keys={'events'})
+        return data
 
     def load_snapshot(self, data):
         load_dict_snapshot(self, data, exclude_keys={"events"})
@@ -59,8 +62,8 @@ class SLHumanPlayer(SLPlayer):
         player = cls()
         player.uid = data['uid']
         player.obj_id = data['obj_id']
-        player.health = data['health']
-        player.last_health_diff = data['last_health_diff']
+        player.data = data.get('data',{})
+        print(data_dict)
         return player
 
 
@@ -283,10 +286,9 @@ class SLAgentPlayer(SLPlayer):
         return events
 
 
-class SLPlayerManager(object):
+class SLPlayerManager:
 
-    def __init__(self,config=None):
-        self.config = {} if config is None else config
+    def __init__(self):
         self.players_map: Dict[str, SLPlayer] = {}
 
     def add_player(self, player: SLPlayer):

@@ -25,6 +25,8 @@ import struct
 import threading
 import argparse
 import random
+from simpleland.config import ConfigManager
+from simpleland.content_manager import ContentManager
 
 HEADER_SIZE = 16
 def receive_data(sock):
@@ -151,16 +153,18 @@ from simpleland.config import GameConfig, ClientConfig
 
 class GameClient:
 
-    def __init__(self, 
+    def __init__(self,
+            content_manager: ConfigManager,
             game: SLGame, 
             renderer: SLRenderer, 
             config: ClientConfig, 
             connector: ClientConnector):
 
         self.config = config
-        self.game:SLGame = SLGame(config)
+        self.game = game
+        self.content_manager = content_manager
         self.connector = connector
-        self.render_delay_in_ms = 100 #tick gap + latency
+        self.render_delay_in_ms = 60 #tick gap + latency
         self.frames_per_second = config
 
         # RL Agent will be different
@@ -215,16 +219,20 @@ class GameClient:
             self.player = self.game.player_manager.get_player(server_info['player_id'])
             # obj = self.game.get_object_manager().get_by_id(self.player.get_object_id(),render_time)
 
-        # Render
-        if self.player is not None:
+        self.renderer.process_frame(
+            render_time = render_time,
+            player = self.player,
+            game = self.game)
+                
+        self.content_manager.post_process_frame(
+            render_time = render_time,
+            game = self.game,
+            player = self.player,
+            renderer = self.renderer)
 
-            self.renderer.process_frame(
-                render_time,
-                self.player.get_object_id(),
-                self.game.object_manager)
-            self.renderer.render_frame()
+        self.renderer.render_frame()
         self.renderer.play_sounds(self.game.get_sound_events(render_time))
-        self.game.process_events()
+        self.game.run_event_processing()
         self.game.clock.tick(self.config.frames_per_second)
         self.step_counter += 1
 
@@ -244,34 +252,43 @@ def main():
 
     args = parser.parse_args()
 
-    config = GameConfig()
+    config_manager = ConfigManager()
 
+    # Get resolution
     if args.resolution == 'f':
         import pygame
         pygame.init()
         infoObject = pygame.display.Info()
-        config.renderer.resolution = (infoObject.current_w, infoObject.current_h)
+        resolution = (infoObject.current_w, infoObject.current_h)
     else:
         res_string = args.resolution.split("x")
-        config.renderer.resolution = (int(res_string[0]), int(res_string[1]))
+        resolution = (int(res_string[0]), int(res_string[1]))
+    config_manager.renderer_config.resolution = resolution
+
+    config_manager.renderer_config.render_shapes = args.render_shapes
+
 
     connector = ClientConnector(client_id = args.client_id, server_address=(args.hostname,args.port))
     connector_thread =threading.Thread(target=connector.start_connection, args=())
     connector_thread.daemon = True
     connector_thread.start()
 
-    config.renderer.render_shapes = args.render_shapes
 
-
-    game = SLGame(config)
+    game = SLGame(
+        physics_config = config_manager.physics_config, 
+        config = config_manager.game_config)
 
     asset_manager = AssetManager()
 
-    renderer = SLRenderer(config.renderer, asset_manager=asset_manager)
+    content_manager = ContentManager(
+            config= config_manager.content_config)
+
+    renderer = SLRenderer(config_manager.renderer_config, asset_manager=asset_manager)
     game_client = GameClient(
+        content_manager = content_manager,
         game = game, 
         renderer=renderer,
-        config = config.client,
+        config = config_manager.client_config,
         connector=connector)
 
     game_client.run()

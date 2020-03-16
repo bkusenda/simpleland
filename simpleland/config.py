@@ -28,7 +28,9 @@ class ClientConfig(SLBase):
 
 class ServerConfig(SLBase):
     def __init__(self):
-        pass
+        self.steps_per_second = 60
+        self.outgoing_chunk_size = 4000
+        self.max_unconfirmed_messages_before_new_snapshot = 10
 
 class GameConfig(SLBase):
 
@@ -36,7 +38,17 @@ class GameConfig(SLBase):
         self.move_speed = 1
         self.keep_moving = 0
         self.clock_factor = 1.0
-        self.physics = PhysicsConfig()
-        self.server = ServerConfig()
-        self.renderer = RendererConfig()
-        self.client = ClientConfig()
+
+
+class ConfigManager(SLBase):
+
+    def __init__(self):
+        """
+        TODO: support loading from file
+        """
+        self.physics_config = PhysicsConfig()
+        self.server_config = ServerConfig()
+        self.renderer_config = RendererConfig()
+        self.client_config = ClientConfig()
+        self.game_config = GameConfig()
+        self.content_config = {}

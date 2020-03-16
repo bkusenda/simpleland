@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import numpy
 import pygame
@@ -29,18 +29,20 @@ class SLObjectManager:
     def clear_objects(self):
         self.objects:Dict[str,SLExtendedObject] = {}
 
-    def get_latest_by_id(self, obj_id)->SLObject:
+    def get_latest_by_id(self, obj_id, include_deleted = False)->Tuple[int,SLObject]:
         ext_obj = self.objects.get(obj_id,None)
         if ext_obj is None:
-            print("no such object with id {}".format(obj_id))
             return None, None
         else:
-            return ext_obj.get_latest()
+            t, o = ext_obj.get_latest()
+            if not include_deleted and o.is_deleted:
+                return None, None
+            else:
+                return t, o
 
     def get_by_id(self, obj_id, timestamp)->SLObject:
         ext_obj = self.objects.get(obj_id,None)
         if ext_obj is None:
-            print("no such object with id {}".format(obj_id))
             return None
         else:
             return ext_obj.get_interpolated(timestamp)

@@ -60,6 +60,30 @@ class SLPeriodicEvent(SLEvent):
 
         return [], False
 
+class SLDelayedEvent(SLEvent):
+
+    def __init__(self,
+                func, 
+                execution_time, 
+                id=None,
+                data={},
+                **kwargs):
+
+        super(SLDelayedEvent,self).__init__(id,**kwargs)
+        self.execution_time = execution_time
+        self.data=data
+        self.func = func
+
+    def get_id(self):
+        return self.id
+
+    def run(self,game_time, om:SLObjectManager):
+        new_events = []
+        if  self.execution_time <= game_time:
+            new_events = self.func(self,self.data,om)
+            return new_events, True
+        return new_events, False
+
 
 class SLSoundEvent(SLEvent):
 
@@ -142,8 +166,7 @@ class SLEventManager:
     Contains references to all game events
     """
 
-    def __init__(self,config=None):
-        self.config = {} if config is None else config
+    def __init__(self):
 
         self.events: Dict[str, SLEvent] = {}
 

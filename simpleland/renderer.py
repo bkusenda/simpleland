@@ -10,6 +10,8 @@ import os
 
 from .config import RendererConfig
 from .asset_manager import AssetManager
+from .player import SLPlayer
+from .game import SLGame
 
 def to_pygame(p, surface):
     """Convenience method to convert pymunk coordinates to pygame surface
@@ -20,8 +22,6 @@ def to_pygame(p, surface):
     """
 
     return int(p[0]), surface.get_height() - int(p[1])
-
-
 
 
 class SLRenderer:
@@ -71,7 +71,7 @@ class SLRenderer:
         self.view_width = self.view_height * self.aspect_ratio
 
     def initialize(self):
-        pygame.mixer.pre_init(  22100, -16, 2, 512)
+        pygame.mixer.pre_init(  44100, -16, 2, 1024)
         pygame.init()
         self.asset_manager.load_assets()
         # pygame.mixer.init(frequency=)
@@ -82,7 +82,8 @@ class SLRenderer:
     def render_to_console(self, lines, x, y, fsize=18, spacing=12, color=(180, 180, 180)):
         font = pygame.font.SysFont(None, fsize)
         for i, l in enumerate(lines):
-            self._display_surf.blit(font.process_frame(l, True, color), (x, y + spacing * i))
+            # font.render(l, False, (0, 0, 0))
+            self._display_surf.blit(font.render(l, True, color), (x, y + spacing * i))
 
     def draw_line(self,
                   obj: SLObject,
@@ -224,17 +225,19 @@ class SLRenderer:
     # TODO: Clean this up
     def process_frame(self,
                     render_time,
-                    obj_id:str,
-                    object_manager: SLObjectManager,
+                    player:SLPlayer,
+                    game: SLGame,
                     additional_data: Dict[str, Any]={}):
+        if player is None:
+            return
+        object_manager = game.object_manager
         # import pdb;pdb.set_trace()
         self._display_surf.fill((0, 0, 0))
         console_log = []
-        view_obj = object_manager.get_by_id(obj_id, render_time)
+        view_obj = object_manager.get_by_id(player.get_object_id(), render_time)
         if view_obj == None:
-            print(object_manager.objects[obj_id].timestamps)
-            raise Exception("No View Object {} at render_time {}".format(obj_id,render_time))
-        
+            return
+
         # TODO: make max customizeable 
         self.update_view(max(view_obj.get_camera().get_distance(),1))
         center = view_obj.get_body().position

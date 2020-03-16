@@ -57,13 +57,16 @@ from simpleland.config import ServerConfig
 
 class GameServer:
 
-    def __init__(self,content_manager:ContentManager, game:SLGame, config: ServerConfig):
+    def __init__(self,
+                config: ServerConfig, 
+                content_manager:ContentManager, 
+                game:SLGame):
+
         self.config = config
         self.game = game
         self.content_manager = content_manager
-        self.content_manager.load_level()
         self.clients = {}
-        self.steps_per_second = 60
+        self.steps_per_second = config.steps_per_second
 
 
     def get_client(self, client_id)->ClientInfo:
@@ -75,7 +78,7 @@ class GameServer:
     
     def get_player(self, client):
         if client.player_id is None:
-            player = self.content_manager.new_player()
+            player = self.content_manager.new_player(self.game)
             client.player_id = player.get_id()
         else:
             player = self.get_player_by_id(client.player_id)
@@ -87,10 +90,11 @@ class GameServer:
     def run(self):
         done = False
         while not done:
-            self.game.process_events()
-            self.game.apply_physics()
+            self.game.run_pre_event_processing()
+            self.game.run_event_processing()
+            self.game.run_pre_physics_processing()
+            self.game.run_physics_processing()
             self.game.tick()
-
 
 class UDPHandler(socketserver.BaseRequestHandler):
 
@@ -134,7 +138,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
         
         message = "UPDATE"
 
-        if len(client.unconfirmed_messages) <10:
+        if len(client.unconfirmed_messages) < gameserver.config.max_unconfirmed_messages_before_new_snapshot:
             snapshot_timestamp, snapshot = gameserver.game.create_snapshot(client.last_snapshot_time_ms)
         else:
             print("To many unconfirmed, packets full update required") #TODO add replay
@@ -154,13 +158,9 @@ class UDPHandler(socketserver.BaseRequestHandler):
         response_data_st = bytes(response_data_st,'utf-8')
         response_data_st = lz4.frame.compress(response_data_st)
 
-        chunk_size = 4000
+        chunk_size = gameserver.config.outgoing_chunk_size
         chunks = math.ceil(len(response_data_st)/chunk_size)
-        # client.
-        # print(chunks)
         socket = self.request[1]
-        # time.sleep(random.random()/1000 * 20)
-
         for i in range(chunks+1):
             header = struct.pack('ll',i+1,chunks)
             data_chunk = header + response_data_st[i*chunk_size:(i+1)*chunk_size]
@@ -172,14 +172,13 @@ class UDPHandler(socketserver.BaseRequestHandler):
             socket.sendto(data_chunk, self.client_address)
         
         client.last_snapshot_time_ms = snapshot_timestamp
-        # print("sent")
 
 class GameUDPServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
     
     def __init__(self,conn,handler,gameserver):
         socketserver.UDPServer.__init__(self,conn,handler)
         self.gameserver = gameserver
-from simpleland.config import GameConfig
+from simpleland.config import ConfigManager
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -188,15 +187,26 @@ if __name__ == "__main__":
 
     HOST, PORT = "0.0.0.0", args.port
 
-    config = GameConfig()
+    config_manager = ConfigManager()
+    #TODO: load from file
 
-    game = SLGame(config)
+    game = SLGame(
+            physics_config = config_manager.physics_config, 
+            config = config_manager.game_config)
 
-    content_manager = ContentManager(game)
+    content_manager = ContentManager(
+            config= config_manager.content_config)
 
-    gameserver = GameServer(content_manager=content_manager, game = game, config = config.server)
+    content_manager.load(game)
 
-    server = GameUDPServer((HOST, PORT), UDPHandler, gameserver=gameserver)
+    gameserver = GameServer(
+            config = config_manager.server_config,
+            content_manager= content_manager, 
+            game = game)
+
+    server = GameUDPServer(
+            (HOST, PORT), UDPHandler, 
+            gameserver=gameserver)
 
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
@@ -204,9 +214,8 @@ if __name__ == "__main__":
     try:
         server_thread.start()
         print("Server started at {} port {}".format(HOST, PORT))
-
         gameserver.run()
-        # while True: time.sleep(100)
+
     except (KeyboardInterrupt, SystemExit):
         server.shutdown()
         server.server_close()

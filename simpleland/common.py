@@ -17,7 +17,7 @@ def get_dict_snapshot(obj, exclude_keys = {}):
             continue
         if issubclass(type(v), SLBase):
             data[k] = v.get_snapshot()
-        elif v is None or isinstance(v, (int, float, str, SLVector)):
+        elif v is None or isinstance(v, (int, float, str, SLVector, dict)):
             data[k] = v
         elif type(v) is list:
             data[k] = []
@@ -38,11 +38,11 @@ def load_dict_snapshot(obj, dict_data, exclude_keys={}):
         
         if issubclass(type(v), SLBase):
             data = v.load_snapshot(obj.__dict__[k], v)
-        elif v is None or isinstance(v, (int, float, str)):
+        elif v is None or isinstance(v, (int, float, str, SLVector)):
             obj.__dict__[k] = v
-        else:
-            pass
-           # print("Skipping loading of:{} with value {}".format(k, v))
+        elif v is None or (isinstance(v, dict) and ("_type" not in v)):
+            obj.__dict__[k] = v
+
 
 
 class SimClock:
@@ -278,9 +278,13 @@ class SLShapeGroup(SLBase):
         data = {}
         for k,s in self._shapes.items():
             data[k] = s.get_snapshot()
-        return data
+        dict_data = {}
+        dict_data['data'] = data
+        dict_data['_type'] = "SLShapeGroup"
+        return dict_data
 
-    def load_snapshot(self, data: Dict[str,Dict]):
+    def load_snapshot(self, dict_data: Dict[str,Dict]):
+        data = dict_data['data']
         for k,shape_dict in data:
             self._shapes[k].load_snapshot(shape_dict)
 
@@ -306,7 +310,7 @@ class SLObject(SLBase):
         obj = SLObject(body=body, id=data['id'])
         load_dict_snapshot(obj, dict_data, exclude_keys={"body"})
 
-        for k,v in data['shape_group'].items():
+        for k,v in data['shape_group']['data'].items():
             obj.add_shape(get_shape_from_dict(body,v))
         
         # print(data)
@@ -413,7 +417,6 @@ class SLObject(SLBase):
 
         # self.body.torque = body_data['general']['torque']
         self.body.angular_velocity = body_data['general']['angular_velocity']
-        print(self.body.size)
 
 
 def build_interpolated_object(obj_1:SLObject,obj_2:SLObject,fraction=0.5):
