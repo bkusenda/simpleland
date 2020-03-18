@@ -107,19 +107,21 @@ class SLSoundEvent(SLEvent):
 class SLInputEvent(SLEvent):
 
     @classmethod
-    def build_from_dict(cls,dict_data):
+    def build_from_dict(cls,dict_data, **kwargs):
         return cls(
             player_id = dict_data['player_id'],
-            input_id = dict_data['input_id'],
-            id = dict_data['id'])
+            input_data = dict_data['input_data'],
+            id = dict_data['id'],
+            **kwargs)
 
     def __init__(self, 
                 player_id: str,
-                input_id: int ,
-                id=None):
-        super(SLInputEvent,self).__init__(id)
+                input_data: Dict[str,Any] ,
+                id=None,
+                **kwargs):
+        super(SLInputEvent,self).__init__(id,**kwargs)
         self.player_id = player_id
-        self.input_id = input_id
+        self.input_data = input_data
 
 class SLMechanicalEvent(SLEvent):
 

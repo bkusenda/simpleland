@@ -23,7 +23,7 @@ class SLShapeFactory(object):
         body.moment = inertia
         circle = SLCircle(body, radius = radius, offset= pos)
         obj.add_shape(circle)
-        body.size = (radius,radius)
+        body.size =  (radius * 2,radius *2)
 
     @classmethod
     def attach_circle2(cls, obj: SLObject, radius=5, pos = (0,0)):
@@ -34,7 +34,7 @@ class SLShapeFactory(object):
         circle.elasticity = 0.1
         circle.friction = 0.4
         obj.add_shape(circle)
-        body.size = (radius,radius)
+        body.size = (radius * 2,radius *2)
 
     @classmethod
     def attach_square(cls, obj: SLObject, thickness=0, side_length=12):
@@ -60,6 +60,19 @@ class SLShapeFactory(object):
         p2 = SLVector(-1 * side_length, side_length)
         p3 = SLVector(side_length, side_length)
         p4 = SLVector(side_length, -1 * side_length)
+        p = SLPolygon(body, vertices=[p1, p2, p3, p4])
+        obj.add_shape(p)
+
+    @classmethod
+    def attach_rectangle(cls, obj: SLObject, width=1, height=3):
+        body = obj.get_body()
+        body.size = (width,height)
+        h = height/2
+        w = width/2
+        p1 = SLVector(-1 * w, -1 * h)
+        p2 = SLVector(-1 * w,h)
+        p3 = SLVector(w, h)
+        p4 = SLVector(w, -1 * h)
         p = SLPolygon(body, vertices=[p1, p2, p3, p4])
         obj.add_shape(p)
 

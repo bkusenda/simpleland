@@ -9,7 +9,7 @@ import struct
 import threading
 import time
 from multiprocessing import Queue
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, List
 
 import lz4.frame
 import numpy as np
@@ -30,33 +30,133 @@ from simpleland.utils import gen_id
 from simpleland.config import PhysicsConfig,ServerConfig,RendererConfig,ClientConfig
 import pygame
 
+from .event_manager import (SLAdminEvent, SLEventManager, SLMechanicalEvent,
+                            SLPeriodicEvent, SLViewEvent, SLEvent, SLInputEvent)
+
+
+def input_event_callback(input_event:SLInputEvent, game:SLGame) -> List[SLEvent]:
+
+
+
+    # for event in pygame.event.get():
+    #     # print("%s" % event.type)
+    #     if event.type == pygame.QUIT:
+    #         admin_event = SLAdminEvent('QUIT')
+    #         events.append(admin_event)
+    #         print("Adding admin_event (via pygame_event) %s" % admin_event)
+    #     elif event.type == pygame.MOUSEBUTTONDOWN:
+    #         # print("here %s" % event.button)
+    #         if event.button == 4:
+    #             view_event = SLViewEvent(player.get_object_id(), 1, SLVector.zero())
+    #             events.append(view_event)
+    #         elif event.button == 5:
+    #             view_event = SLViewEvent(player.get_object_id(), -1, SLVector.zero())
+    #             events.append(view_event)
+    keys = input_event.input_data['inputs']
+    if len(keys)== 0:
+        return []
+
+    player = game.player_manager.get_player(input_event.player_id)
+    t, obj = game.object_manager.get_latest_by_id(player.get_object_id())
+    if obj is None:
+        return []
+
+    move_speed = 0.04
+    obj_orientation_diff = 0
+    if '17' in keys:
+        obj_orientation_diff = 1
+    
+    if '5' in keys:
+        obj_orientation_diff = -1
+
+
+    # Object Movement
+    force = 1
+    direction = SLVector.zero()
+    if '23' in keys:
+        direction += SLVector(0, 1)
+
+    if '19' in keys:
+        direction += SLVector(0, -1)
+
+    if '1' in keys:
+        direction += SLVector(-1, 0)
+
+    if '4' in keys:
+        direction += SLVector(1, 0)
+
+    if '10' in keys:
+        print("Adding admin_event ...TODO!!")
+
+    mag = direction.length
+    if mag != 0:
+        direction = ((1.0 / mag) * force * direction)
+    else:
+        direction = SLVector.zero()
+    
+    orientation_diff=obj_orientation_diff * move_speed
+
+    direction = direction * 25
+    obj.set_last_change(game.clock.get_time())
+    body = obj.get_body()
+
+    direction = direction.rotated(body.angle)
+    body.apply_impulse_at_world_point(direction, body.position)
+    body.angular_velocity += orientation_diff
+
+    if body.angular_velocity > 3:
+        body.angular_velocity = 3
+    elif body.angular_velocity < -3:
+        body.angular_velocity = -3
+    return []
+
 class ContentManager:
 
     def __init__(self,config):
         self.config = config
+        self.config['space_size'] =  50
+
+    def get_random_pos(self):
+        return SLVector(
+            random.random() * self.config['space_size'] - (self.config['space_size']/2),
+            random.random()  * self.config['space_size'] - (self.config['space_size']/2))
 
     def load(self,game:SLGame):
         print("Starting Game")
 
+
         # Create Wall
         wall = SLItemFactory.border(SLBody(body_type=pymunk.Body.STATIC),
                                     SLVector(0, 0),
-                                    size=50)
+                                    size=self.config['space_size'])
         wall.set_data_value("type","static")
         game.add_object(wall)
+        
+
+        # Create some Large Recangls
+        for i in range(4):
+            o = SLObject(SLBody(body_type=pymunk.Body.STATIC))
+            o.set_position(position=self.get_random_pos())
+            o.set_data_value("energy",30)
+            o.set_data_value("type","wall")
+            o.set_data_value("image", "lava1")
+            o.set_last_change(game.clock.get_time())
+            o.get_body().angle = random.random() * 360
+            SLShapeFactory.attach_rectangle(o, 10,3)#.attach_circle(o,1)
+            game.add_object(o)
 
         # Create some Astroids
         for i in range(20):
             o = SLObject(SLBody(mass=5, moment=1))
-            o.set_position(position=SLVector(
-                random.random() * 100 - 50,
-                random.random()  * 100 - 50))
+            o.set_position(position=self.get_random_pos())
             o.set_data_value("energy",30)
             o.set_data_value("type","astroid")
             o.set_data_value("image", "astroid2")
             o.set_last_change(game.clock.get_time())
             o.get_body().angle = random.random() * 360
-            SLShapeFactory.attach_circle(o,1)
+            # SLShapeFactory.attach_rectangle(o,2,2)
+            SLShapeFactory.attach_circle(o,2)
+            
             game.add_object(o)
 
         for i in range(3):
@@ -75,9 +175,7 @@ class ContentManager:
         def new_food_event_callback(event: SLPeriodicEvent,data:Dict[str,Any],om:SLObjectManager):
             for i in range(0,random.randint(0,1)):
                 o = SLObject(SLBody(body_type=pymunk.Body.KINEMATIC))
-                o.set_position(position=SLVector(
-                    random.random()  * 40 - 20,
-                    random.random()  * 40 - 20))
+                o.set_position(position=self.get_random_pos())
                 o.set_data_value("energy",10)
                 o.set_data_value("type","food")
                 o.set_data_value("image", "energy1")
@@ -97,7 +195,7 @@ class ContentManager:
                 s:SLShape = s
                 t, o = game.object_manager.get_latest_by_id(s.get_object_id())
                 if o is None:
-                    return
+                    return False
                 if o.get_data_value("type") == "food":
                     food_objs.append(o)
                 elif o.get_data_value("type") == "player":
@@ -128,9 +226,9 @@ class ContentManager:
                 if p.get_object_id() is None:
                     continue
                 t, o = game.object_manager.get_latest_by_id(p.get_object_id())
-                if o is None:
+                if o is None or o.is_deleted:
                     continue
-                if o.is_deleted == False and o.get_data_value("energy") <= 0:
+                if o.get_data_value("energy") <= 0:
                     print("Player is dead")
                     lives_used = p.get_data_value("lives_used", 0)
                     p.set_data_value("lives_used",lives_used+1)
@@ -138,8 +236,8 @@ class ContentManager:
                     # Delete and create event
 
                     def event_callback(event: SLDelayedEvent ,data:Dict[str,Any],om:SLObjectManager):
-                        print("Here")
-                        self.new_player(game,player_id=p.get_id())
+                        self.new_player(game,player_id=data['player_id'])
+                        print("New Player Created")
                         return []
 
                     new_ship_event = SLDelayedEvent(
@@ -151,6 +249,7 @@ class ContentManager:
                                 # Response
             return new_events
         game.set_pre_physics_callback(pre_physics_callback)
+        game.set_input_event_callback(input_event_callback)
 
         print("Loading Game Complete")
 
@@ -167,17 +266,15 @@ class ContentManager:
 
         create_time = game.clock.get_time()
         player_object = SLObject(SLBody(mass=8, moment=30), 
-            camera=SLCamera(distance=40))
-        player_object.set_position(position=SLVector(
-                random.random() * 80 - 40,
-                random.random()  * 80 - 40))
+            camera=SLCamera(distance=30))
+        player_object.set_position(position=self.get_random_pos())
         
         player_object.set_data_value("type","player")
         player_object.set_data_value("energy", 100)
         player_object.set_data_value("image", "1")
         player_object.set_data_value("player_id", player.get_id())
 
-        # SLShapeFactory.attach_psquare(player_object, 1)
+        # SLShapeFactory.attach_rectangle(player_object, 2,2)
         SLShapeFactory.attach_circle(player_object, 1)
 
         player.attach_object(player_object)
@@ -189,7 +286,7 @@ class ContentManager:
             t, obj = om.get_latest_by_id(data['obj_id'])
             if obj is None or obj.is_deleted:
                 return [], True
-            new_energy = max(obj.get_data_value("energy") -10,0)
+            new_energy = max(obj.get_data_value("energy") - 1, 0)
             #     # om.remove_by_id(obj.get_id())
             #     return [], False
             print(new_energy)
@@ -205,7 +302,7 @@ class ContentManager:
         game.event_manager.add_event(decay_event)
         return player
 
-    def post_process_frame(self,render_time, game:SLGame, player, renderer:SLRenderer):
+    def post_process_frame(self,render_time, game:SLGame, player:SLPlayer, renderer:SLRenderer):
         if player is None:
             print("Player Dead")
         else:

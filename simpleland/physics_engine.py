@@ -43,7 +43,9 @@ class SLPhysicsEngine:
     def __init__(self,clock:SimClock,config:PhysicsConfig):
         self.config = config
         self.clock = clock
-        self.space = SLSpace()
+        self.space = SLSpace(threaded=True)
+        self.space.threads = 2
+        self.space.idle_speed_threshold = 0.01
         self.space.damping = self.config.space_damping
 
         # Called at each step when velocity is updated

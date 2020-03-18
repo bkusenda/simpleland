@@ -8,12 +8,14 @@ from .common import (SLBody, SLCircle, SLClock, SLLine,
                      SLObject, SLPolygon, SLSpace, SLVector, SimClock, SLExtendedObject)
 from .physics_engine import SLPhysicsEngine
 from .event_manager import (SLEvent, SLAdminEvent, SLEventManager, SLMechanicalEvent,
-                            SLPeriodicEvent, SLViewEvent, SLSoundEvent, SLDelayedEvent)
+                            SLPeriodicEvent, SLViewEvent, SLSoundEvent, SLDelayedEvent, SLInputEvent)
 from .object_manager import SLObjectManager
 from .player import SLPlayer, SLPlayerManager
 # from .renderer import SLRenderer
 from .utils import gen_id
 from .config import GameConfig, PhysicsConfig
+import pygame
+
 
 class StateEncoder(json.JSONEncoder):
     def default(self, obj): # pylint: disable=E0202
@@ -36,7 +38,7 @@ class StateDecoder(json.JSONDecoder):
         if type == 'Vec2d':
             return Vec2d(obj['x'],obj['y'])
         return obj
-import pygame
+
 class SLGame:
 
     def __init__(self, 
@@ -56,11 +58,12 @@ class SLGame:
         self.last_position_lookup = {}
         self.reset()
 
-        self.tick_rate = 60#steps per second
-        self.physics_tick_rate = self.tick_rate  #steps per second
+        self.tick_rate = self.config.tick_rate #steps per second
+        self.physics_tick_rate = self.physics_config.tick_rate  #steps per second
         self.id = gen_id()
         self.pre_event_processing_callback = lambda game: []
         self.pre_physics_callback = lambda game: []
+        self.input_event_callback = lambda event, game: []
 
     def reset(self):
         self.object_manager = SLObjectManager(200)
@@ -73,6 +76,9 @@ class SLGame:
 
     def change_game_state(self, new_state):
         self.game_state = new_state
+
+    def set_input_event_callback(self, callback):
+        self.input_event_callback = callback
 
     def set_pre_event_processing_callback(self, callback):
         self.pre_event_processing_callback = callback
@@ -118,6 +124,9 @@ class SLGame:
                 if e.value == 'QUIT':
                     self.change_game_state("QUITING")
                     events_to_remove.append(e)
+            elif type(e) == SLInputEvent:
+                result_events = self.input_event_callback(e,self)
+                events_to_remove.append(e)
             elif type(e) == SLMechanicalEvent:
                 result_events = self._process_mechanical_event(e)
                 events_to_remove.append(e)
@@ -213,7 +222,7 @@ class SLGame:
         obj.set_last_change(self.clock.get_time())
         body = obj.get_body()
 
-        direction_delta = direction_delta.rotated(-1 * body.angle)
+        direction_delta = direction_delta.rotated(body.angle)
         body.apply_impulse_at_world_point(direction_delta, body.position)
         # body.angle += 0.1 * (e.orientation_diff * self.physics_engine.config.orientation_multiplier)
         body.angular_velocity += (e.orientation_diff * self.physics_engine.config.orientation_multiplier)

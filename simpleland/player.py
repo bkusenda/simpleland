@@ -9,8 +9,45 @@ from .common import (get_dict_snapshot, load_dict_snapshot, SLBody, SLCircle, SL
                      SLObject, SLPolygon, SLSpace, SLVector, SimClock, SLBase)
 from .utils import gen_id
 from .event_manager import (SLAdminEvent, SLEventManager, SLMechanicalEvent,
-                            SLPeriodicEvent, SLViewEvent, SLEvent)
+                            SLPeriodicEvent, SLViewEvent, SLEvent, SLInputEvent)
 
+
+def get_default_key_map():
+    key_map = {}
+    key_map[pygame.K_a] = 1
+    key_map[pygame.K_b] = 2
+    key_map[pygame.K_c] = 3
+    key_map[pygame.K_d] = 4
+    key_map[pygame.K_e] = 5
+    key_map[pygame.K_f] = 6
+    key_map[pygame.K_g] = 7
+    key_map[pygame.K_h] = 8
+    key_map[pygame.K_i] = 9
+    key_map[pygame.K_j] = 10
+    key_map[pygame.K_k] = 11
+    key_map[pygame.K_l] = 12
+    key_map[pygame.K_m] = 13
+    key_map[pygame.K_n] = 14
+    key_map[pygame.K_o] = 15
+    key_map[pygame.K_p] = 16
+    key_map[pygame.K_q] = 17
+    key_map[pygame.K_r] = 18
+    key_map[pygame.K_s] = 19
+    key_map[pygame.K_t] = 20
+    key_map[pygame.K_u] = 21
+    key_map[pygame.K_v] = 22
+    key_map[pygame.K_w] = 23
+    key_map[pygame.K_x] = 24
+    key_map[pygame.K_y] = 25
+    key_map[pygame.K_z] = 26
+    key_map[pygame.K_ESCAPE] = 27
+    key_map["MOUSE_DOWN_1"] = 28
+    key_map["MOUSE_DOWN_2"] = 29
+    key_map["MOUSE_DOWN_3"] = 30
+    key_map["MOUSE_DOWN_4"] = 31
+    key_map["MOUSE_DOWN_5"] = 32
+    return key_map
+DEFAULT_KEYMAP = get_default_key_map()
 class SLPlayer(SLBase):
 
     def __init__(self, uid=None, data=None):
@@ -52,6 +89,7 @@ class SLPlayer(SLBase):
         load_dict_snapshot(self, data, exclude_keys={"events"})
 
 
+
 class SLHumanPlayer(SLPlayer):
 
 
@@ -68,161 +106,46 @@ class SLHumanPlayer(SLPlayer):
 
 
     def __init__(self):
-        """
-
-        :return:
-        """
         super(SLHumanPlayer, self).__init__()
-        self.blocking_player = True
-        #self.block_sleep_secs = 0.01
-        self.ready = False
+
 
     def pull_input_events(self) -> List[SLEvent]:
 
-        events = None
-
-        if self.blocking_player and self.ready:
-            done = False
-            while not done:
-                #time.sleep(self.block_sleep_secs)
-                events = self._pull_input_events()
-                done = len(events) > 0
-        else:
-            events = self._pull_input_events()
-        return events
-
-    def _pull_input_events(self) -> List[SLEvent]:
-        """
-
-        :param action:
-        :return:
-        """
-        # print("Getting action from player")
-
         events: List[SLEvent] = []
 
-        for event in pygame.event.get():
-            # print("%s" % event.type)
-            if event.type == pygame.QUIT:
-                admin_event = SLAdminEvent('QUIT')
-                events.append(admin_event)
-                print("Adding admin_event (via pygame_event) %s" % admin_event)
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                # print("here %s" % event.button)
-                if event.button == 4:
-                    view_event = SLViewEvent(self.get_object_id(), 1, SLVector.zero())
-                    events.append(view_event)
-                elif event.button == 5:
-                    view_event = SLViewEvent(self.get_object_id(), -1, SLVector.zero())
-                    events.append(view_event)
+        key_list = []
+        key_list.append(pygame.K_q)
+        key_list.append(pygame.K_e)
+        key_list.append(pygame.K_w)
+        key_list.append(pygame.K_q)
+        key_list.append(pygame.K_s)
+        key_list.append(pygame.K_a)
+        key_list.append(pygame.K_d)
+        key_list.append(pygame.K_ESCAPE)
 
-        keys = pygame.key.get_pressed()
-
-        move_speed = 0.02
-        obj_orientation_diff = None
-        if keys[pygame.K_q]:
-            obj_orientation_diff = -1
-        elif keys[pygame.K_e]:
-            obj_orientation_diff = 1
-
-        if obj_orientation_diff is not None:
-            events.append(SLMechanicalEvent(self.get_object_id(), direction=SLVector.zero(), orientation_diff=obj_orientation_diff * move_speed))
-
-        # Object Movement
-        force = 0.5
-        direction = SLVector.zero()
-        if keys[pygame.K_w]:
-            direction += SLVector(0, 1)
-
-        if keys[pygame.K_s]:
-            direction += SLVector(0, -1)
-
-        if keys[pygame.K_a]:
-            direction += SLVector(-1, 0)
-
-        if keys[pygame.K_d]:
-            direction += SLVector(1, 0)
-
-        if keys[pygame.K_ESCAPE]:
-            admin_event = SLAdminEvent('QUIT')
-            events.append(admin_event)
-            print("Adding admin_event %s" % admin_event)
-
-        mag = float(np.sqrt(direction.dot(direction)))
-        if mag != 0:
-            direction = ((1.0 / mag) * force * direction)
-            events.append(SLMechanicalEvent(self.get_object_id(), direction))
-            # print("Adding movement_event %s" % direction_event)
-
-        return events
-
-
-    def _pull_input_events_old(self) -> List[SLEvent]:
-        """
-
-        :param action:
-        :return:
-        """
-        # print("Getting action from player")
-
-        events: List[SLEvent] = []
+        key_pressed=set()
 
         for event in pygame.event.get():
-            # print("%s" % event.type)
             if event.type == pygame.QUIT:
-                admin_event = SLAdminEvent('QUIT')
-                events.append(admin_event)
-                print("Adding admin_event (via pygame_event) %s" % admin_event)
+                key_pressed.add("QUIT")
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                # print("here %s" % event.button)
-                if event.button == 4:
-                    view_event = SLViewEvent(self.get_object_id(), 1, SLVector.zero())
-                    events.append(view_event)
-                elif event.button == 5:
-                    view_event = SLViewEvent(self.get_object_id(), -1, SLVector.zero())
-                    events.append(view_event)
+                key_pressed.add("MOUSE_DOWN_{}".format(event.button))
 
         keys = pygame.key.get_pressed()
-
-        move_speed = 1
-        obj_orientation_diff = None
-        if keys[pygame.K_q]:
-            obj_orientation_diff = -1
-        elif keys[pygame.K_e]:
-            obj_orientation_diff = 1
-
-        if obj_orientation_diff is not None:
-            events.append(SLMechanicalEvent(self.get_object_id(), 
-                    direction=SLVector.zero(),
-                    orientation_diff=obj_orientation_diff * move_speed))
-
-        # Object Movement
-        force = 0.5
-        direction = SLVector.zero()
-        if keys[pygame.K_w]:
-            direction += SLVector(0, 1)
-
-        if keys[pygame.K_s]:
-            direction += SLVector(0, -1)
-
-        if keys[pygame.K_a]:
-            direction += SLVector(-0.5, 0)
-
-        if keys[pygame.K_d]:
-            direction += SLVector(0.5, 0)
-
-        if keys[pygame.K_ESCAPE]:
-            admin_event = SLAdminEvent('QUIT')
-            events.append(admin_event)
-            print("Adding admin_event %s" % admin_event)
-
-        mag = float(np.sqrt(direction.dot(direction)))
-        if mag != 0:
-            direction = ((1.0 / mag) * force * direction)
-            events.append(SLMechanicalEvent(self.get_object_id(), direction))
-            # print("Adding movement_event %s" % direction_event)
-
+        for key in key_list:
+            if keys[key]:
+                key_pressed.add(key)
+        event = SLInputEvent(
+            player_id  =self.get_id(), 
+            input_data = {
+                'inputs':{DEFAULT_KEYMAP[k]:1 for k in key_pressed},
+                'mouse_pos': pygame.mouse.get_pos(),
+                'mouse_rel': pygame.mouse.get_rel(),
+                'focused': pygame.mouse.get_focused()
+                })
+        events.append(event)
         return events
+
 
 class SLAgentPlayer(SLPlayer):
 

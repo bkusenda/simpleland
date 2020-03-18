@@ -1,54 +1,61 @@
 
-import socket
-import sys
-
+import argparse
+import json
 import logging
+import math
+import os
+import random
+import socket
+import struct
+import sys
+import threading
+import time
+from multiprocessing import Queue
 from typing import Tuple
 
+import lz4.frame
 import numpy as np
+import pymunk
+from pyinstrument import Profiler
+from pymunk import Vec2d
 
-from simpleland.common import (TimeLoggingContainer, SLObject, SLVector, SLShape, SLCamera, SLBody, SLClock, SimClock)
-from simpleland.physics_engine import SLPhysicsEngine
+from simpleland.asset_manager import AssetManager
+from simpleland.common import (SimClock, SLBody, SLCamera, SLClock, SLObject,
+                               SLShape, SLVector, TimeLoggingContainer,
+                               build_interpolated_object)
+from simpleland.config import ClientConfig, ConfigManager, GameConfig
+from simpleland.content_manager import ContentManager
 from simpleland.game import SLGame, StateDecoder, StateEncoder
 from simpleland.itemfactory import SLItemFactory, SLShapeFactory
+from simpleland.physics_engine import SLPhysicsEngine
 from simpleland.player import SLAgentPlayer, SLHumanPlayer, SLPlayer
 from simpleland.renderer import SLRenderer
-from simpleland.asset_manager import AssetManager
-from pymunk import Vec2d
-import pymunk
-
-import os
-import json
-import time
-import lz4.frame
-import struct
-import threading
-import argparse
-import random
-from simpleland.config import ConfigManager
-from simpleland.content_manager import ContentManager
+from simpleland.utils import gen_id
 
 HEADER_SIZE = 16
+
+
 def receive_data(sock):
     done = False
     all_data = b''
     while not done:
         sock.settimeout(1.0)
         data, server = sock.recvfrom(4096)
-        chunk_num,chunks  = struct.unpack('ll',data[:HEADER_SIZE])
+        chunk_num, chunks = struct.unpack('ll', data[:HEADER_SIZE])
         all_data += data[HEADER_SIZE:]
         if chunk_num == chunks:
             done = True
     return lz4.frame.decompress(all_data).decode('utf-8')
 
-def send_request(request_data , server_address):
+
+def send_request(request_data, server_address):
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         data_st = json.dumps(request_data, cls=StateEncoder)
         # Send data
-        sent = sock.sendto(lz4.frame.compress(bytes(data_st,'utf-8')), 
-            server_address)
+        sent = sock.sendto(lz4.frame.compress(bytes(data_st, 'utf-8')),
+                           server_address)
         data = receive_data(sock)
     except Exception as e:
         print(e)
@@ -57,35 +64,33 @@ def send_request(request_data , server_address):
         sock.close()
     return json.loads(data, cls=StateDecoder)
 
-from multiprocessing import Queue
-LATENCY_LOG_SIZE = 10000
-import math
 
-from simpleland.common import build_interpolated_object
+LATENCY_LOG_SIZE = 10000
+
 
 class ClientConnector:
     # TODO, change to client + server connection
 
-    def __init__(self, client_id, server_address = ('localhost', 10001)):
+    def __init__(self, client_id, server_address=('localhost', 10001)):
         self.server_address = server_address
-        self.incomming_buffer:Queue= Queue()# event buffer
-        self.outgoing_buffer:Queue = Queue()# state buffer
+        self.incomming_buffer: Queue = Queue()  # event buffer
+        self.outgoing_buffer: Queue = Queue()  # state buffer
         self.running = True
         self.client_id = client_id
 
         self.latency_log = [None for i in range(LATENCY_LOG_SIZE)]
         self.last_latency_ms = None
-        self.request_counter =0
+        self.request_counter = 0
         self.absolute_server_time = None
 
-        self.clock = SimClock() # clock for controlling network tick speed
+        self.clock = SimClock()  # clock for controlling network tick speed
         self.ticks_per_second = 64
         self.last_received_snapshots = []
 
-    def add_network_info(self,latency:int, success:bool):
+    def add_network_info(self, latency: int, success: bool):
 
-        self.latency_log[self.request_counter % LATENCY_LOG_SIZE] = {'latency':latency, 'success': success}
-    
+        self.latency_log[self.request_counter % LATENCY_LOG_SIZE] = {'latency': latency, 'success': success}
+
     def get_avg_latency(self):
         vals = [i for i in self.latency_log if i is not None]
         return math.fsum(vals['latency'])/len(vals)
@@ -97,10 +102,10 @@ class ClientConnector:
 
     def create_request(self):
         request_info = {
-            'client_id' : "" if self.client_id is None else self.client_id,
-            'last_latency_ms' : self.last_latency_ms,
+            'client_id': "" if self.client_id is None else self.client_id,
+            'last_latency_ms': self.last_latency_ms,
             'snapshots_received': self.last_received_snapshots,
-            'message':"UPDATE"
+            'message': "UPDATE"
         }
 
         # Get items:
@@ -118,29 +123,28 @@ class ClientConnector:
 
         start_time = time.time() * 1000
         response = send_request({
-                'info':request_info,
-                'items': outgoing_items},
+            'info': request_info,
+            'items': outgoing_items},
             self.server_address)
         last_latency_ms = (time.time() * 1000) - start_time
 
         if response is None:
             print("Packet loss or error occurred")
-            self.add_network_info(last_latency_ms,False)
+            self.add_network_info(last_latency_ms, False)
         else:
             # Log latency
-            self.add_network_info(last_latency_ms,True)
+            self.add_network_info(last_latency_ms, True)
             response_info = response['info']
             self.last_received_snapshots = [response_info['snapshot_timestamp']]
 
             # set clock
             self.absolute_server_time = (time.time()*1000) - float(response_info['server_time_ms']) - last_latency_ms
-            
+
             self.client_id = response_info['client_id']
             if response_info['message'] == 'UPDATE':
                 self.incomming_buffer.put(response)
-            self.request_counter +=1
+            self.request_counter += 1
         self.clock.tick(self.ticks_per_second)
-
 
     def start_connection(self, callback=None):
         print("Starting connection to server")
@@ -148,36 +152,34 @@ class ClientConnector:
         while self.running:
             self.create_request()
 
-from simpleland.config import GameConfig, ClientConfig  
-
 
 class GameClient:
 
     def __init__(self,
-            content_manager: ConfigManager,
-            game: SLGame, 
-            renderer: SLRenderer, 
-            config: ClientConfig, 
-            connector: ClientConnector):
+                 content_manager: ConfigManager,
+                 game: SLGame,
+                 renderer: SLRenderer,
+                 config: ClientConfig,
+                 connector: ClientConnector):
 
         self.config = config
         self.game = game
         self.content_manager = content_manager
         self.connector = connector
-        self.render_delay_in_ms = 60 #tick gap + latency
+        self.render_delay_in_ms = 60  # tick gap + latency
         self.frames_per_second = config
 
         # RL Agent will be different
 
         self.server_info_history = TimeLoggingContainer(100)
-        self.player:SLHumanPlayer = None #TODO: move to history data managed for rendering consistency
+        self.player: SLHumanPlayer = None  # TODO: move to history data managed for rendering consistency
         self.step_counter = 0
         self.renderer = renderer
 
     def load_response_data(self):
         done = False
         while (not done):
-            if self.connector.incomming_buffer.qsize() ==0:
+            if self.connector.incomming_buffer.qsize() == 0:
                 incomming_data = None
             else:
                 incomming_data = self.connector.incomming_buffer.get()
@@ -191,12 +193,10 @@ class GameClient:
                     incomming_data['info'])
 
     def run_step(self):
-            # Process Any Local Events
-
         if self.connector.absolute_server_time is not None:
             self.game.clock.set_absolute_time(self.connector.absolute_server_time)
-        
-        render_time = max(0,self.game.clock.get_time() - self.render_delay_in_ms)
+
+        render_time = max(0, self.game.clock.get_time() - self.render_delay_in_ms)
 
         # Get Input Events and put in output buffer
         if self.player is not None:
@@ -206,7 +206,7 @@ class GameClient:
         if self.connector.outgoing_buffer.qsize() < 30:
             self.connector.outgoing_buffer.put(event_snapshot)
 
-        # Clear Events after sending to Server 
+        # Clear Events after sending to Server
         # TODO: add support for selective removal of events. eg keep local events  like quite request
         self.game.event_manager.clear()
 
@@ -214,21 +214,21 @@ class GameClient:
         self.load_response_data()
 
         server_info_timestamp, server_info = self.server_info_history.get_prev_entry(render_time)
-        #Note, loaded immediately rather than at render time. this could be an issue?
+        # Note, loaded immediately rather than at render time. this could be an issue?
         if server_info is not None and server_info['player_id'] is not "":
             self.player = self.game.player_manager.get_player(server_info['player_id'])
             # obj = self.game.get_object_manager().get_by_id(self.player.get_object_id(),render_time)
 
         self.renderer.process_frame(
-            render_time = render_time,
-            player = self.player,
-            game = self.game)
-                
+            render_time=render_time,
+            player=self.player,
+            game=self.game)
+
         self.content_manager.post_process_frame(
-            render_time = render_time,
-            game = self.game,
-            player = self.player,
-            renderer = self.renderer)
+            render_time=render_time,
+            game=self.game,
+            player=self.player,
+            renderer=self.renderer)
 
         self.renderer.render_frame()
         self.renderer.play_sounds(self.game.get_sound_events(render_time))
@@ -237,20 +237,25 @@ class GameClient:
         self.step_counter += 1
 
     def run(self):
-
-        # Create Renderer
         while self.game.game_state == "RUNNING":
             self.run_step()
-from simpleland.utils import gen_id
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--resolution", default="640x480",help="resolution eg, [f,640x480]")
-    parser.add_argument("--hostname", default="localhost",help="hostname or ip, default is localhost")
+    parser.add_argument("--resolution", default="640x480", help="resolution eg, [f,640x480]")
+    parser.add_argument("--hostname", default="localhost", help="hostname or ip, default is localhost")
     parser.add_argument("--port", default=10001, help="port")
     parser.add_argument("--client_id", default=gen_id(), help="user id, default is random")
     parser.add_argument("--render_shapes", action='store_true', help="render actual shapes")
+    parser.add_argument("--enable_profiler", action="store_true", help="Enable Performance profiler")
 
     args = parser.parse_args()
+
+    if args.enable_profiler:
+        print("Profiling Enabled..")
+        profiler = Profiler()
+        profiler.start()
 
     config_manager = ConfigManager()
 
@@ -267,31 +272,36 @@ def main():
 
     config_manager.renderer_config.render_shapes = args.render_shapes
 
+    try:
+        connector = ClientConnector(client_id=args.client_id, server_address=(args.hostname, args.port))
+        connector_thread = threading.Thread(target=connector.start_connection, args=())
+        connector_thread.daemon = True
+        connector_thread.start()
 
-    connector = ClientConnector(client_id = args.client_id, server_address=(args.hostname,args.port))
-    connector_thread =threading.Thread(target=connector.start_connection, args=())
-    connector_thread.daemon = True
-    connector_thread.start()
+        game = SLGame(
+            physics_config=config_manager.physics_config,
+            config=config_manager.game_config)
 
+        asset_manager = AssetManager()
 
-    game = SLGame(
-        physics_config = config_manager.physics_config, 
-        config = config_manager.game_config)
+        content_manager = ContentManager(
+            config=config_manager.content_config)
 
-    asset_manager = AssetManager()
+        renderer = SLRenderer(config_manager.renderer_config, asset_manager=asset_manager)
+        game_client = GameClient(
+            content_manager=content_manager,
+            game=game,
+            renderer=renderer,
+            config=config_manager.client_config,
+            connector=connector)
 
-    content_manager = ContentManager(
-            config= config_manager.content_config)
+        game_client.run()
+    except (KeyboardInterrupt, SystemExit):
+        if args.enable_profiler:
+            profiler.stop()
+            print(profiler.output_text(unicode=True, color=True))
+        exit()
 
-    renderer = SLRenderer(config_manager.renderer_config, asset_manager=asset_manager)
-    game_client = GameClient(
-        content_manager = content_manager,
-        game = game, 
-        renderer=renderer,
-        config = config_manager.client_config,
-        connector=connector)
-
-    game_client.run()
 
 if __name__ == "__main__":
     main()
