@@ -1,60 +1,28 @@
-# Goal
-- create survival an environment for training RL agents
+# Simpleland
 
-# Features
-- survival types features
-- for multiple agents
-- eat
-- grow
-- increase mass and strength
-- don't eat too much 
-- expend energy
-- solve puzzles
-- complete for food/resources
-- cooperative situations
-- start with simple controlled situations and increase difficulty and risk overtime as agent learns
-- allows human players to do things like teaching
-- 2d
-- each agent gets locallized view
+## Overview
+This is a simple 2d game engine with client/server multiplayer or agent. It's primary purpose is to provide a flexilble test-bed for development of **reinforcement learning agents**.
 
+**This is an Alpha Release:** Only limited documentation and functionality
 
-# Current status
-- can move a circle with [wsda]
-- TODO: was about to implement the physics engine 
- to allow movement by applying force and conservation of momentum
-- starting 2d
+![alt text](https://github.com/bkusenda/simpleland/assets/game_screen1.png "Game screenshot")
 
-# ideas
-- game within game (same game or subset but with different actions) +1
-- reproduce? (hyper param search??), but not for physical features 
+## Features
+- 2d Physics and collision detection using pymunk
+- Realtime client server networking support for multiple agents/players
+- Very simple demo game provided
 
-# Next steps
- - populate space
- - create simple designer
- - add game elements
- - on collision
- 
- 
- 
-## Game elements
-- mouse mazes/ obstacles
-- object types
-    - structures  - not movable or edible
-    - lifeforms
-        - require energy to live
-        - moving costs energy
-        - animals 
-            - multiple types: preditor prey
-            - can move
-            - interact with env and each other
-            - food source
-            - eat plants or animals
-        - plants
-            - multiple types
-            - grow and duplicate
-            - food source
-            - grow over time unless completely devo
+## Known Issues/ Things to fix
+- Openai gym interface not yet added
+- Most configuration is currently hardcoded
+- Currently uses inefficient JSON for network serialization
+- Incomplete documentation
+- Objects are not yet purged from memory after being deleted resulting in a slow memory leak
+- Performance degrades with large number of objects or on poor network connections.
+- Incomplete tests
 
-
-# TODOS
-- add entity concept
+## Requirements
+- python 3.7
+- pygame
+- pymunk
+- pyinstrument 
