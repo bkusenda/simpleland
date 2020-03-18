@@ -5,7 +5,7 @@ This is a simple 2d game engine with client/server multiplayer or agent. It's pr
 
 **This is an Alpha Release:** Only limited documentation and functionality
 
-![alt text](https://github.com/bkusenda/simpleland/assets/game_screen1.png "Game screenshot")
+![alt text](https://raw.githubusercontent.com/bkusenda/simpleland/master/assets/game_screen1.png "Game screenshot")
 
 ## Features
 - 2d Physics and collision detection using pymunk
