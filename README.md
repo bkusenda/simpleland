@@ -15,7 +15,7 @@ This is a simple 2d game engine written completely in python with client/server 
 ## Known Issues
 - Openai gym interface not yet added
 - Most configuration is hardcoded
-- Yses inefficient JSON for network serialization
+- Uses inefficient JSON for network serialization
 - Objects are not yet purged from memory after being deleted resulting in a slow memory leak
 - Performance degrades with large number of objects or on poor network connections.
 - Incomplete documentation and testing
