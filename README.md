@@ -78,5 +78,5 @@ observation, reward, is_done, _ = env.step(action=1)
 
 ## Configuration/Customization
 
-- Game Environments: [environments](environments/)
-- Environment Registration: [config.py](simpleland/environment.py)
+- G1 Environment: [simpleland/environments/g1.py](simpleland/environments/g1.py)
+- Environment Registration: [simpleland/environment.py](simpleland/environment.py)
