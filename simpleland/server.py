@@ -17,22 +17,23 @@ import pymunk
 from pyinstrument import Profiler
 from pymunk import Vec2d
 
-from simpleland.common import (SimClock, SLBody, SLCamera, SLCircle, SLClock,
-                               SLLine, SLObject, SLPolygon, SLShape, SLSpace,
-                               SLVector, TimeLoggingContainer)
-from simpleland.config import ConfigManager, ServerConfig
-from simpleland.content_manager import ContentManager
-from simpleland.event_manager import SLPeriodicEvent, SLSoundEvent
-from simpleland.game import SLGame, StateDecoder, StateEncoder
-from simpleland.itemfactory import SLItemFactory, SLShapeFactory
-from simpleland.object_manager import SLObjectManager
-from simpleland.physics_engine import SLPhysicsEngine
-from simpleland.player import SLAgentPlayer, SLHumanPlayer, SLPlayer
-from simpleland.renderer import SLRenderer
+from simpleland.common import (SimClock, Body, Camera, Circle, Clock,
+                               Line, Polygon, Shape, Space,
+                               Vector, TimeLoggingContainer)
+
+from simpleland.object import GObject
+from simpleland.config import ServerConfig
+from simpleland.content import Content
+from simpleland.event import PeriodicEvent, SoundEvent
+from simpleland.game import Game, StateDecoder, StateEncoder
+from simpleland.itemfactory import ItemFactory, ShapeFactory
+from simpleland.object_manager import GObjectManager
+from simpleland.physics_engine import PhysicsEngine
+from simpleland.player import  Player
+from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
 
 LATENCY_LOG_SIZE = 100
-
 
 class ClientInfo:
     """
@@ -67,12 +68,12 @@ class GameServer:
 
     def __init__(self,
                  config: ServerConfig,
-                 content_manager: ContentManager,
-                 game: SLGame):
+                 content: Content,
+                 game: Game):
 
         self.config = config
         self.game = game
-        self.content_manager = content_manager
+        self.content = content
         self.clients = {}
 
     def get_client(self, client_id) -> ClientInfo:
@@ -82,12 +83,12 @@ class GameServer:
             self.clients[client.id] = client
         return client
 
-    def get_player(self, client):
+    def get_player(self, client, player_type):
         """
         Get existing player or create new one
         """
         if client.player_id is None:
-            player = self.content_manager.new_player(self.game)
+            player = self.content.new_player(self.game, player_type=player_type)
             client.player_id = player.get_id()
         else:
             player = self.game.player_manager.get_player(client.player_id)
@@ -103,6 +104,7 @@ class GameServer:
             self.game.run_pre_physics_processing()
             self.game.run_physics_processing()
             self.game.tick()
+            self.game.cleanup()
 
 
 class UDPHandler(socketserver.BaseRequestHandler):
@@ -122,7 +124,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
 
         request_message = request_info['message']
         client = game_server.get_client(request_info['client_id'])
-        player = game_server.get_player(client)
+        player = game_server.get_player(client,player_type = request_info['player_type'])
 
         snapshots_received = request_info['snapshots_received']
 
@@ -191,11 +193,14 @@ class GameUDPServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
         self.game_server = game_server
 
 
+from simpleland.environment import load_environment, get_env_content
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", default=10001, help="port")
     parser.add_argument("--enable_profiler", action="store_true", help="Enable Performance profiler")
+    parser.add_argument("--env_id", default="g1", help="id of environment")
 
     args = parser.parse_args()
 
@@ -206,21 +211,24 @@ if __name__ == "__main__":
         profiler = Profiler()
         profiler.start()
 
-    config_manager = ConfigManager()
+
+    env_def = load_environment(args.env_id)
+    print(env_def)
+
+
+    content = get_env_content(env_def)
+    
     # TODO: load from file
 
-    game = SLGame(
-        physics_config=config_manager.physics_config,
-        config=config_manager.game_config)
+    game = Game(
+        physics_config=env_def.physics_config,
+        config=env_def.game_config)
 
-    content_manager = ContentManager(
-        config=config_manager.content_config)
-
-    content_manager.load(game)
+    content.load(game)
 
     game_server = GameServer(
-        config=config_manager.server_config,
-        content_manager=content_manager,
+        config=env_def.server_config,
+        content=content,
         game=game)
 
     server = GameUDPServer(

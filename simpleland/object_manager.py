@@ -5,18 +5,19 @@ import pygame
 import pymunk
 from pymunk import Vec2d
 
-from .common import (Singleton, SLBody, SLCircle, SLClock,
-                     SLLine, SLObject, SLPolygon, SLSpace, SLVector, SLExtendedObject)
+from .common import (Singleton, Body, Circle, Clock,
+                     Line, Polygon, Space, Vector)
+from .object import (GObject, ExtendedGObject)
 from .utils import gen_id
 
-class SLObjectManager:
+class GObjectManager:
 
     def __init__(self, history_size):
         self.history_size = 10
-        self.objects:Dict[str,SLExtendedObject] = {}
+        self.objects:Dict[str,ExtendedGObject] = {}
 
-    def add(self,timestamp, obj: SLObject):
-        extObj = self.objects.get(obj.get_id(), SLExtendedObject(self.history_size))
+    def add(self,timestamp, obj: GObject):
+        extObj = self.objects.get(obj.get_id(), ExtendedGObject(self.history_size))
         extObj.add(timestamp,obj)
         self.objects[obj.get_id()] = extObj
     
@@ -27,9 +28,9 @@ class SLObjectManager:
         extObj.link_to_latest(timestamp)
 
     def clear_objects(self):
-        self.objects:Dict[str,SLExtendedObject] = {}
+        self.objects:Dict[str,ExtendedGObject] = {}
 
-    def get_latest_by_id(self, obj_id, include_deleted = False)->Tuple[int,SLObject]:
+    def get_latest_by_id(self, obj_id, include_deleted = False)->Tuple[int,GObject]:
         ext_obj = self.objects.get(obj_id,None)
         if ext_obj is None:
             return None, None
@@ -40,7 +41,7 @@ class SLObjectManager:
             else:
                 return t, o
 
-    def get_by_id(self, obj_id, timestamp)->SLObject:
+    def get_by_id(self, obj_id, timestamp)->GObject:
         ext_obj = self.objects.get(obj_id,None)
         if ext_obj is None:
             return None
@@ -59,7 +60,7 @@ class SLObjectManager:
                 valid_objs[k] = o
         return valid_objs
 
-    def get_objects_latest(self)->SLObject:
+    def get_objects_latest(self)->Dict[str,GObject]:
         objs = {}
         for k,eo in self.objects.items():
             t,o = eo.get_latest()
@@ -69,7 +70,7 @@ class SLObjectManager:
     def load_snapshot_from_data(self,timestamp, data):
         snapshot_keys = set()
         for odata in data:
-            new_obj = SLObject.build_from_dict(odata)
+            new_obj = GObject.build_from_dict(odata)
             self.add(timestamp, new_obj)
             snapshot_keys.add(new_obj.get_id())
         not_updated_keys = snapshot_keys - self.objects.keys()

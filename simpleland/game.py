@@ -4,17 +4,18 @@ from uuid import UUID
 
 from pymunk import Vec2d
 
-from .common import (SLBody, SLCircle, SLClock, SLLine,
-                     SLObject, SLPolygon, SLSpace, SLVector, SimClock, SLExtendedObject)
-from .physics_engine import SLPhysicsEngine
-from .event_manager import (SLEvent, SLAdminEvent, SLEventManager, SLMechanicalEvent,
-                            SLPeriodicEvent, SLViewEvent, SLSoundEvent, SLDelayedEvent, SLInputEvent)
-from .object_manager import SLObjectManager
-from .player import SLPlayer, SLPlayerManager
+from .common import (Body, Circle, Clock, Line
+                     , Polygon, Space, Vector, SimClock)
+from .object import (GObject, ExtendedGObject)
+from .physics_engine import PhysicsEngine
+from .event import (Event, AdminEvent, MechanicalEvent,
+                            PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
+from .event_manager import EventManager
+from .object_manager import GObjectManager
+from .player import Player, PlayerManager
 # from .renderer import SLRenderer
 from .utils import gen_id
 from .config import GameConfig, PhysicsConfig
-import pygame
 
 
 class StateEncoder(json.JSONEncoder):
@@ -39,7 +40,7 @@ class StateDecoder(json.JSONDecoder):
             return Vec2d(obj['x'],obj['y'])
         return obj
 
-class SLGame:
+class Game:
 
     def __init__(self, 
             physics_config: PhysicsConfig, 
@@ -49,10 +50,10 @@ class SLGame:
         self.physics_config = physics_config
         self.clock = SimClock()
 
-        self.object_manager:SLObjectManager = None
-        self.physics_engine:SLPhysicsEngine = None
-        self.player_manager: SLPlayerManager = None
-        self.event_manager: SLEventManager = None
+        self.object_manager:GObjectManager = None
+        self.physics_engine:PhysicsEngine = None
+        self.player_manager: PlayerManager = None
+        self.event_manager: EventManager = None
         self.game_state = "RUNNING"
         self.step_counter = 0
         self.last_position_lookup = {}
@@ -64,12 +65,13 @@ class SLGame:
         self.pre_event_processing_callback = lambda game: []
         self.pre_physics_callback = lambda game: []
         self.input_event_callback = lambda event, game: []
+        self.data = {} #TODO: create class to handle this info
 
     def reset(self):
-        self.object_manager = SLObjectManager(200)
-        self.physics_engine = SLPhysicsEngine(self.clock, self.physics_config)
-        self.player_manager = SLPlayerManager()
-        self.event_manager = SLEventManager()
+        self.object_manager = GObjectManager(200)
+        self.physics_engine = PhysicsEngine(self.clock, self.physics_config)
+        self.player_manager = PlayerManager()
+        self.event_manager = EventManager()
         self.game_state = "RUNNING"
         self.step_counter = 0
         self.last_position_lookup = {}
@@ -119,28 +121,28 @@ class SLGame:
         events_to_remove = []
         for e in self.event_manager.get_events():
             result_events = []
-            if type(e) == SLAdminEvent:
-                e: SLAdminEvent = e
+            if type(e) == AdminEvent:
+                e: AdminEvent = e
                 if e.value == 'QUIT':
                     self.change_game_state("QUITING")
                     events_to_remove.append(e)
-            elif type(e) == SLInputEvent:
+            elif type(e) == InputEvent:
                 result_events = self.input_event_callback(e,self)
                 events_to_remove.append(e)
-            elif type(e) == SLMechanicalEvent:
+            elif type(e) == MechanicalEvent:
                 result_events = self._process_mechanical_event(e)
                 events_to_remove.append(e)
-            elif type(e) == SLViewEvent:
+            elif type(e) == ViewEvent:
                 result_events = self._process_view_event(e)
                 events_to_remove.append(e)
 
-            elif type(e) == SLDelayedEvent:
-                e: SLDelayedEvent = e
+            elif type(e) == DelayedEvent:
+                e: DelayedEvent = e
                 result_events, delete_event = e.run(self.clock.get_time(),self.object_manager)
                 if delete_event:
                     events_to_remove.append(e)
-            elif type(e) == SLPeriodicEvent:
-                e: SLPeriodicEvent = e
+            elif type(e) == PeriodicEvent:
+                e: PeriodicEvent = e
                 result_events, remove_event = e.run(self.clock.get_time(),self.object_manager)
                 # NOT REMOVED
                 if remove_event:
@@ -180,7 +182,7 @@ class SLGame:
     def tick(self):
         self.clock.tick(self.tick_rate)     
 
-    def add_player(self, player: SLPlayer):
+    def add_player(self, player: Player):
         self.player_manager.add_player(player) 
 
     def add_object(self,obj):
@@ -188,7 +190,7 @@ class SLGame:
         self.object_manager.add(self.clock.get_time(), obj)
         self.physics_engine.add_object(obj)
 
-    def remove_object(self,obj:SLObject):
+    def remove_object(self,obj:GObject):
         # Marks as deleted, but not removed completely
         obj.delete()
         obj.set_last_change(self.clock.get_time())
@@ -198,14 +200,19 @@ class SLGame:
                 p.obj_id = None
         print("Deleting:{}".format(obj.is_deleted))
 
+    def cleanup(self):
+        for o in list(self.object_manager.get_objects_latest().values()):
+            if o.is_deleted and o.get_last_change() < (self.clock.get_time() - 10000):
+                self.object_manager.remove_by_id(o.get_id())
+
     def get_sound_events(self,render_time):
         events_to_remove = []
         sound_ids = []
         for e in self.event_manager.get_events():
             if e.is_client_event and not e.is_realtime_event:
                 result_events = []
-                if type(e) == SLSoundEvent:
-                    e:SLSoundEvent = e
+                if type(e) == SoundEvent:
+                    e:SoundEvent = e
                     sound_ids.append(e.sound_id)
                     events_to_remove.append(e)
         
@@ -213,7 +220,7 @@ class SLGame:
             self.event_manager.remove_event_by_id(e.get_id())
         return sound_ids
     
-    def _process_mechanical_event(self, e: SLMechanicalEvent) -> List[SLEvent]:
+    def _process_mechanical_event(self, e: MechanicalEvent) -> List[Event]:
         # TODO: use callback instead
         direction_delta = e.direction * self.physics_engine.config.velocity_multiplier * self.physics_engine.config.clock_multiplier
         t, obj = self.object_manager.get_latest_by_id(e.obj_id)
@@ -233,7 +240,7 @@ class SLGame:
             body.angular_velocity = -2
         return []
 
-    def _process_view_event(self, e: SLViewEvent):
+    def _process_view_event(self, e: ViewEvent):
         # TODO: use callback instead
         t, obj = self.object_manager.get_latest_by_id(e.obj_id)
         obj.set_last_change(self.clock.get_time())

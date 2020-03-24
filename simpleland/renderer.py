@@ -1,17 +1,17 @@
 from typing import Dict, Any
 
 import pygame
-
-from .common import SLVector, SLObject, SLLine, SLCircle, SLPolygon
-from .object_manager import SLObjectManager
+from .object import GObject
+from .common import Vector, Line, Circle, Polygon
+from .object_manager import GObjectManager
 from PIL import Image
 import numpy as np
 import os
 
 from .config import RendererConfig
-from .asset_manager import AssetManager
-from .player import SLPlayer
-from .game import SLGame
+from .asset_bundle import AssetBundle
+from .player import Player
+from .game import Game
 import time
 
 def to_pygame(p, surface):
@@ -25,12 +25,14 @@ def to_pygame(p, surface):
     return int(p[0]), surface.get_height() - int(p[1])
 
 
-class SLRenderer:
+class Renderer:
 
-    def __init__(self, config: RendererConfig, asset_manager: AssetManager):
-        # os.environ['SDL_AUDIODRIVER'] = 'dsp'
-        # os.environ["SDL_VIDEODRIVER"] = "dummy"
-        self.asset_manager = asset_manager
+    def __init__(self, config: RendererConfig, asset_bundle: AssetBundle):
+        if config.sdl_audio_driver:
+            os.environ['SDL_AUDIODRIVER'] = config.sdl_audio_driver 
+        if config.sdl_video_driver:
+            os.environ["SDL_VIDEODRIVER"] = config.sdl_video_driver
+        self.asset_bundle = asset_bundle
         self.config = config
         self.format = config.format
         self._display_surf = None
@@ -39,14 +41,19 @@ class SLRenderer:
         self.initialized = False
         self.frame_cache = None
 
+
         # These will be source object properties eventually
         self.view_height = 60.0
         self.view_width = self.view_height * self.aspect_ratio
-        self.center = SLVector.zero()
+        self.center = Vector.zero()
         self.initialize()
-        self.update_audio()
-        self.update_images()
 
+        self.images = {}
+        self.sounds = {}
+        self.load_sounds()
+        self.load_images()
+
+        # FPS Counter
         self.frames_to_count = 2
         self.frame_counter = [0 for i in range(self.frames_to_count)]
         self.last_spot = 0
@@ -62,33 +69,36 @@ class SLRenderer:
     def avg_fps(self):
         return sum([v for i, v in enumerate(self.frame_counter) if self.last_spot != i])/(self.frames_to_count -1)
 
-    def update_audio(self):
-        for k,v in self.asset_manager.sound_assets.items():
-            v.set_volume(0.06)
+    def load_sounds(self):
+        if self.config.sound_enabled:
+            for k,path in self.asset_bundle.sound_assets.items():
+                sound = pygame.mixer.Sound(path)
+                sound.set_volume(0.06)
+                self.sounds[k] = sound
 
-    def update_images(self):
-        new_assets = {}
-        for k, v in self.asset_manager.image_assets.items():
-            print("current size {}".format(v.get_rect().size))
-
-            new_assets[k] = pygame.transform.scale(v,(200,200))
-        self.asset_manager.image_assets = new_assets
+    def load_images(self):
+        self.images = {}
+        for k, path in self.asset_bundle.image_assets.items():
+            image = pygame.image.load(path).convert()
+            image = pygame.transform.scale(image,(200,200))
+            self.images[k] = image
 
     def play_sounds(self, sound_ids):
-        for sid in sound_ids:
-            self.asset_manager.sound_assets[sid].play()
+        if self.config.sound_enabled:
+            for sid in sound_ids:
+                self.sounds[sid].play()
 
     def get_image_by_id(self, image_id):
-        return self.asset_manager.image_assets.get(image_id)
+        return self.images.get(image_id)
 
     def update_view(self, view_height):
         self.view_height = max(view_height, 0.001)
         self.view_width = self.view_height * self.aspect_ratio
 
     def initialize(self):
-        pygame.mixer.pre_init(  44100, -16, 2, 1024)
+        if self.config.sound_enabled:
+            pygame.mixer.pre_init(  44100, -16, 2, 1024)
         pygame.init()
-        self.asset_manager.load_assets()
         self._display_surf = pygame.display.set_mode(self.size)  # , pygame.HWSURFACE | pygame.DOUBLEBUF)
         self.initialized = True
 
@@ -99,8 +109,8 @@ class SLRenderer:
             self._display_surf.blit(font.render(l, True, color), (x, y + spacing * i))
 
     def draw_line(self,
-                  obj: SLObject,
-                  line: SLLine,
+                  obj: GObject,
+                  line: Line,
                   color,
                   screen_factor,
                   screen_view_center,
@@ -124,8 +134,8 @@ class SLRenderer:
                          1)
 
     def draw_circle(self,
-                    obj: SLObject,
-                    circle: SLCircle,
+                    obj: GObject,
+                    circle: Circle,
                     color,
                     screen_factor,
                     screen_view_center,
@@ -144,8 +154,8 @@ class SLRenderer:
                            1)
 
     def draw_polygon(self,
-                     obj: SLObject,
-                     shape: SLPolygon,
+                     obj: GObject,
+                     shape: Polygon,
                      color,
                      screen_factor,
                      screen_view_center,
@@ -199,7 +209,7 @@ class SLRenderer:
                 else:
                     color = (255, 50, 50)
 
-                if type(shape) == SLLine:
+                if type(shape) == Line:
                     self.draw_line(obj,
                                 shape,
                                 color,
@@ -207,7 +217,7 @@ class SLRenderer:
                                 screen_view_center,
                                 angle = angle,
                                 center = center)
-                elif type(shape) == SLCircle:
+                elif type(shape) == Circle:
                     self.draw_circle(obj,
                                     shape,
                                     color,
@@ -215,7 +225,7 @@ class SLRenderer:
                                     screen_view_center,
                                     angle = angle,
                                     center = center)
-                elif type(shape) == SLPolygon:
+                elif type(shape) == Polygon:
                     self.draw_polygon(obj,
                                     shape,
                                     color,
@@ -227,8 +237,8 @@ class SLRenderer:
     # TODO: Clean this up
     def process_frame(self,
                     render_time,
-                    player:SLPlayer,
-                    game: SLGame,
+                    player:Player,
+                    game: Game,
                     additional_data: Dict[str, Any]={}):
         if player is None:
             return
@@ -245,9 +255,9 @@ class SLRenderer:
         center = view_obj.get_body().position
         angle = view_obj.get_body().angle
 
-        screen_factor = SLVector(self.width / self.view_width, self.height / self.view_height)
+        screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
 
-        screen_view_center = SLVector(self.view_width, self.view_height) / 2.0
+        screen_view_center = Vector(self.view_width, self.view_height) / 2.0
 
         self.draw_object(center, view_obj, angle, screen_factor, screen_view_center)
         render_obj_dict = object_manager.get_objects_for_timestamp(render_time)
@@ -264,11 +274,12 @@ class SLRenderer:
 
     def render_frame(self):
         self.count_frame()
-        if self.config.save_observation and self.config.frame_cache is None:
+        if self.config.save_observation:
             self.get_observation()
         frame = self.frame_cache
         self.frame_cache = None
-        pygame.display.flip()
+        if self.config.render_to_screen:
+            pygame.display.flip()
         return frame
 
     def get_observation(self):
@@ -281,5 +292,3 @@ class SLRenderer:
         self.frame_cache = np_data
         return np_data
 
-    def quit(self):
-        pygame.quit()

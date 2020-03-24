@@ -5,12 +5,15 @@ import numpy as np
 import pygame
 
 
-from .common import (get_dict_snapshot, load_dict_snapshot, SLBody, SLCircle, SLClock, SLLine,
-                     SLObject, SLPolygon, SLSpace, SLVector, SimClock, SLBase)
+from .common import (get_dict_snapshot, load_dict_snapshot, Body, Circle, Clock, Line,
+                     Polygon, Space, Vector, SimClock, Base)
 from .utils import gen_id
-from .event_manager import (SLAdminEvent, SLEventManager, SLMechanicalEvent,
-                            SLPeriodicEvent, SLViewEvent, SLEvent, SLInputEvent)
 
+from .object import (GObject, ExtendedGObject)
+from .physics_engine import PhysicsEngine
+from .event import (Event, AdminEvent, MechanicalEvent,
+                            PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
+from .event_manager import EventManager
 
 def get_default_key_map():
     key_map = {}
@@ -48,14 +51,63 @@ def get_default_key_map():
     key_map["MOUSE_DOWN_5"] = 32
     return key_map
 DEFAULT_KEYMAP = get_default_key_map()
-class SLPlayer(SLBase):
 
-    def __init__(self, uid=None, data=None):
+def get_input_events(player_id) -> List[Event]:
+
+    events: List[Event] = []
+
+    key_list = []
+    key_list.append(pygame.K_q)
+    key_list.append(pygame.K_e)
+    key_list.append(pygame.K_w)
+    key_list.append(pygame.K_q)
+    key_list.append(pygame.K_s)
+    key_list.append(pygame.K_a)
+    key_list.append(pygame.K_d)
+    key_list.append(pygame.K_ESCAPE)
+
+    key_pressed=set()
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            key_pressed.add("QUIT")
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            key_pressed.add("MOUSE_DOWN_{}".format(event.button))
+
+    keys = pygame.key.get_pressed()
+    for key in key_list:
+        if keys[key]:
+            key_pressed.add(key)
+    event = InputEvent(
+        player_id  = player_id, 
+        input_data = {
+            'inputs':{DEFAULT_KEYMAP[k]:1 for k in key_pressed},
+            'mouse_pos': pygame.mouse.get_pos(),
+            'mouse_rel': pygame.mouse.get_rel(),
+            'focused': pygame.mouse.get_focused()
+            })
+    events.append(event)
+    return events
+
+class Player(Base):
+
+    @classmethod
+    def build_from_dict(cls,data_dict):
+        data = data_dict['data']
+        player = cls()
+        player.uid = data['uid']
+        player.obj_id = data['obj_id']
+        player.data = data.get('data',{})
+        print(data_dict)
+        return player
+
+    def __init__(self, uid=None, data=None, player_type =0):
         """
 
         :return:
         """
         self.uid = uid
+        self.player_type = player_type
         self.obj_id = None
         self.events=[]
         self.data = {} if data is None else data
@@ -69,18 +121,20 @@ class SLPlayer(SLBase):
     def set_data_value(self,k,value):
         self.data[k] = value
 
-    def add_input(self, input):
-        raise NotImplementedError
-
-    def attach_object(self, obj: SLObject):
+    def attach_object(self, obj: GObject):
         self.obj_id = obj.get_id()
 
     def get_object_id(self) -> str:
         return self.obj_id
+
+    def add_event(self, event: Event):
+        self.events.append(event)
     
-    def pull_input_events(self) -> List[SLEvent]:
-        return []
-    
+    def pull_input_events(self) -> List[Event]:
+        events =  self.events
+        self.events = []
+        return events
+
     def get_snapshot(self):
         data =  get_dict_snapshot(self, exclude_keys={'events'})
         return data
@@ -90,131 +144,12 @@ class SLPlayer(SLBase):
 
 
 
-class SLHumanPlayer(SLPlayer):
-
-
-
-    @classmethod
-    def build_from_dict(cls,data_dict):
-        data = data_dict['data']
-        player = cls()
-        player.uid = data['uid']
-        player.obj_id = data['obj_id']
-        player.data = data.get('data',{})
-        print(data_dict)
-        return player
-
+class PlayerManager:
 
     def __init__(self):
-        super(SLHumanPlayer, self).__init__()
+        self.players_map: Dict[str, Player] = {}
 
-
-    def pull_input_events(self) -> List[SLEvent]:
-
-        events: List[SLEvent] = []
-
-        key_list = []
-        key_list.append(pygame.K_q)
-        key_list.append(pygame.K_e)
-        key_list.append(pygame.K_w)
-        key_list.append(pygame.K_q)
-        key_list.append(pygame.K_s)
-        key_list.append(pygame.K_a)
-        key_list.append(pygame.K_d)
-        key_list.append(pygame.K_ESCAPE)
-
-        key_pressed=set()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                key_pressed.add("QUIT")
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                key_pressed.add("MOUSE_DOWN_{}".format(event.button))
-
-        keys = pygame.key.get_pressed()
-        for key in key_list:
-            if keys[key]:
-                key_pressed.add(key)
-        event = SLInputEvent(
-            player_id  =self.get_id(), 
-            input_data = {
-                'inputs':{DEFAULT_KEYMAP[k]:1 for k in key_pressed},
-                'mouse_pos': pygame.mouse.get_pos(),
-                'mouse_rel': pygame.mouse.get_rel(),
-                'focused': pygame.mouse.get_focused()
-                })
-        events.append(event)
-        return events
-
-
-class SLAgentPlayer(SLPlayer):
-
-    def __init__(self):
-        super(SLAgentPlayer, self).__init__()
-        """
-
-        :return:
-        """
-        self.blocking_player = True
-        self.block_sleep_secs = 0.00
-        self.ready = False
-
-    def pull_input_events(self) -> List[SLEvent]:
-        return self.events
-
-    def add_input(self, action_set):
-        self.events = self._get_events_from_input(action_set)
-
-    def add_event(self, event: SLEvent):
-        self.events.append(event)
-
-    def clear_events(self):
-        self.events = []
-
-    def _get_events_from_input(self, action_set) -> List[SLEvent]:
-
-        events: List[SLEvent] = []
-
-        move_speed = 0.02
-
-        obj_orientation_diff = None
-        if 1 in action_set and not 2 in action_set:
-            obj_orientation_diff = -1
-        elif 2 in action_set and not 1 in action_set:
-            obj_orientation_diff = 1
-
-        if obj_orientation_diff is not None:
-            events.append(SLMechanicalEvent(self.get_object_id(), direction=SLVector.zero(), orientation_diff=obj_orientation_diff * move_speed))
-
-        # Object Movement
-        force = 0.5
-        direction = SLVector.zero()
-        if 3 in action_set:
-            direction += SLVector(0, 1)
-
-        if 4 in action_set:
-            direction += SLVector(0, -1)
-
-        if 5 in action_set:
-            direction += SLVector(-1, 0)
-
-        if 6 in action_set:
-            direction += SLVector(1, 0)
-
-        mag = float(np.sqrt(direction.dot(direction)))
-        if mag != 0:
-            direction = ((1.0 / mag) * force * direction)
-            events.append(SLMechanicalEvent(self.get_object_id(), direction))
-
-        return events
-
-
-class SLPlayerManager:
-
-    def __init__(self):
-        self.players_map: Dict[str, SLPlayer] = {}
-
-    def add_player(self, player: SLPlayer):
+    def add_player(self, player: Player):
         """
 
         :param player:
@@ -222,11 +157,11 @@ class SLPlayerManager:
         """
         self.players_map[player.uid] = player
 
-    def get_player(self, uid) -> SLPlayer:
+    def get_player(self, uid) -> Player:
         return self.players_map.get(uid, None)
 
-    def pull_events(self) -> List[SLEvent]:
-        all_player_events: List[SLEvent] = []
+    def pull_events(self) -> List[Event]:
+        all_player_events: List[Event] = []
         for player in self.players_map.values():
             all_player_events.extend(player.pull_input_events())
         return all_player_events
@@ -244,7 +179,7 @@ class SLPlayerManager:
             if k in self.players_map:
                 self.players_map[k].load_snapshot(p_data)
             else:
-                new_p = SLHumanPlayer.build_from_dict(p_data)
+                new_p = Player.build_from_dict(p_data)
                 self.players_map[k] = new_p
                 new_players.append(new_p)
         return new_players
