@@ -171,6 +171,7 @@ class GameClient:
         self.renderer = renderer
 
         self.connector = ClientConnector(config= config)
+        #TODO, separate process instead?
         self.connector_thread = threading.Thread(target=self.connector.start_connection, args=())
         self.connector_thread.daemon = True
         self.connector_thread.start()
@@ -316,7 +317,6 @@ class SimpleLandEnv(gym.Env):
     def step(self, action):
         if self.dry_run:
             return self.observation_space.sample(), 1, False, None
-        done=False
         if self.game_client.player is not None:
             event = InputEvent(
                 player_id  = self.game_client.player.get_id(), 
@@ -330,24 +330,10 @@ class SimpleLandEnv(gym.Env):
         # obs, step_reward, done = self.game.manual_player_action_step({int(action)}, self.player.uid)
         self.game_client.run_step()
         self.ob = self.launcher.renderer.get_observation()
-        reward = 0
-        if self.game_client.player is not None:
-            obj_id = self.game_client.player.get_object_id()
-            tt, obj = self.game_client.game.object_manager.get_latest_by_id(obj_id)
-            
-            if obj is not None:
-                reward = obj.get_data_value("energy")
-                if reward <= 0:
-                    done = True
-                    reward = 0
-                else:
-                    reward = 1
+        reward, done = self.game_client.content.get_step_info(
+            player= self.game_client.player,
+            game=self.game_client.game)
 
-            else:
-                done = True
-                    
-            if done:
-                reward = -100
 
         return self.ob, reward, done, None
 
@@ -360,8 +346,15 @@ class SimpleLandEnv(gym.Env):
 
     def reset(self):
         done = True
+        count = 0
+        wait_time = 0.001
         while done: 
             self.ob, reward, done, _ = self.step(0)
+            if done:
+                count +=1
+                time.sleep(count * wait_time)
+                if ((count + 1)  % 100) == 0:
+                    print("Waiting for game reset {}".format(count))
         return self.ob
 
 

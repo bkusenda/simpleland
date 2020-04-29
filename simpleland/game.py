@@ -12,7 +12,8 @@ from .event import (Event, AdminEvent, MechanicalEvent,
                             PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
 from .event_manager import EventManager
 from .object_manager import GObjectManager
-from .player import Player, PlayerManager
+from .player import Player
+from .player_manager import PlayerManager
 # from .renderer import SLRenderer
 from .utils import gen_id
 from .config import GameConfig, PhysicsConfig
@@ -57,7 +58,7 @@ class Game:
         self.game_state = "RUNNING"
         self.step_counter = 0
         self.last_position_lookup = {}
-        self.reset()
+        self.initialize()
 
         self.tick_rate = self.config.tick_rate #steps per second
         self.physics_tick_rate = self.physics_config.tick_rate  #steps per second
@@ -65,9 +66,8 @@ class Game:
         self.pre_event_processing_callback = lambda game: []
         self.pre_physics_callback = lambda game: []
         self.input_event_callback = lambda event, game: []
-        self.data = {} #TODO: create class to handle this info
 
-    def reset(self):
+    def initialize(self):
         self.object_manager = GObjectManager(200)
         self.physics_engine = PhysicsEngine(self.clock, self.physics_config)
         self.player_manager = PlayerManager()
@@ -112,7 +112,10 @@ class Game:
             self.event_manager.load_snapshot(snapshot['em'])
 
     def run_pre_event_processing(self):
-        if self.pre_physics_callback is not None:
+        """
+        TODO: redo callbacks, use function overrides instead
+        """
+        if self.pre_event_processing_callback is not None:
             events = self.pre_event_processing_callback(self)
             self.event_manager.add_events(events)
 
@@ -199,7 +202,15 @@ class Game:
             if obj.get_id() == p.get_object_id():
                 p.obj_id = None
         print("Deleting:{}".format(obj.is_deleted))
+    
+    def remove_all_objects(self):
+        for o in list(self.object_manager.get_objects_latest().values()):
+            if not o.is_deleted:
+                self.remove_object(o)
 
+    def remove_all_events(self):
+        self.event_manager.clear()
+    
     def cleanup(self):
         for o in list(self.object_manager.get_objects_latest().values()):
             if o.is_deleted and o.get_last_change() < (self.clock.get_time() - 10000):

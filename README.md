@@ -3,7 +3,7 @@
 ## Overview
 This is a simple 2d game engine written completely in python with client/server multiplayer support. It's primary purpose is to provide a flexilble test-bed for development of **reinforcement learning agents**.
 
-**VERSION: 0.1-ALPHA**: This is an alpha release.  *Only limited documentation and functionality.*
+**Version: 0.1-alpha**: This is an alpha release.  *Only limited documentation and functionality.*
 
 ![Game Screenshot](https://raw.githubusercontent.com/bkusenda/simpleland/master/assets/game_screen1.png "Game screenshot")
 

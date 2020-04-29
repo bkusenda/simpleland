@@ -1,7 +1,7 @@
 from .config import ContentConfig, ServerConfig, GameConfig, ClientConfig, PhysicsConfig, RendererConfig
 
 import importlib.util
-from .environments import g1
+from .environments import g1, g2
 from .content import Content
 from typing import Dict, Any
 
@@ -51,6 +51,8 @@ def get_env_content(env_def:EnvironmentDefinition) -> Content:
 
 # g1
 content_classes['g1'] = g1.GameContent
+content_classes['g2'] = g2.GameContent
+
 
 def build_env_g1():
     env = EnvironmentDefinition(
@@ -63,6 +65,18 @@ def build_env_g1():
         game_config=GameConfig())
     return env
 
+def build_env_g2():
+    env = EnvironmentDefinition(
+        server_config=ServerConfig(),
+        client_config=ClientConfig(),
+        content_id = "g2",
+        content_config={},
+        renderer_config=RendererConfig(),
+        physics_config=PhysicsConfig(),
+        game_config=GameConfig())
+    return env
+
 env_registry['g1'] = build_env_g1
+env_registry['g2'] = build_env_g2
 
 

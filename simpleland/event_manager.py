@@ -28,7 +28,7 @@ class EventManager:
         return self.events[id]
 
     def remove_event_by_id(self, id):
-        del self.events[id]
+        self.events.pop(id,None)
 
     def clear(self):
         self.events: Dict[str, Event] = {}

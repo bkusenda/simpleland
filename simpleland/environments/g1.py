@@ -1,5 +1,5 @@
 import random
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 
 import pymunk
 
@@ -35,7 +35,6 @@ def load_asset_bundle():
     sound_assets['bleep2'] = 'assets/sounds/bleep2.wav'
     return AssetBundle(image_assets = image_assets,sound_assets = sound_assets)
 
-
 class GameContent(Content):
 
     def __init__(self, config):
@@ -45,6 +44,28 @@ class GameContent(Content):
 
     def get_asset_bundle(self):
         return self.asset_bundle
+
+    def get_step_info(self,player:Player,game:Game) -> Tuple[float,bool]:
+        done = False
+        reward = 0
+        if player is not None:
+            obj_id = player.get_object_id()
+            tt, obj = game.object_manager.get_latest_by_id(obj_id)
+            
+            if obj is not None:
+                reward = obj.get_data_value("energy")
+                if reward <= 0:
+                    done = True
+                    reward = 0
+                else:
+                    reward = 1
+
+            else:
+                done = True
+                    
+            if done:
+                reward = -100
+        return reward, done
 
     def get_random_pos(self):
         return Vector(
@@ -110,7 +131,7 @@ class GameContent(Content):
 
 
             for i in range(0, 5): #random.randint(0, 3)
-                food_counter = game.data.get('food_counter',0)
+                food_counter = self.data.get('food_counter',0)
                 if food_counter > 6:
                     continue
                 o = GObject(Body(body_type=pymunk.Body.KINEMATIC))
@@ -129,7 +150,7 @@ class GameContent(Content):
                 o.set_data_value("type", "food")
                 o.set_data_value("image", "energy1")
                 o.set_last_change(game.clock.get_time())
-                game.data['food_counter'] = food_counter +1
+                self.data['food_counter'] = food_counter +1
 
                 ShapeFactory.attach_circle(o, 1)
                 game.add_object(o)
@@ -157,8 +178,8 @@ class GameContent(Content):
                 player_objs[0].set_data_value("energy",
                                               player_energy + food_energy)
                 player_objs[0].set_last_change(game.clock.get_time())
-                food_counter = game.data.get('food_counter',0)
-                game.data['food_counter'] = food_counter -1
+                food_counter = self.data.get('food_counter',0)
+                self.data['food_counter'] = food_counter -1
                 game.remove_object(food_objs[0])
                 sound_event = SoundEvent(
                     creation_time=game.clock.get_time(),
