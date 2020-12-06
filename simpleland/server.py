@@ -124,7 +124,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
 
         request_message = request_info['message']
         client = game_server.get_client(request_info['client_id'])
-        player = game_server.get_player(client,player_type = request_info['player_type'])
+        player = game_server.get_player(client, player_type = request_info['player_type'])
 
         snapshots_received = request_info['snapshots_received']
 
@@ -201,6 +201,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", default=10001, help="port")
     parser.add_argument("--enable_profiler", action="store_true", help="Enable Performance profiler")
     parser.add_argument("--env_id", default="g1", help="id of environment")
+    parser.add_argument("--tick_rate", default=60, type=int, help="game tickrate")
 
     args = parser.parse_args()
 
@@ -213,6 +214,7 @@ if __name__ == "__main__":
 
 
     env_def = load_environment(args.env_id)
+    env_def.game_config.tick_rate = args.tick_rate
     print(env_def)
 
 

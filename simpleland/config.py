@@ -1,5 +1,5 @@
 from .common import Base
-
+import pprint
 class PhysicsConfig(Base):
     def __init__(self):
         self.velocity_multiplier = 15.0
@@ -14,7 +14,6 @@ class PhysicsConfig(Base):
 class RendererConfig(Base):
 
     def __init__(self):
-        self.show_object_shapes = True
         self.render_delay_in_ms = 25
         self.resolution = (640,480)
         self.format='RGB'
@@ -25,8 +24,10 @@ class RendererConfig(Base):
         self.sdl_audio_driver = None #'dsp'
         self.sdl_video_driver = None #'dummy'
         self.sound_enabled = True
-        self.render_to_screen = True
+        self.render_to_screen = True 
 
+def __repr__(self) -> str:
+    return pprint.pformat(self.__dict__)
 
 class ClientConfig(Base):
     def __init__(self):
@@ -37,10 +38,17 @@ class ClientConfig(Base):
         self.server_hostname = None
         self.server_port = None
 
+    def __repr__(self) -> str:
+        return pprint.pformat(self.__dict__)
+
 class ServerConfig(Base):
     def __init__(self):
         self.outgoing_chunk_size = 4000
         self.max_unconfirmed_messages_before_new_snapshot = 10
+
+
+    def __repr__(self) -> str:
+        return pprint.pformat(self.__dict__)
 
 class GameConfig(Base):
 
@@ -50,8 +58,14 @@ class GameConfig(Base):
         self.clock_factor = 1.0
         self.tick_rate = 60
 
+    def __repr__(self) -> str:
+        return pprint.pformat(self.__dict__)
+        
 class ContentConfig(Base):
 
     def __init__(self, id, data):
         self.id = id
         self.data = data
+
+    def __repr__(self) -> str:
+        return pprint.pformat(self.__dict__)

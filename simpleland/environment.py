@@ -4,8 +4,7 @@ import importlib.util
 from .environments import g1, g2
 from .content import Content
 from typing import Dict, Any
-
-
+import pprint
 class EnvironmentDefinition:
 
     def __init__(self,
@@ -26,6 +25,8 @@ class EnvironmentDefinition:
         self.content_config = content_config
         self.content_id = content_id
 
+    def __repr__(self) -> str:
+        return pprint.pformat(self.__dict__)
 
 
 # Init Registries
@@ -33,7 +34,7 @@ content_classes = {}
 env_registry = {}
 
 
-def load_environment(env_id):
+def load_environment(env_id)->EnvironmentDefinition:
     env_def = env_registry.get(env_id)()
     return env_def
 

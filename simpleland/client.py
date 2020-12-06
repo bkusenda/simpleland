@@ -163,20 +163,30 @@ class GameClient:
         self.game = game
         self.content = content
         self.render_delay_in_ms = 60  # tick gap + latency
-        self.frames_per_second = config
+        self.frames_per_second = config.frames_per_second
 
         self.server_info_history = TimeLoggingContainer(100)
         self.player: Player = None  # TODO: move to history data managed for rendering consistency
         self.step_counter = 0
         self.renderer = renderer
 
+        # self.connector = None
         self.connector = ClientConnector(config= config)
         #TODO, separate process instead?
         self.connector_thread = threading.Thread(target=self.connector.start_connection, args=())
         self.connector_thread.daemon = True
         self.connector_thread.start()
 
+
+    def sync_time(self):
+        if self.connector is None:
+            return
+        if self.connector.absolute_server_time is not None:
+            self.game.clock.set_absolute_time(self.connector.absolute_server_time)
+
     def load_response_data(self):
+        if self.connector is None:
+            return
         done = False
         while (not done):
             if self.connector.incomming_buffer.qsize() == 0:
@@ -192,9 +202,19 @@ class GameClient:
                     incomming_data['info']['snapshot_timestamp'],
                     incomming_data['info'])
 
+    def send_events(self):
+        if self.connector is None:
+            return
+        event_snapshot = self.game.event_manager.get_snapshot()
+        if self.connector.outgoing_buffer.qsize() < 30:
+            self.connector.outgoing_buffer.put(event_snapshot)
+
+        # Clear Events after sending to Server
+        # TODO: add support for selective removal of events. eg keep local events  like quite request
+        self.game.event_manager.clear()
+
     def run_step(self):
-        if self.connector.absolute_server_time is not None:
-            self.game.clock.set_absolute_time(self.connector.absolute_server_time)
+        self.sync_time()
 
         render_time = max(0, self.game.clock.get_time() - self.render_delay_in_ms)
 
@@ -208,13 +228,8 @@ class GameClient:
             events.extend(self.player.pull_input_events())
             self.game.event_manager.add_events(events)
 
-        event_snapshot = self.game.event_manager.get_snapshot()
-        if self.connector.outgoing_buffer.qsize() < 30:
-            self.connector.outgoing_buffer.put(event_snapshot)
-
-        # Clear Events after sending to Server
-        # TODO: add support for selective removal of events. eg keep local events  like quite request
-        self.game.event_manager.clear()
+        # Send events
+        self.send_events()
 
         # Get Game Snapshot
         self.load_response_data()
@@ -247,8 +262,8 @@ class GameClient:
     def run(self):
         while self.game.game_state == "RUNNING":
             self.run_step()
-from simpleland.environment import load_environment, get_env_content, EnvironmentDefinition
 
+from simpleland.environment import load_environment, get_env_content, EnvironmentDefinition
 
 class Launcher:
 
@@ -365,6 +380,10 @@ def main():
     parser.add_argument("--port", default=10001, help="port")
     parser.add_argument("--client_id", default=gen_id(), help="user id, default is random")
     parser.add_argument("--render_shapes", action='store_true', help="render actual shapes")
+    parser.add_argument("--disable_textures", action='store_true', help="don't show images")
+    parser.add_argument("--fps", default=60, type=int,help="fps")
+
+
     parser.add_argument("--enable_profiler", action="store_true", help="Enable Performance profiler")
     parser.add_argument("--player_type", default=0, help="Player type (0=default, 1=observer)")
     parser.add_argument("--env_id", default="g1", help="id of environment")
@@ -394,11 +413,14 @@ def main():
     env_def.client_config.client_id = args.client_id
     env_def.client_config.server_hostname = args.hostname
     env_def.client_config.server_port = args.port
+    env_def.client_config.frames_per_second = args.fps
+    
     
 
     env_def.renderer_config.resolution = resolution
 
     env_def.renderer_config.render_shapes = args.render_shapes
+    env_def.renderer_config.disable_textures = args.disable_textures
 
     launcher = Launcher(env_def)
 

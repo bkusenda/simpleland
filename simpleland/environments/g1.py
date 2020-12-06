@@ -269,7 +269,7 @@ class GameContent(Content):
             t, obj = om.get_latest_by_id(data['obj_id'])
             if obj is None or obj.is_deleted:
                 return [], True
-            new_energy = max(obj.get_data_value("energy") - 30, 0)
+            new_energy = max(obj.get_data_value("energy") - 1, 0)
             #     # om.remove_by_id(obj.get_id())
             #     return [], False
             print("Energy: {}".format(new_energy))
