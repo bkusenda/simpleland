@@ -81,7 +81,7 @@ def get_input_events(player_id) -> List[Event]:
     event = InputEvent(
         player_id  = player_id, 
         input_data = {
-            'inputs':{DEFAULT_KEYMAP[k]:1 for k in key_pressed},
+            'inputs':[DEFAULT_KEYMAP[k] for k in key_pressed], # TAG: BJK1
             'mouse_pos': pygame.mouse.get_pos(),
             'mouse_rel': pygame.mouse.get_rel(),
             'focused': pygame.mouse.get_focused()

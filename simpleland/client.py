@@ -151,6 +151,8 @@ class ClientConnector:
             self.create_request()
 
 
+from simpleland.utils import TickPerSecCounter
+
 class GameClient:
 
     def __init__(self,
@@ -164,18 +166,28 @@ class GameClient:
         self.content = content
         self.render_delay_in_ms = 60  # tick gap + latency
         self.frames_per_second = config.frames_per_second
+        self.render_last_update = 0
+        self.render_update_freq = (1.0/self.frames_per_second)  * 1000
+        self.frame_limit = self.frames_per_second != self.game.config.tick_rate
 
         self.server_info_history = TimeLoggingContainer(100)
         self.player: Player = None  # TODO: move to history data managed for rendering consistency
         self.step_counter = 0
         self.renderer = renderer
+        self.tick_counter = TickPerSecCounter(2)
 
-        # self.connector = None
-        self.connector = ClientConnector(config= config)
-        #TODO, separate process instead?
-        self.connector_thread = threading.Thread(target=self.connector.start_connection, args=())
-        self.connector_thread.daemon = True
-        self.connector_thread.start()
+        self.connector = None
+        if self.config.is_remote:
+            print("Creating remote connection")
+            self.connector = ClientConnector(config= config)
+            #TODO, separate process instead?
+            self.connector_thread = threading.Thread(target=self.connector.start_connection, args=())
+            self.connector_thread.daemon = True
+            self.connector_thread.start()
+        else:
+            self.player = self.content.new_player(self.game, player_type=config.player_type)
+            # content.load(game)
+        
 
 
     def sync_time(self):
@@ -184,7 +196,19 @@ class GameClient:
         if self.connector.absolute_server_time is not None:
             self.game.clock.set_absolute_time(self.connector.absolute_server_time)
 
-    def load_response_data(self):
+
+    def send_local_events(self):
+        if self.connector is None:
+            return
+        event_snapshot = self.game.event_manager.get_snapshot()
+        if self.connector.outgoing_buffer.qsize() < 30:
+            self.connector.outgoing_buffer.put(event_snapshot)
+
+        # Clear Events after sending to Server
+        # TODO: add support for selective removal of events. eg keep local events  like quite request
+        self.game.event_manager.clear()
+
+    def get_remote_state(self):
         if self.connector is None:
             return
         done = False
@@ -202,20 +226,18 @@ class GameClient:
                     incomming_data['info']['snapshot_timestamp'],
                     incomming_data['info'])
 
-    def send_events(self):
+    def update_player_info(self,render_time):
         if self.connector is None:
             return
-        event_snapshot = self.game.event_manager.get_snapshot()
-        if self.connector.outgoing_buffer.qsize() < 30:
-            self.connector.outgoing_buffer.put(event_snapshot)
-
-        # Clear Events after sending to Server
-        # TODO: add support for selective removal of events. eg keep local events  like quite request
-        self.game.event_manager.clear()
+        server_info_timestamp, server_info = self.server_info_history.get_prev_entry(render_time)
+        # Note, loaded immediately rather than at render time. this could be an issue?
+        if server_info is not None and server_info['player_id'] is not "":
+            self.player = self.game.player_manager.get_player(server_info['player_id'])
+            # obj = self.game.get_object_manager().get_by_id(self.player.get_object_id(),render_time)
 
     def run_step(self):
         self.sync_time()
-
+        
         render_time = max(0, self.game.clock.get_time() - self.render_delay_in_ms)
 
         # Get Input Events and put in output buffer
@@ -229,64 +251,35 @@ class GameClient:
             self.game.event_manager.add_events(events)
 
         # Send events
-        self.send_events()
+        self.send_local_events()
 
         # Get Game Snapshot
-        self.load_response_data()
+        self.get_remote_state()
 
-        server_info_timestamp, server_info = self.server_info_history.get_prev_entry(render_time)
-        # Note, loaded immediately rather than at render time. this could be an issue?
-        if server_info is not None and server_info['player_id'] is not "":
-            self.player = self.game.player_manager.get_player(server_info['player_id'])
-            # obj = self.game.get_object_manager().get_by_id(self.player.get_object_id(),render_time)
+        self.update_player_info(render_time)
 
-        self.renderer.process_frame(
-            render_time=render_time,
-            player=self.player,
-            game=self.game)
+        if not self.frame_limit or ((render_time - self.render_last_update)*2 >= self.render_update_freq):
+            self.renderer.set_log_info("TPS: {} ".format(self.tick_counter.avg()))
+            self.renderer.process_frame(
+                render_time=render_time,
+                player=self.player,
+                game=self.game)
 
-        self.content.post_process_frame(
-            render_time=render_time,
-            game=self.game,
-            player=self.player,
-            renderer=self.renderer)
+            self.content.post_process_frame(
+                render_time=render_time,
+                game=self.game,
+                player=self.player,
+                renderer=self.renderer)
+            self.renderer.render_frame()
+            self.render_last_update = render_time
 
-        self.renderer.render_frame()
         if self.config.is_human:
             self.renderer.play_sounds(self.game.get_sound_events(render_time))
-        self.game.run_event_processing()
-        self.game.clock.tick(self.config.frames_per_second)
-        self.game.cleanup()
+
+        self.tick_counter.tick()
         self.step_counter += 1
 
-    def run(self):
-        while self.game.game_state == "RUNNING":
-            self.run_step()
-
 from simpleland.environment import load_environment, get_env_content, EnvironmentDefinition
-
-class Launcher:
-
-    def __init__(self,env_def:EnvironmentDefinition):
-        self.env_def = env_def
-
-        self.game = Game(
-            physics_config=env_def.physics_config,
-            config=env_def.game_config)
-
-        self.content = get_env_content(env_def)
-
-        self.renderer = Renderer(
-            env_def.renderer_config,
-            asset_bundle=self.content.get_asset_bundle())
-    
-    def get_game_client(self):
-
-        return GameClient(
-            content=self.content,
-            game=self.game,
-            renderer=self.renderer,
-            config=self.env_def.client_config)
 
 from gym import spaces
 
@@ -309,17 +302,14 @@ class SimpleLandEnv(gym.Env):
         self.env_def.client_config.client_id = client_id
         self.env_def.client_config.server_hostname = hostname
         self.env_def.client_config.server_port = port
-        self.launcher = Launcher(self.env_def)
+        self.launcher = GameRunner(self.env_def)
         self.connector = None
         self.connector_thread = None
         self.dry_run = dry_run
 
         if not self.dry_run:
-            self.game_client:GameClient = self.launcher.get_game_client()
-        else:
-            self.game_client:GameClient = None
-
-
+            self.launcher.add_client()
+  
         self.action_space = spaces.Discrete(5)
         self.observation_space = spaces.Box(0, 255, (resolution[0], resolution[1],3))
         logging.info("Ob space: {}".format(self.observation_space))
@@ -372,70 +362,3 @@ class SimpleLandEnv(gym.Env):
                     print("Waiting for game reset {}".format(count))
         return self.ob
 
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--resolution", default="640x480", help="resolution eg, [f,640x480]")
-    parser.add_argument("--hostname", default="localhost", help="hostname or ip, default is localhost")
-    parser.add_argument("--port", default=10001, help="port")
-    parser.add_argument("--client_id", default=gen_id(), help="user id, default is random")
-    parser.add_argument("--render_shapes", action='store_true', help="render actual shapes")
-    parser.add_argument("--disable_textures", action='store_true', help="don't show images")
-    parser.add_argument("--fps", default=60, type=int,help="fps")
-
-
-    parser.add_argument("--enable_profiler", action="store_true", help="Enable Performance profiler")
-    parser.add_argument("--player_type", default=0, help="Player type (0=default, 1=observer)")
-    parser.add_argument("--env_id", default="g1", help="id of environment")
-
-    args = parser.parse_args()
-
-    if args.enable_profiler:
-        print("Profiling Enabled..")
-        profiler = Profiler()
-        profiler.start()
-
-    env_def = load_environment(args.env_id)
-
-    
-
-    # Get resolution
-    if args.resolution == 'f':
-        import pygame
-        pygame.init()
-        infoObject = pygame.display.Info()
-        resolution = (infoObject.current_w, infoObject.current_h)
-    else:
-        res_string = args.resolution.split("x")
-        resolution = (int(res_string[0]), int(res_string[1]))
-
-    env_def.client_config.player_type = args.player_type
-    env_def.client_config.client_id = args.client_id
-    env_def.client_config.server_hostname = args.hostname
-    env_def.client_config.server_port = args.port
-    env_def.client_config.frames_per_second = args.fps
-    
-    
-
-    env_def.renderer_config.resolution = resolution
-
-    env_def.renderer_config.render_shapes = args.render_shapes
-    env_def.renderer_config.disable_textures = args.disable_textures
-
-    launcher = Launcher(env_def)
-
-    try:
-
-        game_client = launcher.get_game_client()
-        game_client.run()
-    except (KeyboardInterrupt, SystemExit):
-        if args.enable_profiler:
-            profiler.stop()
-            print(profiler.output_text(unicode=True, color=True))
-        exit()
-
-
-
-
-if __name__ == "__main__":
-    main()

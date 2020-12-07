@@ -21,6 +21,7 @@ def get_dict_snapshot(obj, exclude_keys = {}):
         elif type(v) is list:
             data[k] = []
             for vv in v:
+
                 data[k].append(get_dict_snapshot(vv))
         else:
             

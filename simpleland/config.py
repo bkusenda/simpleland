@@ -10,6 +10,7 @@ class PhysicsConfig(Base):
         self.steps_per_second = 60
         self.clock_multiplier = 1
         self.tick_rate = 60
+        self.sim_timestep=0.02
 
 class RendererConfig(Base):
 
@@ -31,9 +32,10 @@ def __repr__(self) -> str:
 
 class ClientConfig(Base):
     def __init__(self):
+        self.is_remote = True
         self.frames_per_second = 60
         self.is_human = True
-        self.observer_only = False
+        self.player_type = 0
         self.client_id = None
         self.server_hostname = None
         self.server_port = None
@@ -55,7 +57,6 @@ class GameConfig(Base):
     def __init__(self):
         self.move_speed = 1
         self.keep_moving = 0
-        self.clock_factor = 1.0
         self.tick_rate = 60
 
     def __repr__(self) -> str:

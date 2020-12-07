@@ -61,7 +61,6 @@ class Game:
         self.initialize()
 
         self.tick_rate = self.config.tick_rate #steps per second
-        self.physics_tick_rate = self.physics_config.tick_rate  #steps per second
         self.id = gen_id()
         self.pre_event_processing_callback = lambda game: []
         self.pre_physics_callback = lambda game: []
@@ -165,7 +164,7 @@ class Game:
 
     def run_physics_processing(self):
 
-        self.physics_engine.update(self.physics_tick_rate)
+        self.physics_engine.update()
 
         # Check for changes in position or angle and log change time
         new_position_lookup = {}

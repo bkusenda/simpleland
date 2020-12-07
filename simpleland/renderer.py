@@ -1,3 +1,4 @@
+from simpleland.utils import TickPerSecCounter
 from typing import Dict, Any
 
 import pygame
@@ -54,20 +55,11 @@ class Renderer:
         self.load_images()
 
         # FPS Counter
-        self.frames_to_count = 2
-        self.frame_counter = [0 for i in range(self.frames_to_count)]
-        self.last_spot = 0
+        self.fps_counter = TickPerSecCounter(2)
+        self.log_info = None
 
-    def count_frame(self):
-        spot = int(time.time()) % self.frames_to_count
-        if spot != self.last_spot:
-            self.frame_counter[spot]=1
-            self.last_spot = spot
-        else:
-            self.frame_counter[spot]+=1
-
-    def avg_fps(self):
-        return sum([v for i, v in enumerate(self.frame_counter) if self.last_spot != i])/(self.frames_to_count -1)
+    def set_log_info(self,log_info):
+        self.log_info = log_info
 
     def load_sounds(self):
         if self.config.sound_enabled:
@@ -269,11 +261,13 @@ class Renderer:
             self.draw_object(center, obj, angle, screen_factor, screen_view_center)
 
         if self.config.show_console:
-            self.render_to_console(["FPS:{}".format(self.avg_fps())], self. config.resolution[0]-100, 5)
-
+            console_info = ["FPS:{}".format(self.fps_counter.avg())]
+            if self.log_info is not None:
+                console_info.append(self.log_info)
+            self.render_to_console(console_info, self. config.resolution[0]-100, 5)
 
     def render_frame(self):
-        self.count_frame()
+        self.fps_counter.tick()
         if self.config.save_observation:
             self.get_observation()
         frame = self.frame_cache

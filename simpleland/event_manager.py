@@ -54,4 +54,8 @@ class EventManager:
             if k in self.events:
                 self.events[k].load_snapshot(e_data)
             else:
-                self.events[k] = build_event_from_dict(e_data)
+                try:
+                    self.events[k] = build_event_from_dict(e_data)
+                except Exception as e:
+                    print(e_data)
+                    print(e)

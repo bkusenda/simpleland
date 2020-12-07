@@ -118,6 +118,9 @@ class InputEvent(Event):
         self.player_id = player_id
         self.input_data = input_data
 
+    def __repr__(self):
+        return str(self.input_data)
+
 class MechanicalEvent(Event):
 
     @classmethod

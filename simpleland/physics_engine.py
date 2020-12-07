@@ -11,6 +11,7 @@ from .object import GObject
 from .utils import gen_id
 from .object_manager import GObjectManager
 from .config import PhysicsConfig
+import math
 
 def get_default_velocity_callback(clock, config):
     def limit_velocity(b, gravity, damping, dt):
@@ -46,6 +47,11 @@ class PhysicsEngine:
         self.space.threads = 2
         self.space.idle_speed_threshold = 0.01
         self.space.damping = self.config.space_damping
+        self.sim_timestep = self.config.sim_timestep
+        dt = 1.0/self.config.tick_rate
+        self.steps_per_update = math.ceil(dt/self.sim_timestep)
+        actual_tick_rate = 1/ (self.steps_per_update * self.sim_timestep)
+        print("Actual Physics Tick Rate is {}, original {} (change due to enforcing sim_timestep size of {})".format(actual_tick_rate, self.config.tick_rate,self.config.sim_timestep))
 
         # Called at each step when velocity is updated
         self.velocity_callback = get_default_velocity_callback(self.clock,self.config)
@@ -76,5 +82,6 @@ class PhysicsEngine:
         self.space.remove(obj.get_shapes())
         self.space.remove(obj.get_body())
 
-    def update(self,tick_rate:float):
-        self.space.step(1.0/tick_rate)
+    def update(self):
+        for _ in range(self.steps_per_update):
+            self.space.step(self.sim_timestep)
