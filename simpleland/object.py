@@ -36,7 +36,8 @@ class GObject(Base):
                  body:Body=None,
                  id= None,
                  data = None,
-                 camera=None):
+                 camera=None,
+                 depth = 2):
         if id is None:
             self.id = gen_id()
         else:
@@ -48,6 +49,7 @@ class GObject(Base):
         self.data = {} if data is None else data
         self.last_change = None
         self.is_deleted = False
+        self.depth=depth
 
     def get_data_value(self,k, default_value=None):
         return self.data.get(k,default_value)

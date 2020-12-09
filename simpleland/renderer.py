@@ -13,6 +13,7 @@ from .config import RendererConfig
 from .asset_bundle import AssetBundle
 from .player import Player
 from .game import Game
+import math
 import time
 
 def to_pygame(p, surface):
@@ -226,6 +227,51 @@ class Renderer:
                                     angle = angle,
                                     center=center)
 
+
+    def draw_grid(self, center, angle, screen_factor, screen_view_center, color = (20, 20, 20),size = 20):      
+        
+        for line in range(0,size*2):
+
+            obj_pos1 = Vector(-size,line-size)
+            obj_location1 = (obj_pos1 - center)
+            obj_location1 = obj_location1.rotated(-angle)
+            p1 = screen_factor * (obj_location1 + screen_view_center)
+            p1 = to_pygame(p1, self._display_surf)
+
+            obj_pos2 = Vector(size,line-size)
+            obj_location2 = (obj_pos2 - center)
+            obj_location2 = obj_location2.rotated(-angle)
+            p2 = screen_factor * (obj_location2 + screen_view_center)
+            p2 = to_pygame(p2, self._display_surf)
+
+            pygame.draw.line(self._display_surf,
+                            color,
+                            p1,
+                            p2,
+                            1)
+
+        for line in range(0,size*2):
+
+            obj_pos1 = Vector(line-size,-size)
+            obj_location1 = (obj_pos1 - center)
+            obj_location1 = obj_location1.rotated(-angle)
+            p1 = screen_factor * (obj_location1 + screen_view_center)
+            p1 = to_pygame(p1, self._display_surf)
+
+            obj_pos2 = Vector(line-size,size)
+            obj_location2 = (obj_pos2 - center)
+            obj_location2 = obj_location2.rotated(-angle)
+            p2 = screen_factor * (obj_location2 + screen_view_center)
+            p2 = to_pygame(p2, self._display_surf)
+
+            pygame.draw.line(self._display_surf,
+                            color,
+                            p1,
+                            p2,
+                        1)
+
+
+
     # TODO: Clean this up
     def process_frame(self,
                     render_time,
@@ -251,14 +297,20 @@ class Renderer:
 
         screen_view_center = Vector(self.view_width, self.view_height) / 2.0
 
-        self.draw_object(center, view_obj, angle, screen_factor, screen_view_center)
-        render_obj_dict = object_manager.get_objects_for_timestamp(render_time)
-        for k, obj in render_obj_dict.items():
-            if k == view_obj.get_id():
-                continue
-            elif abs((center - obj.get_body().position).length) > view_obj.get_camera().get_distance() and obj.get_data_value('type') != 'static':
-                continue
-            self.draw_object(center, obj, angle, screen_factor, screen_view_center)
+        
+        obj_list_sorted_by_depth= object_manager.get_objects_for_timestamp_by_depth(render_time)
+        if self.config.draw_grid:
+            self.draw_grid(center, angle, screen_factor, screen_view_center, self.config.grid_size)
+        for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
+            for k, obj in render_obj_dict.items():
+                if k == view_obj.get_id():
+                    continue
+                elif abs((center - obj.get_body().position).length) > view_obj.get_camera().get_distance() and obj.get_data_value('type') != 'static':
+                    continue
+                self.draw_object(center, obj, angle, screen_factor, screen_view_center)
+            if depth == view_obj.depth:
+                self.draw_object(center, view_obj, angle, screen_factor, screen_view_center)
+            
 
         if self.config.show_console:
             console_info = ["FPS:{}".format(self.fps_counter.avg())]

@@ -13,17 +13,18 @@ from .common import (Body,
 from .object import GObject
 from .player import Player
 from .utils import gen_id
-
+import math
 
 class ShapeFactory(object):
 
     @classmethod
-    def attach_circle(cls, obj: GObject, radius=5, pos = (0,0)):
+    def attach_circle(cls, obj: GObject, radius=5, pos = (0,0), collision_type=1,friction=0.5):
         body = obj.get_body()
         inertia = pymunk.moment_for_circle(body.mass, 0, radius, pos)
         body.moment = inertia
         circle = Circle(body, radius = radius, offset= pos)
-        obj.add_shape(circle)
+        circle.friction = friction
+        obj.add_shape(circle,collision_type=collision_type)
         body.size =  (radius * 2,radius *2)
 
     @classmethod
@@ -38,7 +39,7 @@ class ShapeFactory(object):
         body.size = (radius * 2,radius *2)
 
     @classmethod
-    def attach_square(cls, obj: GObject, thickness=0, side_length=12):
+    def attach_square(cls, obj: GObject, thickness=0, side_length=12, collision_type=1):
         body = obj.get_body()
         p1 = Vector(-1 * side_length, -1 * side_length)
         p2 = Vector(-1 * side_length, side_length)
@@ -51,10 +52,10 @@ class ShapeFactory(object):
         body.size = (side_length,side_length)
         shapes = [l1, l2, l3, l4]
         for s in shapes:
-            obj.add_shape(s)
+            obj.add_shape(s,collision_type=collision_type)
 
     @classmethod
-    def attach_psquare(cls, obj: GObject, side_length=12):
+    def attach_psquare(cls, obj: GObject, side_length=12,collision_type=1):
         body = obj.get_body()
         body.size = (side_length,side_length)
         p1 = Vector(-1 * side_length, -1 * side_length)
@@ -62,10 +63,10 @@ class ShapeFactory(object):
         p3 = Vector(side_length, side_length)
         p4 = Vector(side_length, -1 * side_length)
         p = Polygon(body, vertices=[p1, p2, p3, p4])
-        obj.add_shape(p)
+        obj.add_shape(p,collision_type=collision_type)
 
     @classmethod
-    def attach_rectangle(cls, obj: GObject, width=1, height=3):
+    def attach_rectangle(cls, obj: GObject, width=1, height=3, collision_type=1):
         body = obj.get_body()
         body.size = (width,height)
         h = height/2
@@ -75,17 +76,32 @@ class ShapeFactory(object):
         p3 = Vector(w, h)
         p4 = Vector(w, -1 * h)
         p = Polygon(body, vertices=[p1, p2, p3, p4])
-        obj.add_shape(p)
+        obj.add_shape(p,collision_type=collision_type)
 
     @classmethod
-    def attach_triangle(cls, obj: GObject, side_length=12):
+    def attach_triangle(cls, obj: GObject, side_length=12, collision_type=1):
         body = obj.get_body()
         p1 = Vector(0, side_length)
         p2 = Vector(side_length / 2, 0)
         p3 = Vector(-1 / 2 * side_length, 0)
         p = Polygon(body, vertices=[p1, p2, p3])
-        obj.add_shape(p)
+        obj.add_shape(p,collision_type=collision_type)
         body.size = (side_length,side_length)
+
+
+    @classmethod
+    def attach_poly(cls, obj: GObject, size=10, num_sides=3, collision_type=1):
+        body = obj.get_body()
+        verts = []
+        for i in range(num_sides):
+            angle = math.pi + 2.0 * math.pi * i /num_sides
+            x = (size/2.0) * math.sin(angle) 
+            y = (size/2.0) * math.cos(angle)
+            verts.append(Vector(x,y))
+
+        p = Polygon(body, vertices=verts)
+        obj.add_shape(p,collision_type=collision_type)
+        body.size = (size,size)
 
 
 class ItemFactory(object):

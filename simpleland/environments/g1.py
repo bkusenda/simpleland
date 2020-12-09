@@ -97,17 +97,22 @@ class GameContent(Content):
             game.add_object(o)
 
         # Create some Astroids
-        for i in range(0):
-            o = GObject(Body(mass=5, moment=1))
+        for i in range(5):
+            o = GObject(Body(mass=5, moment=1),depth=0)
             o.set_position(position=self.get_random_pos())
             o.set_data_value("energy", 30)
             o.set_data_value("type", "astroid")
             o.set_data_value("image", "astroid2")
             o.set_last_change(game.clock.get_time())
+            
             o.get_body().angle = random.random() * 360
-            ShapeFactory.attach_circle(o, 2)
+            # ShapeFactory.attach_rectangle(o, 2, 2)
+            #ShapeFactory.attach_poly(o, size=10,num_sides=40)
+            ShapeFactory.attach_circle(o, 2, collision_type=1)
 
             game.add_object(o)
+
+
 
         # for i in range(4):
         #     o = SLObject(SLBody(body_type=pymunk.Body.STATIC))
@@ -150,6 +155,7 @@ class GameContent(Content):
                 o.set_data_value("type", "food")
                 o.set_data_value("image", "energy1")
                 o.set_last_change(game.clock.get_time())
+                o.get_body().angle = random.random() * 360
                 self.data['food_counter'] = food_counter +1
 
                 ShapeFactory.attach_circle(o, 1)
@@ -164,6 +170,8 @@ class GameContent(Content):
             player_objs = []
             for s in arbiter.shapes:
                 s: Shape = s
+                # if s.collision_type == 0:
+                #     return False
                 t, o = game.object_manager.get_latest_by_id(s.get_object_id())
                 if o is None:
                     return False
@@ -190,7 +198,15 @@ class GameContent(Content):
             else:
                 return True
                 # self.game.object_manager.remove_by_id(food_objs[0].get_id())
-        game.physics_engine.set_collision_callback(collision_callback)
+        game.physics_engine.set_collision_callback(collision_callback,1 ,1)
+
+
+        def collision_callback_0(arbiter: pymunk.Arbiter, space, data):
+
+            return False
+
+        game.physics_engine.set_collision_callback(collision_callback_0,1 ,0)
+
 
         def pre_physics_callback(game: Game):
             new_events = []
@@ -258,7 +274,7 @@ class GameContent(Content):
         player_object.set_data_value("player_id", player.get_id())
 
         # SLShapeFactory.attach_rectangle(player_object, 2,2)
-        ShapeFactory.attach_circle(player_object, 1)
+        ShapeFactory.attach_circle(player_object, radius=1)
 
         player.attach_object(player_object)
         game.add_object(player_object)

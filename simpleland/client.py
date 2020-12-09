@@ -156,14 +156,13 @@ from simpleland.utils import TickPerSecCounter
 class GameClient:
 
     def __init__(self,
-                 content: Content,
                  game: Game,
                  renderer: Renderer,
                  config: ClientConfig):
 
         self.config = config
         self.game = game
-        self.content = content
+        self.content:Content = self.game.content
         self.render_delay_in_ms = 60  # tick gap + latency
         self.frames_per_second = config.frames_per_second
         self.render_last_update = 0
@@ -173,7 +172,7 @@ class GameClient:
         self.server_info_history = TimeLoggingContainer(100)
         self.player: Player = None  # TODO: move to history data managed for rendering consistency
         self.step_counter = 0
-        self.renderer = renderer
+        self.renderer:Renderer = renderer
         self.tick_counter = TickPerSecCounter(2)
 
         self.connector = None
@@ -278,87 +277,3 @@ class GameClient:
 
         self.tick_counter.tick()
         self.step_counter += 1
-
-from simpleland.environment import load_environment, get_env_content, EnvironmentDefinition
-
-from gym import spaces
-
-
-# AGENT_KEYMAP = [0,17,5,23,19,1,4]
-
-class SimpleLandEnv(gym.Env):
-
-    def __init__(self,resolution=(30, 30), env_id="g1", client_id = 'agent', hostname = 'localhost', port = 10001, dry_run=False, keymap = [0,23,19,1,4]):
-        self.keymap = keymap
-        self.env_def = load_environment(env_id)
-        self.env_def.client_config.is_human = False
-        self.env_def.renderer_config.resolution = resolution
-        self.env_def.renderer_config.sdl_audio_driver = 'dsp'
-        self.env_def.renderer_config.render_to_screen = True
-        # self.config_manager.renderer_config.sdl_video_driver = 'dummy'
-        self.env_def.renderer_config.sound_enabled = False
-        self.env_def.renderer_config.show_console = False
-        self.env_def.client_config.player_type = 0
-        self.env_def.client_config.client_id = client_id
-        self.env_def.client_config.server_hostname = hostname
-        self.env_def.client_config.server_port = port
-        self.launcher = GameRunner(self.env_def)
-        self.connector = None
-        self.connector_thread = None
-        self.dry_run = dry_run
-
-        if not self.dry_run:
-            self.launcher.add_client()
-  
-        self.action_space = spaces.Discrete(5)
-        self.observation_space = spaces.Box(0, 255, (resolution[0], resolution[1],3))
-        logging.info("Ob space: {}".format(self.observation_space))
-        
-        self.ob = None
-        self.safe_mode = True
-        self.running = True
-
-
-    def step(self, action):
-        if self.dry_run:
-            return self.observation_space.sample(), 1, False, None
-        if self.game_client.player is not None:
-            event = InputEvent(
-                player_id  = self.game_client.player.get_id(), 
-                input_data = {
-                    'inputs':{self.keymap[action]:1},
-                    'mouse_pos': "",
-                    'mouse_rel': "",
-                    'focused': ""
-                    })
-            self.game_client.player.add_event(event)
-        # obs, step_reward, done = self.game.manual_player_action_step({int(action)}, self.player.uid)
-        self.game_client.run_step()
-        self.ob = self.launcher.renderer.get_observation()
-        reward, done = self.game_client.content.get_step_info(
-            player= self.game_client.player,
-            game=self.game_client.game)
-
-
-        return self.ob, reward, done, None
-
-    def render(self, mode=None):
-        if self.dry_run:
-            return self.observation_space.sample()
-        return self.launcher.renderer.frame_cache
-        # img = self.game_client.renderer.renderer.render_frame()
-        # return img
-
-    def reset(self):
-        done = True
-        count = 0
-        wait_time = 0.001
-        while done: 
-            self.ob, reward, done, _ = self.step(0)
-            if done:
-                count +=1
-                time.sleep(count * wait_time)
-                if ((count + 1)  % 100) == 0:
-                    print("Waiting for game reset {}".format(count))
-        return self.ob
-

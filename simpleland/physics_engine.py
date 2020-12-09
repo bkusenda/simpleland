@@ -59,8 +59,8 @@ class PhysicsEngine:
         # Called at each step when position is updated
         self.position_callback= get_default_position_callback(self.clock,self.config)
 
-    def set_collision_callback(self, callback):
-        h = self.space.add_collision_handler(1, 1)
+    def set_collision_callback(self, callback, collision_type_a=1, collision_type_b=1):
+        h = self.space.add_collision_handler(collision_type_a, collision_type_b)
         def begin(arbiter, space, data):
             return callback(arbiter,space,data)
         h.begin = begin

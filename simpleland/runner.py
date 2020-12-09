@@ -3,126 +3,27 @@ import argparse
 import json
 import logging
 import math
-import random
 import socketserver
 import struct
 import threading
-import time
-from multiprocessing import Queue
-from typing import Any, Dict, Tuple
 
 import lz4.frame
-import numpy as np
-import pymunk
 from pyinstrument import Profiler
-from pymunk import Vec2d
-
-from simpleland.common import (SimClock, Body, Camera, Circle, Clock,
-                               Line, Polygon, Shape, Space,
-                               Vector, TimeLoggingContainer)
-
-from simpleland.object import GObject
-from simpleland.config import ServerConfig
-from simpleland.content import Content
-from simpleland.event import PeriodicEvent, SoundEvent
-from simpleland.game import Game, StateDecoder, StateEncoder
-from simpleland.itemfactory import ItemFactory, ShapeFactory
-from simpleland.object_manager import GObjectManager
-from simpleland.physics_engine import PhysicsEngine
-from simpleland.player import  Player
-from simpleland.renderer import Renderer
-from simpleland.utils import gen_id
 from simpleland.client import GameClient
 
-LATENCY_LOG_SIZE = 100
+from simpleland.config import GameDef, PlayerDefinition, ServerConfig
+from simpleland.content import Content
 
-class ClientInfo:
-    """
-    Stores Client session info 
-    """
-
-    def __init__(self, client_id):
-        self.id = client_id
-        self.last_snapshot_time_ms = 0
-        self.latency_history = [None for i in range(LATENCY_LOG_SIZE)]
-        self.player_id = None
-        self.conn_info = None
-        self.request_counter = 0
-        self.unconfirmed_messages = set()
-
-    def add_latency(self, latency: float):
-        self.latency_history[self.request_counter % LATENCY_LOG_SIZE] = latency
-        self.request_counter += 1
-
-    def avg(self):
-        vals = [i for i in self.latency_history if i is not None]
-        return math.fsum(vals)/len(vals)
-
-    def get_id(self):
-        return self.id
-
-
-class GameRunner:
-    """
-    Runs server game loop
-    """
-
-    def __init__(self,
-                content: Content,
-                game: Game,
-                client_only_mode=False):
-
-        self.game = game
-        self.content = content
-        self.clients = {}
-        self.local_clients = []
-        self.client_only_mode = client_only_mode
-
-    def add_local_client(self,client):
-        self.local_clients.append(client)
-        
-
-    def get_client(self, client_id) -> ClientInfo:
-        client = self.clients.get(client_id, None)
-        if client is None:
-            client = ClientInfo(client_id)
-            self.clients[client.id] = client
-        return client
-    
-    def get_player(self, client, player_type):
-        """
-        Get existing player or create new one
-        """
-        if client.player_id is None:
-            player = self.content.new_player(self.game, player_type=player_type)
-            client.player_id = player.get_id()
-        else:
-            player = self.game.player_manager.get_player(client.player_id)
-        return player
-
-    def run_step(self):
-        for client in self.local_clients:
-            client.run_step()
-
-        if self.client_only_mode:
-            self.game.run_event_processing()
-        else:
-            self.game.run_pre_event_processing()
-            self.game.run_event_processing()
-            self.game.run_pre_physics_processing()
-            self.game.run_physics_processing()
-        self.game.tick()
-        self.game.cleanup()
-
-    def run(self):
-        while self.game.game_state == "RUNNING":
-            self.run_step()
+from simpleland.game import Game, StateDecoder, StateEncoder
+from simpleland.registry import get_game_content, load_game_def
+from simpleland.renderer import Renderer
+from simpleland.utils import gen_id
 
 
 class UDPHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
-        game_runner: GameRunner = self.server.game_server
+        game: Game = self.server.game
         config:ServerConfig = self.server.config
 
         # Process Request data
@@ -136,8 +37,8 @@ class UDPHandler(socketserver.BaseRequestHandler):
         request_info = request_data['info']
 
         request_message = request_info['message']
-        client = game_runner.get_client(request_info['client_id'])
-        player = game_runner.get_player(client, player_type = request_info['player_type'])
+        client = game.get_client(request_info['client_id'])
+        player = game.get_player(client, player_type = request_info['player_type'])
 
         snapshots_received = request_info['snapshots_received']
 
@@ -158,20 +59,20 @@ class UDPHandler(socketserver.BaseRequestHandler):
             all_events_data.extend(event_dict)
 
         if len(all_events_data) > 0:
-            game_runner.game.event_manager.load_snapshot(all_events_data)
+            game.event_manager.load_snapshot(all_events_data)
 
         if len(client.unconfirmed_messages) < config.max_unconfirmed_messages_before_new_snapshot:
-            snapshot_timestamp, snapshot = game_runner.game.create_snapshot(client.last_snapshot_time_ms)
+            snapshot_timestamp, snapshot = game.create_snapshot(client.last_snapshot_time_ms)
         else:
             print("Too many unconfirmed, packets full update required")
-            snapshot_timestamp, snapshot = game_runner.game.create_snapshot_for_client(0)
+            snapshot_timestamp, snapshot = game.create_snapshot_for_client(0)
             client.unconfirmed_messages.clear()
         client.unconfirmed_messages.add(snapshot_timestamp)
 
         # Build response data
         response_data = {}
         response_data['info'] = {
-            'server_time_ms': game_runner.game.clock.get_exact_time(),
+            'server_time_ms': game.clock.get_exact_time(),
             'message': "UPDATE",
             'client_id': client.get_id(),
             'player_id': player.get_id(),
@@ -201,13 +102,69 @@ class UDPHandler(socketserver.BaseRequestHandler):
 
 class GameUDPServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
 
-    def __init__(self, conn, handler, game_runner, config):
+    def __init__(self, conn, handler, game, config):
         socketserver.UDPServer.__init__(self, conn, handler)
-        self.game_server = game_runner
+        self.game = game
         self.config = config
 
 
-from simpleland.environment import load_environment, get_env_content
+
+def get_game_def(
+        game_id,
+        enable_server,
+        remote_client,
+        port,
+        physics_tick_rate = None,
+        game_tick_rate = None,
+        sim_timestep = None,        
+        )->GameDef:
+    game_def = load_game_def(game_id)
+
+    game_def.server_config.enabled = enable_server
+    game_def.server_config.hostname = '0.0.0.0'
+    game_def.server_config.port = port
+
+    # Game
+    game_def.game_config.tick_rate = game_tick_rate
+    game_def.physics_config.sim_timestep = sim_timestep
+    game_def.physics_config.tick_rate = physics_tick_rate
+
+    game_def.game_config.client_only_mode= not enable_server and remote_client
+    return game_def
+
+def get_player_def(
+    enable_client,
+    client_id,
+    remote_client,
+    hostname,
+    port,
+    player_type,
+    resolution=None,
+    fps=None,
+    render_shapes=None,
+    disable_textures=None,
+    is_human=True,
+    draw_grid=False) -> PlayerDefinition:
+    player_def = PlayerDefinition()
+
+    player_def.client_config.player_type = player_type
+    player_def.client_config.client_id = client_id
+
+    player_def.client_config.enabled = enable_client
+    player_def.client_config.server_hostname = hostname
+    player_def.client_config.server_port = port
+    player_def.client_config.frames_per_second = fps
+    player_def.client_config.is_remote =  remote_client
+    player_def.client_config.is_human = is_human
+    
+    player_def.renderer_config.resolution = resolution
+    player_def.renderer_config.render_shapes = render_shapes
+    player_def.renderer_config.disable_textures = disable_textures
+    player_def.renderer_config.draw_grid = draw_grid
+    return player_def
+
+
+
 
 if __name__ == "__main__":
 
@@ -227,6 +184,7 @@ if __name__ == "__main__":
     parser.add_argument("--disable_textures", action='store_true', help="don't show images")
     parser.add_argument("--fps", default=60, type=int,help="fps")    
     parser.add_argument("--player_type", default=0, help="Player type (0=default, 1=observer)")
+    parser.add_argument("--grid_size", default=None, type=int, help="not = no grid")
 
     # used for both client and server
     parser.add_argument("--port", default=10001, help="the port the server is running on")   
@@ -237,9 +195,11 @@ if __name__ == "__main__":
     parser.add_argument("--sim_timestep", default=0.01, type=float,help="sim_timestep, lower (eg 0.01) = more accurate, higher (eg 0.1) = less accurate but faster")
     parser.add_argument("--game_tick_rate", default=60, type=int,help="game_tick_rate")
     
-    parser.add_argument("--env_id", default="g1", help="id of environment")
+    parser.add_argument("--game_id", default="g1", help="id of game")
 
     args = parser.parse_args()
+
+    print(args.__dict__)
 
     if args.enable_server and args.enable_client and args.remote_client:
         print("Error: Server and Remote Client cannot be started from the same process. Please run seperately.")
@@ -252,13 +212,18 @@ if __name__ == "__main__":
         profiler = Profiler()
         profiler.start()
 
-
-    env_def = load_environment(args.env_id)
-
-    env_def.physics_config.tick_rate = args.physics_tick_rate
+    game_def = get_game_def(
+        game_id = args.game_id,
+        enable_server = args.enable_server,
+        remote_client=args.remote_client,
+        port = args.port,
+        game_tick_rate=args.game_tick_rate,
+        physics_tick_rate=args.physics_tick_rate,
+        sim_timestep = args.sim_timestep
+        )
 
     # Get resolution
-    if args.resolution == 'f':
+    if args.enable_client and args.resolution == 'f':
         import pygame
         pygame.init()
         infoObject = pygame.display.Info()
@@ -267,65 +232,59 @@ if __name__ == "__main__":
         res_string = args.resolution.split("x")
         resolution = (int(res_string[0]), int(res_string[1]))
 
-    env_def.client_config.player_type = args.player_type
-    env_def.client_config.client_id = args.client_id
-    env_def.client_config.server_hostname = args.hostname
-    env_def.client_config.server_port = args.port
-    env_def.client_config.frames_per_second = args.fps
-    env_def.client_config.is_remote =  args.remote_client
-    env_def.game_config.tick_rate = args.game_tick_rate
-    env_def.physics_config.sim_timestep = args.sim_timestep
-    
-    env_def.renderer_config.resolution = resolution
+    player_def = get_player_def(
+        enable_client= args.enable_client,
+        client_id = args.client_id,
+        remote_client=args.remote_client,
+        hostname=args.hostname,
+        port=args.port,
+        disable_textures=args.disable_textures,
+        render_shapes=args.render_shapes,
+        resolution=resolution,
+        fps=args.fps,
+        player_type=args.player_type,
+        draw_grid=args.grid_size is not None
+        )
 
-    env_def.renderer_config.render_shapes = args.render_shapes
-    env_def.renderer_config.disable_textures = args.disable_textures
-    print(env_def)
+    content:Content = get_game_content(game_def)
 
     game = Game(
-        physics_config=env_def.physics_config,
-        config=env_def.game_config)
+        game_def,
+        content=content)
 
 
-    # Load Content
-    # TODO: load from file
-    content = get_env_content(env_def)
-    client_only_mode=not args.enable_server and args.remote_client
-    if not client_only_mode:
-        print("Loading Game Content.")
-        content.load(game)
-
-    runner = GameRunner(content=content,game=game,client_only_mode=client_only_mode)
-
-    if args.enable_client:
+    if player_def.client_config.enabled:
         renderer = Renderer(
-            env_def.renderer_config,
+            player_def.renderer_config,
             asset_bundle=content.get_asset_bundle())
 
         client = GameClient(
-                content=content,
                 game=game,
                 renderer=renderer,
-                config=env_def.client_config)
+                config=player_def.client_config)
 
-        runner.add_local_client(client)
+        game.add_local_client(client)
 
 
     server = None
     try:
-        if args.enable_server:        
+        if game_def.server_config.enabled:        
             server = GameUDPServer(
-                ("0.0.0.0", args.port), UDPHandler,
-                game_runner=runner, config = env_def.server_config)
+                conn = (game_def.server_config.hostname, game_def.server_config.port), 
+                handler=UDPHandler,
+                game=game, 
+                config = game_def.server_config)
 
             server_thread = threading.Thread(target=server.serve_forever)
             server_thread.daemon = True
             server_thread.start()
-            print("Server started at {} port {}".format("0.0.0.0", args.port))
+            print("Server started at {} port {}".format(game_def.server_config.hostname, game_def.server_config.port))
 
-        runner.run()
+        game.run()
+    except Exception as e:
+        print(e)
     finally:
-        if args.enable_server:
+        if game_def.server_config.enabled:
             server.shutdown()
             server.server_close()
 

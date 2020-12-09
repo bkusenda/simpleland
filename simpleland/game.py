@@ -16,7 +16,35 @@ from .player import Player
 from .player_manager import PlayerManager
 # from .renderer import SLRenderer
 from .utils import gen_id
-from .config import GameConfig, PhysicsConfig
+from .config import GameDef, GameConfig, PhysicsConfig
+import math
+LATENCY_LOG_SIZE = 100
+
+class ClientInfo:
+    """
+    Stores Client session info 
+    """
+
+    def __init__(self, client_id):
+        self.id = client_id
+        self.last_snapshot_time_ms = 0
+        self.latency_history = [None for i in range(LATENCY_LOG_SIZE)]
+        self.player_id = None
+        self.conn_info = None
+        self.request_counter = 0
+        self.unconfirmed_messages = set()
+
+    def add_latency(self, latency: float):
+        self.latency_history[self.request_counter % LATENCY_LOG_SIZE] = latency
+        self.request_counter += 1
+
+    def avg(self):
+        vals = [i for i in self.latency_history if i is not None]
+        return math.fsum(vals)/len(vals)
+
+    def get_id(self):
+        return self.id
+
 
 
 class StateEncoder(json.JSONEncoder):
@@ -42,13 +70,18 @@ class StateDecoder(json.JSONDecoder):
         return obj
 
 class Game:
+    """
+    
+    """
 
     def __init__(self, 
-            physics_config: PhysicsConfig, 
-            config:GameConfig):
+            game_def:GameDef,
+            content):
 
-        self.config = config
-        self.physics_config = physics_config
+        self.game_def = game_def
+
+        self.config = game_def.game_config
+        self.physics_config = game_def.physics_config
         self.clock = SimClock()
 
         self.object_manager:GObjectManager = None
@@ -65,6 +98,42 @@ class Game:
         self.pre_event_processing_callback = lambda game: []
         self.pre_physics_callback = lambda game: []
         self.input_event_callback = lambda event, game: []
+
+
+        self.clients = {}
+        self.local_clients = []
+
+        self.content = content
+        if not self.config.client_only_mode:
+            print("Loading Game Content.")
+            content.load(self)
+
+
+    def get_content(self):
+        return self.content
+
+
+
+    def add_local_client(self,client):
+        self.local_clients.append(client)
+        
+    def get_client(self, client_id) -> ClientInfo:
+        client = self.clients.get(client_id, None)
+        if client is None:
+            client = ClientInfo(client_id)
+            self.clients[client.id] = client
+        return client
+
+    def get_player(self, client, player_type):
+        """
+        Get existing player or create new one
+        """
+        if client.player_id is None:
+            player = self.content.new_player(self, player_type=player_type)
+            client.player_id = player.get_id()
+        else:
+            player = self.player_manager.get_player(client.player_id)
+        return player
 
     def initialize(self):
         self.object_manager = GObjectManager(200)
@@ -256,3 +325,23 @@ class Game:
         obj.set_last_change(self.clock.get_time())
         obj.get_camera().distance += e.distance_diff
         return []
+
+    def process_client_step(self):
+        for client in self.local_clients:
+            client.run_step()
+
+    def run_step(self):
+        if self.config.client_only_mode:
+            self.run_event_processing()
+        else:
+            self.run_pre_event_processing()
+            self.run_event_processing()
+            self.run_pre_physics_processing()
+            self.run_physics_processing()
+        self.tick()
+        self.cleanup()
+
+    def run(self):
+        while self.game_state == "RUNNING":
+            self.process_client_step()
+            self.run_step()

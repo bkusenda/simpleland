@@ -52,13 +52,13 @@ class GObjectManager:
         self.objects[obj_id]
         del self.objects[obj_id]
 
-    def get_objects_for_timestamp(self,timestamp):
-        valid_objs = {}
+    def get_objects_for_timestamp_by_depth(self,timestamp):
+        object_list_depth_sorted = [{},{},{},{}]
         for k,eo in self.objects.items():
             o = eo.get_interpolated(timestamp)
             if o is not None and not o.is_deleted:
-                valid_objs[k] = o
-        return valid_objs
+                object_list_depth_sorted[o.depth][k] = o
+        return object_list_depth_sorted
 
     def get_objects_latest(self)->Dict[str,GObject]:
         objs = {}

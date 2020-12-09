@@ -34,10 +34,10 @@ def input_event_callback(input_event: InputEvent, game: Game) -> List[Event]:
 
     move_speed = 0.10
     obj_orientation_diff = 0
-    if 17 in keys:
+    if 1 in keys:
         obj_orientation_diff = 1
 
-    if 5 in keys:
+    if 4 in keys:
         obj_orientation_diff = -1
 
     # Object Movement
@@ -47,20 +47,20 @@ def input_event_callback(input_event: InputEvent, game: Game) -> List[Event]:
         direction += Vector(0, 1)
 
     if 19 in keys:
-        direction += Vector(0, -1.)
+        direction += Vector(0, -.3)
 
-    if 1 in keys:
-        direction += Vector(-1, 0)
+    # if 1 in keys:
+    #     direction += Vector(-1, 0)
 
-    if 4 in keys:
-        direction += Vector(1., 0)
+    # if 4 in keys:
+    #     direction += Vector(1., 0)
 
     if 10 in keys:
         print("Adding admin_event ...TODO!!")
 
     mag = direction.length
     if mag != 0:
-        direction = ((1.0 / mag) * force * direction)
+        # direction = ((1.0 / mag) * force * direction)
         obj.set_data_value("image", "1_thrust")
     else:
         direction = Vector.zero()

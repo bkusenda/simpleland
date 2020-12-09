@@ -1,5 +1,9 @@
 from .common import Base
 import pprint
+from typing import Dict, Any
+
+
+
 class PhysicsConfig(Base):
     def __init__(self):
         self.velocity_multiplier = 15.0
@@ -26,12 +30,15 @@ class RendererConfig(Base):
         self.sdl_video_driver = None #'dummy'
         self.sound_enabled = True
         self.render_to_screen = True 
+        self.draw_grid = False
+        self.grid_size = 20
 
 def __repr__(self) -> str:
     return pprint.pformat(self.__dict__)
 
 class ClientConfig(Base):
     def __init__(self):
+        self.enabled=True
         self.is_remote = True
         self.frames_per_second = 60
         self.is_human = True
@@ -45,9 +52,11 @@ class ClientConfig(Base):
 
 class ServerConfig(Base):
     def __init__(self):
+        self.enabled=False
         self.outgoing_chunk_size = 4000
         self.max_unconfirmed_messages_before_new_snapshot = 10
-
+        self.hostname="localhost"
+        self.port = 10001
 
     def __repr__(self) -> str:
         return pprint.pformat(self.__dict__)
@@ -58,6 +67,7 @@ class GameConfig(Base):
         self.move_speed = 1
         self.keep_moving = 0
         self.tick_rate = 60
+        self.client_only_mode=False
 
     def __repr__(self) -> str:
         return pprint.pformat(self.__dict__)
@@ -67,6 +77,33 @@ class ContentConfig(Base):
     def __init__(self, id, data):
         self.id = id
         self.data = data
+
+    def __repr__(self) -> str:
+        return pprint.pformat(self.__dict__)
+
+
+class PlayerDefinition:
+
+    def __init__(self):
+        self.client_config = ClientConfig()
+        self.renderer_config = RendererConfig()
+
+    def __repr__(self) -> str:
+        return pprint.pformat(self.__dict__)
+
+class GameDef:
+
+    def __init__(self,
+                content_id: str,
+                content_config: Dict[str,Any]
+                ):
+
+        self.physics_config = PhysicsConfig()
+        self.server_config = ServerConfig()
+        self.game_config = GameConfig()
+        self.content_config = content_config
+        self.content_id = content_id
+        
 
     def __repr__(self) -> str:
         return pprint.pformat(self.__dict__)
