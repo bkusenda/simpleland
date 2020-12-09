@@ -6,7 +6,7 @@ import pygame
 
 
 from .common import (get_dict_snapshot, load_dict_snapshot, Body, Circle, Clock, Line,
-                     Polygon, Space, Vector, SimClock, Base)
+                     Polygon, Space, Vector, SimClock, Base, Camera)
 from .utils import gen_id
 
 from .object import (GObject, ExtendedGObject)
@@ -97,17 +97,21 @@ class Player(Base):
         player = cls()
         player.uid = data['uid']
         player.obj_id = data['obj_id']
+        player.player_type = data['player_type']
         player.data = data.get('data',{})
-        print(data_dict)
+
+        if data['camera'] :
+            player.camera = Camera(**data['camera']['data'])
         return player
 
-    def __init__(self, uid=None, data=None, player_type =0):
+    def __init__(self, uid=None, data=None, player_type =0, camera=None):
         """
 
         :return:
         """
         self.uid = uid
         self.player_type = player_type
+        self.camera = camera
         self.obj_id = None
         self.events=[]
         self.data = {} if data is None else data
@@ -141,3 +145,9 @@ class Player(Base):
 
     def load_snapshot(self, data):
         load_dict_snapshot(self, data, exclude_keys={"events"})
+
+    def get_camera(self) -> Camera:
+        return self.camera
+
+    def __repr__(self):
+        return "Player: {}, Type: {}".format(self.uid,self.player_type)

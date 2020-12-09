@@ -31,6 +31,8 @@ from simpleland.player import Player, get_input_events
 from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
 from simpleland.event import InputEvent
+from simpleland.utils import TickPerSecCounter
+
 import gym
 
 HEADER_SIZE = 16
@@ -150,8 +152,6 @@ class ClientConnector:
         while self.running:
             self.create_request()
 
-
-from simpleland.utils import TickPerSecCounter
 
 class GameClient:
 

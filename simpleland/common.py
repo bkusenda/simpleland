@@ -290,8 +290,9 @@ class ShapeGroup(Base):
 
 class Camera(Base):
 
-    def __init__(self, distance: float = 30):
+    def __init__(self, distance: float = 30, position_offset = Vector(0,0)):
         self.distance = distance  # zoom
+        self.position_offset = position_offset
 
     def get_distance(self):
         return self.distance

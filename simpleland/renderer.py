@@ -284,14 +284,22 @@ class Renderer:
         # import pdb;pdb.set_trace()
         self._display_surf.fill((0, 0, 0))
         console_log = []
-        view_obj = object_manager.get_by_id(player.get_object_id(), render_time)
-        if view_obj == None:
-            return
 
+
+        camera = player.get_camera()
         # TODO: make max customizeable 
-        self.update_view(max(view_obj.get_camera().get_distance(),1))
-        center = view_obj.get_body().position
-        angle = view_obj.get_body().angle
+        self.update_view(max(camera.get_distance(),1))
+
+        view_obj = None
+        center = Vector(0,0)
+        angle=0
+        if player.player_type == 0:
+            view_obj = object_manager.get_by_id(player.get_object_id(), render_time)
+            if view_obj is not None:
+                center = view_obj.get_body().position
+                angle = view_obj.get_body().angle
+
+        center = center - camera.position_offset
 
         screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
 
@@ -303,12 +311,12 @@ class Renderer:
             self.draw_grid(center, angle, screen_factor, screen_view_center, self.config.grid_size)
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
             for k, obj in render_obj_dict.items():
-                if k == view_obj.get_id():
+                if view_obj is not None and k == view_obj.get_id():
                     continue
-                elif abs((center - obj.get_body().position).length) > view_obj.get_camera().get_distance() and obj.get_data_value('type') != 'static':
+                elif abs((center - obj.get_body().position).length) > camera.get_distance() and obj.get_data_value('type') != 'static':
                     continue
                 self.draw_object(center, obj, angle, screen_factor, screen_view_center)
-            if depth == view_obj.depth:
+            if view_obj is not None and depth == view_obj.depth:
                 self.draw_object(center, view_obj, angle, screen_factor, screen_view_center)
             
 

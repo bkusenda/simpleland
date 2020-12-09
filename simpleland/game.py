@@ -45,6 +45,9 @@ class ClientInfo:
     def get_id(self):
         return self.id
 
+    def __repr__(self):
+        return "Client: id: {}, player_id: {}".format(self.id,self.player_id)
+
 
 
 class StateEncoder(json.JSONEncoder):
@@ -129,7 +132,7 @@ class Game:
         Get existing player or create new one
         """
         if client.player_id is None:
-            player = self.content.new_player(self, player_type=player_type)
+            player = self.content.new_player(self, player_id=None, player_type=player_type)
             client.player_id = player.get_id()
         else:
             player = self.player_manager.get_player(client.player_id)

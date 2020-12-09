@@ -28,21 +28,17 @@ class GObject(Base):
         if "data" in data:
             obj.data = data['data']
 
-        if data['camera'] :
-            obj.camera = Camera(**data['camera']['data'])
         return obj
         
     def __init__(self,
                  body:Body=None,
                  id= None,
                  data = None,
-                 camera=None,
                  depth = 2):
         if id is None:
             self.id = gen_id()
         else:
             self.id = id
-        self.camera = camera
         self.body: Body = body
 
         self.shape_group: ShapeGroup = ShapeGroup()
@@ -77,8 +73,6 @@ class GObject(Base):
     def get_shapes(self):
         return self.shape_group.get_shapes()
 
-    def get_camera(self) -> Camera:
-        return self.camera
 
     def set_last_change(self,timestamp):
         self.last_change = timestamp
@@ -173,9 +167,9 @@ def build_interpolated_object(obj_1:GObject,obj_2:GObject,fraction=0.5):
     for shape in obj_1.shape_group.get_shapes():
         obj.add_shape(get_shape_from_dict(b_new,shape.get_snapshot()))
 
-    if obj_2.get_camera() is not None:
-        camera_dist = (obj_2.get_camera().distance - obj_1.get_camera().distance) * fraction + obj_1.get_camera().distance
-        obj.camera = Camera(distance=camera_dist)
+    # if obj_2.get_camera() is not None:
+    #     camera_dist = (obj_2.get_camera().distance - obj_1.get_camera().distance) * fraction + obj_1.get_camera().distance
+    #     obj.camera = Camera(distance=camera_dist)
     return obj
 
 class ExtendedGObject(TimeLoggingContainer):

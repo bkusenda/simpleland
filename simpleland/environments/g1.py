@@ -252,20 +252,32 @@ class GameContent(Content):
         print("Loading Game Complete")
 
     # Make callback
-    def new_player(self, game: Game, player_id=None,player_type=None) -> Player:
+    def new_player(self, game: Game, player_id=None,player_type=0) -> Player:
         # Create Player
         if player_id is None:
             player_id = gen_id()
         player = game.player_manager.get_player(player_id)
 
+        print("here")
+
         if player is None:
-            player = Player(player_id)
-            player.player_type = player_type
+            print("Creating player")
+            cam_distance = 10
+            if player_type ==1:
+                cam_distance = 30
+            player = Player(
+                uid=player_id, 
+                camera=Camera(distance=cam_distance),
+                player_type=player_type)
+        game.add_player(player)
+
+        if player_type == 1:
+            print("Player is an observer {}".format(player))
+            return player
+
         print("playerData: {}".format(player.data))
 
-        create_time = game.clock.get_time()
-        player_object = GObject(Body(mass=8, moment=30),
-                                 camera=Camera(distance=10))
+        player_object = GObject(Body(mass=8, moment=30))
         player_object.set_position(position=self.get_random_pos())
 
         player_object.set_data_value("type", "player")
@@ -278,7 +290,6 @@ class GameContent(Content):
 
         player.attach_object(player_object)
         game.add_object(player_object)
-        game.add_player(player)
         print("PLayer Obj {}".format(player_object.get_id()))
 
         def event_callback(event: PeriodicEvent, data: Dict[str, Any], om: GObjectManager):
@@ -286,8 +297,6 @@ class GameContent(Content):
             if obj is None or obj.is_deleted:
                 return [], True
             new_energy = max(obj.get_data_value("energy") - 1, 0)
-            #     # om.remove_by_id(obj.get_id())
-            #     return [], False
             print("Energy: {}".format(new_energy))
             obj.set_data_value('energy', new_energy)
             obj.set_last_change(game.clock.get_time())
@@ -302,7 +311,7 @@ class GameContent(Content):
         return player
 
     def post_process_frame(self, render_time, game: Game, player: Player, renderer: Renderer):
-        if player is not None:
+        if player is not None and player.player_type == 0:
             lines = []
             lines.append("Lives Used: {}".format(player.get_data_value("lives_used", 0)))
 

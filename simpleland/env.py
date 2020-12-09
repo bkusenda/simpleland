@@ -14,12 +14,13 @@ from simpleland.game import Game
 from simpleland.client import GameClient
 from simpleland.registry import load_game_def, get_game_content
 import time
+from typing import Dict, Any
 # AGENT_KEYMAP = [0,17,5,23,19,1,4]
 
 
 keymap = [23,1,4]
 
-class SimpleLandEnv(gym.Env):
+class SimpleLandEnv:
 
     def __init__(self, 
             resolution=(30,30), 
@@ -32,7 +33,6 @@ class SimpleLandEnv(gym.Env):
             game_tick_rate = 60,
             sim_timestep = 0.01):
 
-
         self.game_def = get_game_def(
             game_id=game_id,
             enable_server=True, 
@@ -40,8 +40,7 @@ class SimpleLandEnv(gym.Env):
             remote_client=False,
             physics_tick_rate=physics_tick_rate,
             game_tick_rate = game_tick_rate,
-            sim_timestep=sim_timestep
-            )
+            sim_timestep=sim_timestep)
 
         self.content = get_game_content(self.game_def)
 
@@ -96,7 +95,6 @@ class SimpleLandEnv(gym.Env):
         self.safe_mode = True
         self.running = True
         self.server=None
-        
 
         if self.game_def.server_config.enabled:        
             self.server = GameUDPServer(
@@ -109,8 +107,6 @@ class SimpleLandEnv(gym.Env):
             server_thread.daemon = True
             server_thread.start()
             print("Server started at {} port {}".format(self.game_def.server_config.hostname, self.game_def.server_config.port))
-
-
 
     def step(self, actions):
 
@@ -164,17 +160,8 @@ class SimpleLandEnv(gym.Env):
         # img = self.game_client.renderer.renderer.render_frame()
         # return img
 
-    def reset(self):
-        done = True
-        count = 0
-        wait_time = 0.001
-        while done: 
-            self.ob, reward, done, _ = self.step({})
-            if done:
-                count +=1
-                time.sleep(count * wait_time)
-                if ((count + 1)  % 100) == 0:
-                    print("Waiting for game reset {}".format(count))
+    def reset(self) -> Dict[str,Any]:
+        self.obs, _, _, _ = self.step({})
         return self.ob
 
     def close(self):
@@ -183,8 +170,25 @@ class SimpleLandEnv(gym.Env):
             self.server.server_close()
 
 
+class SimpleLandEnvSingle(gym.Env):
+
+    def __init__(self):
+        self.agent_id = "1"
+        self.env_main = SimpleLandEnv(agent_map={self.agent_id:{}})
+
+    def reset(self):
+        obs = self.env_main.reset()
+        return obs.get(self.agent_id)
+
+    def step(self,action):
+        obs = self.env_main.step({self.agent_id:action})
+        return obs[self.agent_id]
+
+    def close(self):
+        self.env_main.close()
+
 if __name__ == "__main__":
-    agent_map = {str(i):i for i in range(10)}
+    agent_map = {str(i):{} for i in range(10)}
     
     env = SimpleLandEnv(agent_map=agent_map)
     env.reset()
