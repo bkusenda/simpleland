@@ -73,6 +73,12 @@ def get_input_events(player_id) -> List[Event]:
             key_pressed.add("QUIT")
         elif event.type == pygame.MOUSEBUTTONDOWN:
             key_pressed.add("MOUSE_DOWN_{}".format(event.button))
+            if event.button == 4:
+                view_event = ViewEvent(player_id, 50, Vector.zero())
+                events.append(view_event)
+            elif event.button == 5:
+                view_event = ViewEvent(player_id, -50, Vector.zero())
+                events.append(view_event)
 
     keys = pygame.key.get_pressed()
     for key in key_list:
@@ -96,7 +102,7 @@ class Player(Base):
         data = data_dict['data']
         player = cls()
         player.uid = data['uid']
-        player.obj_id = data['obj_id']
+        player.control_obj_id = data['obj_id']
         player.player_type = data['player_type']
         player.data = data.get('data',{})
 
@@ -112,6 +118,7 @@ class Player(Base):
         self.uid = uid
         self.player_type = player_type
         self.camera = camera
+        self.control_obj_id = None
         self.obj_id = None
         self.events=[]
         self.data = {} if data is None else data

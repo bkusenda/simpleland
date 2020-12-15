@@ -33,13 +33,13 @@ class GObjectManager:
     def get_latest_by_id(self, obj_id, include_deleted = False)->Tuple[int,GObject]:
         ext_obj = self.objects.get(obj_id,None)
         if ext_obj is None:
-            return None, None
+            return None
         else:
-            t, o = ext_obj.get_latest()
+            o = ext_obj.get_latest()
             if not include_deleted and o.is_deleted:
-                return None, None
+                return None
             else:
-                return t, o
+                return o
 
     def get_by_id(self, obj_id, timestamp)->GObject:
         ext_obj = self.objects.get(obj_id,None)
@@ -63,7 +63,7 @@ class GObjectManager:
     def get_objects_latest(self)->Dict[str,GObject]:
         objs = {}
         for k,eo in self.objects.items():
-            t,o = eo.get_latest()
+            o = eo.get_latest()
             objs[k] = o
         return objs
 

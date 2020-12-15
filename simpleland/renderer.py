@@ -12,9 +12,10 @@ import os
 from .config import RendererConfig
 from .asset_bundle import AssetBundle
 from .player import Player
-from .game import Game
+from . import gamectx
 import math
 import time
+import pkg_resources
 
 def to_pygame(p, surface):
     """Convenience method to convert pymunk coordinates to pygame surface
@@ -35,25 +36,25 @@ class Renderer:
         if config.sdl_video_driver:
             os.environ["SDL_VIDEODRIVER"] = config.sdl_video_driver
         self.asset_bundle = asset_bundle
-        self.config = config
+        self.config:RendererConfig = config
         self.format = config.format
         self._display_surf = None
-        self.size = self.width, self.height = config.resolution
+        self.resolution = self.width, self.height = config.resolution
         self.aspect_ratio = (self.width * 1.0) / self.height
+
         self.initialized = False
         self.frame_cache = None
-
+        self.debug=config.debug_render_bodies
 
         # These will be source object properties eventually
-        self.view_height = 60.0
+        self.view_height = 60000.0
         self.view_width = self.view_height * self.aspect_ratio
+        print(f"{self.view_width} by {self.view_width}")
         self.center = Vector.zero()
-        self.initialize()
 
         self.images = {}
         self.sounds = {}
-        self.load_sounds()
-        self.load_images()
+
 
         # FPS Counter
         self.fps_counter = TickPerSecCounter(2)
@@ -65,15 +66,15 @@ class Renderer:
     def load_sounds(self):
         if self.config.sound_enabled:
             for k,path in self.asset_bundle.sound_assets.items():
-                sound = pygame.mixer.Sound(path)
+                sound = pygame.mixer.Sound(pkg_resources.resource_filename(__name__,path))
                 sound.set_volume(0.06)
                 self.sounds[k] = sound
 
     def load_images(self):
         self.images = {}
         for k, path in self.asset_bundle.image_assets.items():
-            image = pygame.image.load(path).convert()
-            image = pygame.transform.scale(image,(200,200))
+            image = pygame.image.load(pkg_resources.resource_filename(__name__,path)).convert_alpha()
+            # image = pygame.transform.scale(image,(200,200))
             self.images[k] = image
 
     def play_sounds(self, sound_ids):
@@ -92,7 +93,9 @@ class Renderer:
         if self.config.sound_enabled:
             pygame.mixer.pre_init(  44100, -16, 2, 1024)
         pygame.init()
-        self._display_surf = pygame.display.set_mode(self.size)  # , pygame.HWSURFACE | pygame.DOUBLEBUF)
+        self._display_surf = pygame.display.set_mode(self.resolution)  # , pygame.HWSURFACE | pygame.DOUBLEBUF)
+        self.load_sounds()
+        self.load_images()
         self.initialized = True
 
     def render_to_console(self, lines, x, y, fsize=18, spacing=12, color=(180, 180, 180)):
@@ -101,7 +104,7 @@ class Renderer:
             font.render(l, False, (0, 0, 0))
             self._display_surf.blit(font.render(l, True, color), (x, y + spacing * i))
 
-    def draw_line(self,
+    def _draw_line(self,
                   obj: GObject,
                   line: Line,
                   color,
@@ -126,7 +129,7 @@ class Renderer:
                          p2,
                          1)
 
-    def draw_circle(self,
+    def _draw_circle(self,
                     obj: GObject,
                     circle: Circle,
                     color,
@@ -146,7 +149,7 @@ class Renderer:
                            size,
                            1)
 
-    def draw_polygon(self,
+    def _draw_polygon(self,
                      obj: GObject,
                      shape: Polygon,
                      color,
@@ -170,7 +173,7 @@ class Renderer:
                 new_verts,
                 1)
 
-    def draw_object(self, center, obj, angle, screen_factor, screen_view_center, color=None):
+    def _draw_object(self, center, obj, angle, screen_factor, screen_view_center, color=None):
 
         color = (255, 50, 50)
 
@@ -179,7 +182,10 @@ class Renderer:
         if image_used:
             body_angle = obj.get_body().angle
             obj_pos = obj.get_body().position
-            body_w, body_h = obj.get_body().size
+            if len(obj.get_shapes()) == 0:
+                return 
+            main_shape = list(obj.get_shapes())[0]
+            body_w, body_h = main_shape.radius *2 , main_shape.radius *2
             image = self.get_image_by_id(image_id)
             image_size = int(body_w*screen_factor[0]),int(body_h*screen_factor[1])
             
@@ -203,7 +209,7 @@ class Renderer:
                     color = (255, 50, 50)
 
                 if type(shape) == Line:
-                    self.draw_line(obj,
+                    self._draw_line(obj,
                                 shape,
                                 color,
                                 screen_factor,
@@ -211,7 +217,7 @@ class Renderer:
                                 angle = angle,
                                 center = center)
                 elif type(shape) == Circle:
-                    self.draw_circle(obj,
+                    self._draw_circle(obj,
                                     shape,
                                     color,
                                     screen_factor,
@@ -219,7 +225,7 @@ class Renderer:
                                     angle = angle,
                                     center = center)
                 elif type(shape) == Polygon:
-                    self.draw_polygon(obj,
+                    self._draw_polygon(obj,
                                     shape,
                                     color,
                                     screen_factor,
@@ -228,7 +234,7 @@ class Renderer:
                                     center=center)
 
 
-    def draw_grid(self, center, angle, screen_factor, screen_view_center, color = (20, 20, 20),size = 20):      
+    def _draw_grid(self, center, angle, screen_factor, screen_view_center, color = (100, 80, 80),size = 20):      
         
         for line in range(0,size*2):
 
@@ -276,48 +282,51 @@ class Renderer:
     def process_frame(self,
                     render_time,
                     player:Player,
-                    game: Game,
                     additional_data: Dict[str, Any]={}):
+
+        if not self.initialized:
+            self.initialize()
+
         if player is None:
             return
-        object_manager = game.object_manager
+        object_manager = gamectx.object_manager
         # import pdb;pdb.set_trace()
         self._display_surf.fill((0, 0, 0))
-        console_log = []
 
+        if self.debug:
+            import pymunk.pygame_util
+            draw_options = pymunk.pygame_util.DrawOptions(self._display_surf)
+            gamectx.physics_engine.space.debug_draw(draw_options)
 
         camera = player.get_camera()
         # TODO: make max customizeable 
         self.update_view(max(camera.get_distance(),1))
 
         view_obj = None
-        center = Vector(0,0)
+        center = Vector(self.view_width/2,self.view_height/2)
         angle=0
-        if player.player_type == 0:
+        if self.config.view_type == 0:
             view_obj = object_manager.get_by_id(player.get_object_id(), render_time)
             if view_obj is not None:
                 center = view_obj.get_body().position
                 angle = view_obj.get_body().angle
 
         center = center - camera.position_offset
-
         screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
-
         screen_view_center = Vector(self.view_width, self.view_height) / 2.0
 
-        
         obj_list_sorted_by_depth= object_manager.get_objects_for_timestamp_by_depth(render_time)
         if self.config.draw_grid:
-            self.draw_grid(center, angle, screen_factor, screen_view_center, self.config.grid_size)
+            self._draw_grid(center, angle, screen_factor, screen_view_center, self.config.grid_size)
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
             for k, obj in render_obj_dict.items():
                 if view_obj is not None and k == view_obj.get_id():
                     continue
                 elif abs((center - obj.get_body().position).length) > camera.get_distance() and obj.get_data_value('type') != 'static':
                     continue
-                self.draw_object(center, obj, angle, screen_factor, screen_view_center)
+                self._draw_object(center, obj, angle, screen_factor, screen_view_center)
             if view_obj is not None and depth == view_obj.depth:
-                self.draw_object(center, view_obj, angle, screen_factor, screen_view_center)
+                self._draw_object(center, view_obj, angle, screen_factor, screen_view_center)
             
 
         if self.config.show_console:
@@ -329,14 +338,14 @@ class Renderer:
     def render_frame(self):
         self.fps_counter.tick()
         if self.config.save_observation:
-            self.get_observation()
+            self.get_last_frame()
         frame = self.frame_cache
         self.frame_cache = None
         if self.config.render_to_screen:
             pygame.display.flip()
         return frame
 
-    def get_observation(self):
+    def get_last_frame(self):
 
         img_st = pygame.image.tostring(self._display_surf, self.format)
         data = Image.frombytes(self.format, self.config.resolution, img_st)

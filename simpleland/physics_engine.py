@@ -5,7 +5,7 @@ import pygame
 import pymunk
 from pymunk import Vec2d
 from .common import (Body, Circle, Clock, Line,
-                     Polygon, Space, Vector, SimClock)
+                     Polygon, Space, Vector, SimClock, COLLISION_TYPE)
 from .object import GObject
 # from .player import Player
 from .utils import gen_id
@@ -18,6 +18,8 @@ def get_default_velocity_callback(clock, config):
         max_velocity = config.default_max_velocity
         if b.velocity.length < config.default_min_velocity:
             b.velocity = Vector(0.0,0.0)
+        # if abs(b.angular_velocity) < 0.05:
+        #     b.angular_velocity = 0 
         pymunk.Body.update_velocity(b, gravity, damping, dt)
         l = b.velocity.length
         scale = 1
@@ -46,8 +48,11 @@ class PhysicsEngine:
         self.space = Space(threaded=True)
         self.space.threads = 2
         self.space.idle_speed_threshold = 0.01
-        self.space.damping = self.config.space_damping
+        self.space.sleep_time_threshold = 0.5
+        self.space.damping = self.config.space_dampening
+        self.space.collision_slop = 0.9
         self.sim_timestep = self.config.sim_timestep
+
         dt = 1.0/self.config.tick_rate
         self.steps_per_update = math.ceil(dt/self.sim_timestep)
         actual_tick_rate = 1/ (self.steps_per_update * self.sim_timestep)
@@ -59,11 +64,12 @@ class PhysicsEngine:
         # Called at each step when position is updated
         self.position_callback= get_default_position_callback(self.clock,self.config)
 
-    def set_collision_callback(self, callback, collision_type_a=1, collision_type_b=1):
+    def set_collision_callback(self, callback, collision_type_a=COLLISION_TYPE['default'], collision_type_b=COLLISION_TYPE['default']):
         h = self.space.add_collision_handler(collision_type_a, collision_type_b)
-        def begin(arbiter, space, data):
+        def callerfun(arbiter, space, data):
             return callback(arbiter,space,data)
-        h.begin = begin
+        # h.begin = begin
+        h.pre_solve = callerfun
 
     def set_velocity_callback(self,callback):
         self.velocity_callback = callback

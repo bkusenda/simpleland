@@ -6,20 +6,21 @@ from typing import Dict, Any
 
 class PhysicsConfig(Base):
     def __init__(self):
-        self.velocity_multiplier = 15.0
-        self.default_max_velocity = 10
-        self.default_min_velocity = 0.3
+        self.velocity_multiplier = 200.0
+        self.default_max_velocity = 500
+        self.default_min_velocity = 10
         self.orientation_multiplier = 4
-        self.space_damping = .3
+        self.space_dampening = .5
         self.steps_per_second = 60
         self.clock_multiplier = 1
         self.tick_rate = 60
         self.sim_timestep=0.02
+        self.player_angular_vel_max = 3
 
 class RendererConfig(Base):
 
     def __init__(self):
-        self.render_delay_in_ms = 25
+        self.render_delay_in_ms = 0
         self.resolution = (640,480)
         self.format='RGB'
         self.save_observation=True
@@ -32,6 +33,7 @@ class RendererConfig(Base):
         self.render_to_screen = True 
         self.draw_grid = False
         self.grid_size = 20
+        self.debug_render_bodies = False
 
 def __repr__(self) -> str:
     return pprint.pformat(self.__dict__)
@@ -46,6 +48,7 @@ class ClientConfig(Base):
         self.client_id = None
         self.server_hostname = None
         self.server_port = None
+        
 
     def __repr__(self) -> str:
         return pprint.pformat(self.__dict__)

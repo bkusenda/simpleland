@@ -24,7 +24,7 @@ from simpleland.common import (SimClock, Body, Camera, Clock, \
 from simpleland.object import GObject
 from simpleland.config import ClientConfig, GameConfig
 from simpleland.content import Content
-from simpleland.game import Game, StateDecoder, StateEncoder
+from simpleland.common import StateDecoder, StateEncoder
 from simpleland.itemfactory import ItemFactory, ShapeFactory
 from simpleland.physics_engine import PhysicsEngine
 from simpleland.player import Player, get_input_events
@@ -32,6 +32,7 @@ from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
 from simpleland.event import InputEvent
 from simpleland.utils import TickPerSecCounter
+from simpleland import gamectx
 
 import gym
 
@@ -156,24 +157,25 @@ class ClientConnector:
 class GameClient:
 
     def __init__(self,
-                 game: Game,
                  renderer: Renderer,
                  config: ClientConfig):
 
         self.config = config
-        self.game = game
-        self.content:Content = self.game.content
-        self.render_delay_in_ms = 60  # tick gap + latency
+        self.content:Content = gamectx.content
+        self.render_delay_in_ms = renderer.config.render_delay_in_ms  # tick gap + latency
         self.frames_per_second = config.frames_per_second
         self.render_last_update = 0
         self.render_update_freq = (1.0/self.frames_per_second)  * 1000
-        self.frame_limit = self.frames_per_second != self.game.config.tick_rate
+        self.frame_limit = self.frames_per_second != gamectx.config.tick_rate
 
         self.server_info_history = TimeLoggingContainer(100)
         self.player: Player = None  # TODO: move to history data managed for rendering consistency
         self.step_counter = 0
         self.renderer:Renderer = renderer
         self.tick_counter = TickPerSecCounter(2)
+        self.render_time = 0
+        if self.config.is_human:
+            self.renderer.initialize()
 
         self.connector = None
         if self.config.is_remote:
@@ -184,28 +186,25 @@ class GameClient:
             self.connector_thread.daemon = True
             self.connector_thread.start()
         else:
-            self.player = self.content.new_player(self.game, player_type=config.player_type)
-            # content.load(game)
-        
-
+            self.player = self.content.new_player(gamectx, player_type=config.player_type)
 
     def sync_time(self):
         if self.connector is None:
             return
         if self.connector.absolute_server_time is not None:
-            self.game.clock.set_absolute_time(self.connector.absolute_server_time)
+            gamectx.clock.set_absolute_time(self.connector.absolute_server_time)
 
 
     def send_local_events(self):
         if self.connector is None:
             return
-        event_snapshot = self.game.event_manager.get_snapshot()
+        event_snapshot = gamectx.event_manager.get_snapshot()
         if self.connector.outgoing_buffer.qsize() < 30:
             self.connector.outgoing_buffer.put(event_snapshot)
 
         # Clear Events after sending to Server
         # TODO: add support for selective removal of events. eg keep local events  like quite request
-        self.game.event_manager.clear()
+        gamectx.event_manager.clear()
 
     def get_remote_state(self):
         if self.connector is None:
@@ -220,7 +219,7 @@ class GameClient:
                 done = True
                 break
             else:
-                self.game.load_snapshot(incomming_data['snapshot'])
+                gamectx.load_snapshot(incomming_data['snapshot'])
                 self.server_info_history.add(
                     incomming_data['info']['snapshot_timestamp'],
                     incomming_data['info'])
@@ -230,14 +229,14 @@ class GameClient:
             return
         server_info_timestamp, server_info = self.server_info_history.get_prev_entry(render_time)
         # Note, loaded immediately rather than at render time. this could be an issue?
-        if server_info is not None and server_info['player_id'] is not "":
-            self.player = self.game.player_manager.get_player(server_info['player_id'])
-            # obj = self.game.get_object_manager().get_by_id(self.player.get_object_id(),render_time)
+        if server_info is not None and server_info['player_id'] is not None and server_info['player_id'] != "":
+            self.player = gamectx.player_manager.get_player(server_info['player_id'])
+            # obj = gamectx.get_object_manager().get_by_id(self.player.get_object_id(),render_time)
 
     def run_step(self):
         self.sync_time()
         
-        render_time = max(0, self.game.clock.get_time() - self.render_delay_in_ms)
+        self.render_time = max(0, gamectx.clock.get_time() - self.render_delay_in_ms)
 
         # Get Input Events and put in output buffer
         # TODO: make logic cleaner
@@ -247,33 +246,36 @@ class GameClient:
                 input_events = get_input_events(self.player.get_id())
                 events.extend(input_events)
             events.extend(self.player.pull_input_events())
-            self.game.event_manager.add_events(events)
+            gamectx.event_manager.add_events(events)
 
         # Send events
         self.send_local_events()
-
         # Get Game Snapshot
         self.get_remote_state()
-
-        self.update_player_info(render_time)
-
-        if not self.frame_limit or ((render_time - self.render_last_update)*2 >= self.render_update_freq):
+        self.update_player_info(self.render_time)
+        self.tick_counter.tick()
+        self.step_counter += 1
+    
+    def render(self,force=False):
+        if (force or not self.frame_limit or ((self.render_time - self.render_last_update)*2 >= self.render_update_freq)):
             self.renderer.set_log_info("TPS: {} ".format(self.tick_counter.avg()))
             self.renderer.process_frame(
-                render_time=render_time,
-                player=self.player,
-                game=self.game)
+                render_time=self.render_time,
+                player=self.player)
 
             self.content.post_process_frame(
-                render_time=render_time,
-                game=self.game,
+                render_time=self.render_time,
                 player=self.player,
                 renderer=self.renderer)
             self.renderer.render_frame()
-            self.render_last_update = render_time
+            self.render_last_update = self.render_time
 
         if self.config.is_human:
-            self.renderer.play_sounds(self.game.get_sound_events(render_time))
+            self.renderer.play_sounds(gamectx.get_sound_events(self.render_time))
 
-        self.tick_counter.tick()
-        self.step_counter += 1
+    def get_rgb_array(self):
+        return self.renderer.get_last_frame()
+            
+
+    
+        

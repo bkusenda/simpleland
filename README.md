@@ -43,15 +43,20 @@ This is a simple 2d game engine written completely in python with client/server 
 
 
 ## Usage
-### Run Server
+### Run Server and Local Client
 
 ```bash
-python simpleland/server.py --env_id=g1
+ python simpleland/runner.py --enable_client --resolution=640x480 --hostname=localhost --game_id=space_ship1  --fps=60 --enable_server --game_tick_rate=60
 ```
 
-### Start Client
+### Start Remote Client
 ```bash
-python simpleland/client.py --client_id 2  --resolution=800x600 --hostname=YOURHOSTNAME --env_id=g1
+python simpleland/runner.py --enable_client --resolution=640x480 --hostname=SERVER_HOSTNAME --game_id=space_ship1  --fps=60 --remote_client
+```
+
+### Run Server Only
+```bash
+ python simpleland/runner.py --game_id=space_ship1  --enable_server --game_tick_rate=60 --port=10001
 ```
 
 ### Using the OpenAI Gym Env interface
@@ -61,7 +66,7 @@ from simpleland.client import SimpleLandEnv
 
 env = SimpleLandEnv(
     resolution=(30, 30), 
-    env_id="g1", 
+    game_id="space_ship1", 
     client_id = 'agent', 
     hostname = 'localhost', 
     port = 10001, 
@@ -78,5 +83,5 @@ observation, reward, is_done, _ = env.step(action=1)
 
 ## Configuration/Customization
 
-- G1 Environment: [simpleland/environments/g1.py](simpleland/environments/g1.py)
-- Environment Registration: [simpleland/environment.py](simpleland/environment.py)
+- Space Ship 1 Game: [simpleland/contentbundles/space_ship1.py](simpleland/environments/space_ship1.py)
+- Game Registration: [simpleland/registry.py](simpleland/registry.py)

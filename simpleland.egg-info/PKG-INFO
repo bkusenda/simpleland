@@ -1,0 +1,14 @@
+Metadata-Version: 1.2
+Name: simpleland
+Version: 0.0.1
+Summary: MultiAgent RL 2d Game Framework
+Home-page: https://github.com/bkusenda/simpleland
+Author: Brandyn Kusenda
+Author-email: pistar3.14@gmail.com
+License: UNKNOWN
+Description: MultiAgent RL 2d Game Framework
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Requires-Python: >=3.7

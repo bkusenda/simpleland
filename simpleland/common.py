@@ -3,10 +3,36 @@ import pygame
 from .utils import gen_id
 from typing import List, Dict
 import time
+import json
+OBJ_TYPES = ['default','sensor']
+COLLISION_TYPE = {v:i for i, v in enumerate(OBJ_TYPES)}
+from pymunk import Vec2d
 
 Clock = pygame.time.Clock
 
 Vector = pymunk.Vec2d
+
+class StateEncoder(json.JSONEncoder):
+    def default(self, obj): # pylint: disable=E0202
+        if type(obj) == Vec2d:
+            return {
+                "_type": "Vec2d",
+                "x":obj.x,
+                "y":obj.y}
+        return json.JSONEncoder.default(self, obj)
+
+class StateDecoder(json.JSONDecoder):
+
+    def __init__(self, *args, **kwargs):
+        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
+
+    def object_hook(self, obj): # pylint: disable=E0202
+        if '_type' not in obj:
+            return obj
+        type = obj['_type']
+        if type == 'Vec2d':
+            return Vec2d(obj['x'],obj['y'])
+        return obj
 
 def get_dict_snapshot(obj, exclude_keys = {}):
     _type = type(obj).__name__
@@ -42,7 +68,6 @@ def load_dict_snapshot(obj, dict_data, exclude_keys={}):
             obj.__dict__[k] = v
         elif v is None or (isinstance(v, dict) and ("_type" not in v)):
             obj.__dict__[k] = v
-
 
 
 class SimClock:
@@ -132,9 +157,14 @@ class Shape(pymunk.Shape, Base):
     def __init__(self):
         self.object_id= None
         self.id = gen_id()
+        self.label = None
+
     
     def get_id(self):
         return self.id
+
+    def set_label(self,label):
+        self.label = label
 
     def set_object_id(self, object_id):
         self.object_id = object_id
@@ -212,7 +242,7 @@ class TimeLoggingContainer:
         self.counter = 0
 
     def get_id(self):
-        timestamp, obj = self.get_latest()
+        obj = self.get_latest()
         return obj.get_id()
 
 
@@ -222,7 +252,7 @@ class TimeLoggingContainer:
         self.counter +=1
     
     def link_to_latest(self,timestamp):
-        self.add(timestamp,self.get_latest())
+        self.add(timestamp,self.get_latest_with_timestamp())
 
     def get_bordering_timestamps(self, timestamp):
         #TODO binary search is faster
@@ -256,6 +286,9 @@ class TimeLoggingContainer:
         return next_timestamp, next_obj
 
     def get_latest(self):
+        return self.get_latest_with_timestamp()[1]
+
+    def get_latest_with_timestamp(self):
         if self.counter == 0:
             return None, None
         lastest_counter = self.counter-1

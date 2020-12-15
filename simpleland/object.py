@@ -6,6 +6,7 @@ import time
 
 from .common import Shape, Vector, load_dict_snapshot, Base, Body, dict_to_state, get_shape_from_dict, Camera
 from .common import get_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingContainer
+from .common import COLLISION_TYPE
 
 class GObject(Base):
 
@@ -65,9 +66,16 @@ class GObject(Base):
     def set_position(self, position: Vector):
         self.get_body().position = position
 
-    def add_shape(self,shape:Shape, collision_type=1):
+    def get_position(self):
+        return self.get_body().position
+
+
+    def add_shape(self,shape:Shape, collision_type=1,label=None):
         shape.set_object_id(self.get_id())
         shape.collision_type = collision_type
+        if collision_type == COLLISION_TYPE['sensor']:
+            shape.sensor = True
+        shape.set_label(label)
         self.shape_group.add(shape)
 
     def get_shapes(self):
@@ -138,7 +146,6 @@ def build_interpolated_object(obj_1:GObject,obj_2:GObject,fraction=0.5):
     pos_y = (b2.position.y - b1.position.y) * fraction + b1.position.y
     b_new = Body()
     b_new.last_change = b1.last_change
-    b_new.size = b1.size
 
     # b_new._set_position(SLVector(pos_x,pos_y))
     b_new.position = Vector(pos_x,pos_y)
@@ -189,8 +196,3 @@ class ExtendedGObject(TimeLoggingContainer):
 
         fraction = (timestamp - prev_timestamp)/(next_timestamp-prev_timestamp)
         return build_interpolated_object(prev_obj, next_obj, fraction)
-
-    # def copy_to(self,timestamp):
-    #     t, o = self.get_latest()
-    #     new_o = SLObject.build_from_dict(o.get_snapshot())
-    #     self.add(timestamp,self.get_latest())

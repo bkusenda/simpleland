@@ -7,13 +7,7 @@ from pymunk import Vec2d
 from .common import (Body, Circle, Clock, Line
                      , Polygon, Space, Vector, SimClock)
 from .object import (GObject, ExtendedGObject)
-from .physics_engine import PhysicsEngine
-from .event import (Event, AdminEvent, MechanicalEvent,
-                            PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
-from .event_manager import EventManager
-from .object_manager import GObjectManager
-from .player import Player
-from .player_manager import PlayerManager
+
 # from .renderer import SLRenderer
 from .utils import gen_id
 from .config import GameDef, GameConfig, PhysicsConfig
@@ -50,53 +44,27 @@ class ClientInfo:
 
 
 
-class StateEncoder(json.JSONEncoder):
-    def default(self, obj): # pylint: disable=E0202
-        if type(obj) == Vec2d:
-            return {
-                "_type": "Vec2d",
-                "x":obj.x,
-                "y":obj.y}
-        return json.JSONEncoder.default(self, obj)
-
-class StateDecoder(json.JSONDecoder):
-
-    def __init__(self, *args, **kwargs):
-        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
-
-    def object_hook(self, obj): # pylint: disable=E0202
-        if '_type' not in obj:
-            return obj
-        type = obj['_type']
-        if type == 'Vec2d':
-            return Vec2d(obj['x'],obj['y'])
-        return obj
-
-class Game:
+class GameContext:
     """
     
     """
 
-    def __init__(self, 
-            game_def:GameDef,
-            content):
+    def __init__(self):
 
-        self.game_def = game_def
-
-        self.config = game_def.game_config
-        self.physics_config = game_def.physics_config
+        self.game_def:GameDef = None
+        self.config:GameConfig = None
+        self.physics_config:PhysicsConfig = None
         self.clock = SimClock()
 
-        self.object_manager:GObjectManager = None
-        self.physics_engine:PhysicsEngine = None
-        self.player_manager: PlayerManager = None
-        self.event_manager: EventManager = None
-        self.game_state = "RUNNING"
+        self.object_manager = None
+        self.physics_engine = None
+        self.player_manager = None
+        self.event_manager = None
+        self.state = None
         self.step_counter = 0
         self.last_position_lookup = {}
-        self.initialize()
 
-        self.tick_rate = self.config.tick_rate #steps per second
+        self.tick_rate = None
         self.id = gen_id()
         self.pre_event_processing_callback = lambda game: []
         self.pre_physics_callback = lambda game: []
@@ -105,15 +73,45 @@ class Game:
 
         self.clients = {}
         self.local_clients = []
+        self.data = {}
+
+
+
+    def reset_data(self):
+        self.data = {}
+
+    def initialize(self, 
+            game_def:GameDef = None,
+            content = None):
+        self.game_def = game_def
+
+        self.config = game_def.game_config
+        self.physics_config = game_def.physics_config
+
+        from .event_manager import EventManager
+        from .object_manager import GObjectManager
+        from .player_manager import PlayerManager
+        from .physics_engine import PhysicsEngine
+
+        self.object_manager = GObjectManager(200)
+        self.physics_engine = PhysicsEngine(self.clock, self.physics_config)
+        self.player_manager = PlayerManager()
+        self.event_manager = EventManager()
+        self.state = "RUNNING"
+        self.tick_rate = self.config.tick_rate
+        self.step_counter = 0
+        self.last_position_lookup = {}
 
         self.content = content
         if not self.config.client_only_mode:
             print("Loading Game Content.")
-            content.load(self)
-
+            content.load()
 
     def get_content(self):
         return self.content
+
+    def get_time_scale(self):
+        return 60.0/self.config.tick_rate
 
 
 
@@ -138,17 +136,9 @@ class Game:
             player = self.player_manager.get_player(client.player_id)
         return player
 
-    def initialize(self):
-        self.object_manager = GObjectManager(200)
-        self.physics_engine = PhysicsEngine(self.clock, self.physics_config)
-        self.player_manager = PlayerManager()
-        self.event_manager = EventManager()
-        self.game_state = "RUNNING"
-        self.step_counter = 0
-        self.last_position_lookup = {}
 
     def change_game_state(self, new_state):
-        self.game_state = new_state
+        gamectx_state = new_state
 
     def set_input_event_callback(self, callback):
         self.input_event_callback = callback
@@ -191,6 +181,8 @@ class Game:
             self.event_manager.add_events(events)
 
     def run_event_processing(self):
+        from .event import (Event, AdminEvent, MechanicalEvent,
+                            PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
         new_events = []
         events_to_remove = []
         for e in self.event_manager.get_events():
@@ -201,7 +193,7 @@ class Game:
                     self.change_game_state("QUITING")
                     events_to_remove.append(e)
             elif type(e) == InputEvent:
-                result_events = self.input_event_callback(e,self)
+                result_events = self.input_event_callback(e)
                 events_to_remove.append(e)
             elif type(e) == MechanicalEvent:
                 result_events = self._process_mechanical_event(e)
@@ -212,12 +204,12 @@ class Game:
 
             elif type(e) == DelayedEvent:
                 e: DelayedEvent = e
-                result_events, delete_event = e.run(self.clock.get_time(),self.object_manager)
+                result_events, delete_event = e.run(self.object_manager)
                 if delete_event:
                     events_to_remove.append(e)
             elif type(e) == PeriodicEvent:
                 e: PeriodicEvent = e
-                result_events, remove_event = e.run(self.clock.get_time(),self.object_manager)
+                result_events, remove_event = e.run(self.object_manager)
                 # NOT REMOVED
                 if remove_event:
                     events_to_remove.append(e)
@@ -231,7 +223,7 @@ class Game:
 
     def run_pre_physics_processing(self):
         if self.pre_physics_callback is not None:
-            events = self.pre_physics_callback(self)
+            events = self.pre_physics_callback()
             self.event_manager.add_events(events)
 
     def run_physics_processing(self):
@@ -256,7 +248,7 @@ class Game:
     def tick(self):
         self.clock.tick(self.tick_rate)     
 
-    def add_player(self, player: Player):
+    def add_player(self, player):
         self.player_manager.add_player(player) 
 
     def add_object(self,obj):
@@ -271,8 +263,7 @@ class Game:
         self.physics_engine.remove_object(obj)
         for p in self.player_manager.players_map.values():
             if obj.get_id() == p.get_object_id():
-                p.obj_id = None
-        print("Deleting:{}".format(obj.is_deleted))
+                p.control_obj_id = None
     
     def remove_all_objects(self):
         for o in list(self.object_manager.get_objects_latest().values()):
@@ -288,6 +279,8 @@ class Game:
                 self.object_manager.remove_by_id(o.get_id())
 
     def get_sound_events(self,render_time):
+        from .event import (Event, AdminEvent, MechanicalEvent,
+                            PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
         events_to_remove = []
         sound_ids = []
         for e in self.event_manager.get_events():
@@ -302,10 +295,10 @@ class Game:
             self.event_manager.remove_event_by_id(e.get_id())
         return sound_ids
     
-    def _process_mechanical_event(self, e: MechanicalEvent) -> List[Event]:
+    def _process_mechanical_event(self,e):
         # TODO: use callback instead
         direction_delta = e.direction * self.physics_engine.config.velocity_multiplier * self.physics_engine.config.clock_multiplier
-        t, obj = self.object_manager.get_latest_by_id(e.obj_id)
+        obj = self.object_manager.get_latest_by_id(e.obj_id)
         if obj is None:
             return []
         obj.set_last_change(self.clock.get_time())
@@ -322,16 +315,19 @@ class Game:
             body.angular_velocity = -2
         return []
 
-    def _process_view_event(self, e: ViewEvent):
+    def _process_view_event(self, e):
         # TODO: use callback instead
-        t, obj = self.object_manager.get_latest_by_id(e.obj_id)
-        obj.set_last_change(self.clock.get_time())
-        obj.get_camera().distance += e.distance_diff
+        player = self.player_manager.get_player(e.player_id)
+        player.get_camera().distance += e.distance_diff
         return []
 
     def process_client_step(self):
         for client in self.local_clients:
             client.run_step()
+
+    def render_client_step(self):
+        for client in self.local_clients:
+            client.render()
 
     def run_step(self):
         if self.config.client_only_mode:
@@ -345,6 +341,9 @@ class Game:
         self.cleanup()
 
     def run(self):
-        while self.game_state == "RUNNING":
+        while self.state == "RUNNING":
             self.process_client_step()
+            self.render_client_step()
             self.run_step()
+
+gamectx = GameContext()
