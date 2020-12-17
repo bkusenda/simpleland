@@ -51,7 +51,7 @@ This is a simple 2d game engine written completely in python with client/server 
 
 ### Start Remote Client
 ```bash
-python simpleland/runner.py --enable_client --resolution=640x480 --hostname=SERVER_HOSTNAME --game_id=space_ship1  --fps=60 --remote_client
+ python simpleland/runner.py --enable_client --resolution=640x480 --hostname=SERVER_HOSTNAME --game_id=space_ship1  --fps=60 --remote_client
 ```
 
 ### Run Server Only
@@ -61,24 +61,7 @@ python simpleland/runner.py --enable_client --resolution=640x480 --hostname=SERV
 
 ### Using the OpenAI Gym Env interface
 
-```python
-from simpleland.client import SimpleLandEnv
-
-env = SimpleLandEnv(
-    resolution=(30, 30), 
-    game_id="space_ship1", 
-    client_id = 'agent', 
-    hostname = 'localhost', 
-    port = 10001, 
-    dry_run=False, 
-    keymap = [0,23,19,1,4]):
-
-# initialize
-env.reset()
-
-# take step
-observation, reward, is_done, _ = env.step(action=1)
-
+TODO
 ```
 
 ## Configuration/Customization

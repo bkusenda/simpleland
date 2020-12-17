@@ -32,7 +32,7 @@ class Renderer:
 
     def __init__(self, config: RendererConfig, asset_bundle: AssetBundle):
         if config.sdl_audio_driver:
-            os.environ['SDL_AUDIODRIVER'] = config.sdl_audio_driver 
+            os.environ['SDL_AUDIODRIVER'] = config.sdl_audio_driver
         if config.sdl_video_driver:
             os.environ["SDL_VIDEODRIVER"] = config.sdl_video_driver
         self.asset_bundle = asset_bundle
@@ -93,6 +93,7 @@ class Renderer:
         if self.config.sound_enabled:
             pygame.mixer.pre_init(  44100, -16, 2, 1024)
         pygame.init()
+
         self._display_surf = pygame.display.set_mode(self.resolution)  # , pygame.HWSURFACE | pygame.DOUBLEBUF)
         self.load_sounds()
         self.load_images()
@@ -322,8 +323,8 @@ class Renderer:
             for k, obj in render_obj_dict.items():
                 if view_obj is not None and k == view_obj.get_id():
                     continue
-                elif abs((center - obj.get_body().position).length) > camera.get_distance() and obj.get_data_value('type') != 'static':
-                    continue
+                # elif abs((center - obj.get_body().position).length) > camera.get_distance() and obj.get_data_value('type') != 'static':
+                #     continue
                 self._draw_object(center, obj, angle, screen_factor, screen_view_center)
             if view_obj is not None and depth == view_obj.depth:
                 self._draw_object(center, view_obj, angle, screen_factor, screen_view_center)

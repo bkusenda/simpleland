@@ -27,12 +27,13 @@ class RendererConfig(Base):
         self.render_shapes = False
         self.show_console = True
         self.disable_textures = False
-        self.sdl_audio_driver = None #'dsp'
+        self.sdl_audio_driver = None # 'dsp'
         self.sdl_video_driver = None #'dummy'
         self.sound_enabled = True
         self.render_to_screen = True 
         self.draw_grid = False
         self.grid_size = 20
+        self.view_type = 0
         self.debug_render_bodies = False
 
 def __repr__(self) -> str:

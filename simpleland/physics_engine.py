@@ -80,7 +80,7 @@ class PhysicsEngine:
     def add_object(self, obj: GObject):
         body = obj.body
         body.last_change = self.clock.get_time()
-        body.velocity_func = self.velocity_callback 
+        # body.velocity_func = self.velocity_callback 
         body.position_func = self.position_callback
         self.space.add(obj.get_body(), obj.get_shapes())
 
@@ -90,4 +90,4 @@ class PhysicsEngine:
 
     def update(self):
         for _ in range(self.steps_per_update):
-            self.space.step(self.sim_timestep)
+             self.space.step(self.sim_timestep)

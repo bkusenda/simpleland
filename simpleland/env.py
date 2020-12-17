@@ -1,5 +1,5 @@
 
-from simpleland.registry import get_game_content, GameDef
+from simpleland.registry import load_game_content, GameDef
 import gym
 from gym import spaces
 import logging
@@ -12,12 +12,12 @@ from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
 from . import gamectx
 from simpleland.client import GameClient
-from simpleland.registry import load_game_def, get_game_content
+from simpleland.registry import load_game_def, load_game_content
 import time
 from typing import Dict, Any
 # AGENT_KEYMAP = [0,17,5,23,19,1,4]
 import numpy as np
-
+from simpleland.utils import merged_dict
 
 keymap = [23,1,4]
 
@@ -34,9 +34,11 @@ class SimpleLandEnv:
             game_tick_rate = 2000,
             sim_timestep = 0.01,
             enable_server = True,
-            num_feelers = 8):
-        # import pygame
-        # pygame.init()
+            view_type=0,
+            render_shapes=True,
+            player_type = 1,
+            content_config = {}):
+        
         game_def = get_game_def(
             game_id=game_id,
             enable_server=enable_server, 
@@ -46,8 +48,8 @@ class SimpleLandEnv:
             game_tick_rate = game_tick_rate,
             sim_timestep=sim_timestep)
 
-        game_def.content_config['num_feelers'] = num_feelers
-        self.content = get_game_content(game_def)
+        game_def.content_config = merged_dict(game_def.content_config,content_config)
+        self.content = load_game_content(game_def)
 
         gamectx.initialize(
             game_def = game_def,
@@ -66,8 +68,10 @@ class SimpleLandEnv:
                 port = port,
                 resolution = resolution,#agent_info['resolution'],
                 fps=game_tick_rate,
-                player_type=0,
-                is_human=False)
+                render_shapes=render_shapes,
+                player_type=player_type,
+                is_human=False,
+                view_type=view_type)
 
             # Render config changes
             player_def.renderer_config.sdl_audio_driver = 'dsp'
@@ -154,13 +158,11 @@ class SimpleLandEnv:
     def render(self, mode=None):
         if self.dry_run:
             return self.observation_space.sample()
-
         # TODO: add rendering for observer window
         for agent_id,client in self.agent_clients.items():
             client.render(force=True)
             return client.get_rgb_array()
-        # img = gamectx_client.renderer.renderer.render_frame()
-        # return img
+
 
     def reset(self) -> Dict[str,Any]:
         # self.content.load(gamectx)
@@ -174,13 +176,23 @@ class SimpleLandEnv:
 
 class SimpleLandEnvSingle(gym.Env):
 
-    def __init__(self,frame_skip=0):
-        print("Starting SL v19")
+    def __init__(self,
+            frame_skip=0,
+            content_config={},
+            render_shapes=True,
+            player_type=1,
+            view_type=1,
+            game_tick_rate=10000):
+        print("Starting SL v21")
         self.agent_id = "1"
         self.env_main = SimpleLandEnv(
             agent_map={self.agent_id:{}},
             enable_server=False,
-            game_tick_rate=2000)
+            game_tick_rate=game_tick_rate,
+            content_config=content_config,
+            view_type=view_type,
+            player_type=player_type,
+            render_shapes=render_shapes)
         self.observation_space = self.env_main.observation_space
         self.action_space = self.env_main.action_space
         self.frame_skip = frame_skip
@@ -208,7 +220,6 @@ class SimpleLandEnvSingle(gym.Env):
             if done:
                 ready = True # if done found, exit loop
             elif ob is None: # if ob is missing, retry
-                print("Missing")
                 time.sleep(0.01)
                 continue
             elif i >= self.frame_skip: # if frames skipped reached, exit loop

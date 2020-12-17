@@ -296,24 +296,25 @@ class GameContext:
         return sound_ids
     
     def _process_mechanical_event(self,e):
-        # TODO: use callback instead
-        direction_delta = e.direction * self.physics_engine.config.velocity_multiplier * self.physics_engine.config.clock_multiplier
-        obj = self.object_manager.get_latest_by_id(e.obj_id)
-        if obj is None:
-            return []
-        obj.set_last_change(self.clock.get_time())
-        body = obj.get_body()
+        raise Exception("NOT IMPLEMENTED")
+        # # TODO: use callback instead
+        # direction_delta = e.direction * self.physics_engine.config.velocity_multiplier * self.physics_engine.config.clock_multiplier
+        # obj = self.object_manager.get_latest_by_id(e.obj_id)
+        # if obj is None:
+        #     return []
+        # obj.set_last_change(self.clock.get_time())
+        # body = obj.get_body()
 
-        direction_delta = direction_delta.rotated(body.angle)
-        body.apply_impulse_at_world_point(direction_delta, body.position)
-        # body.angle += 0.1 * (e.orientation_diff * self.physics_engine.config.orientation_multiplier)
-        body.angular_velocity += (e.orientation_diff * self.physics_engine.config.orientation_multiplier)
+        # direction_delta = direction_delta.rotated(body.angle)
+        # body.apply_impulse_at_world_point(direction_delta, body.position)
+        # # body.angle += 0.1 * (e.orientation_diff * self.physics_engine.config.orientation_multiplier)
+        # body.angular_velocity += (e.orientation_diff * self.physics_engine.config.orientation_multiplier)
 
-        if body.angular_velocity > 2:
-            body.angular_velocity = 2
-        elif body.angular_velocity < -2:
-            body.angular_velocity = -2
-        return []
+        # if body.angular_velocity > 2:
+        #     body.angular_velocity = 2
+        # elif body.angular_velocity < -2:
+        #     body.angular_velocity = -2
+        # return []
 
     def _process_view_event(self, e):
         # TODO: use callback instead

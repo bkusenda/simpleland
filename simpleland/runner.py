@@ -16,7 +16,7 @@ from simpleland.content import Content
 from simpleland.common import StateDecoder, StateEncoder
 
 
-from simpleland.registry import get_game_content, load_game_def
+from simpleland.registry import load_game_content, load_game_def
 from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
 import traceback
@@ -149,7 +149,8 @@ def get_player_def(
         is_human=True,
         draw_grid=False,
         debug_render_bodies=False,
-        view_type=0) -> PlayerDefinition:
+        view_type=0,
+        sound_enabled = True) -> PlayerDefinition:
     player_def = PlayerDefinition()
 
     player_def.client_config.player_type = player_type
@@ -168,6 +169,7 @@ def get_player_def(
     player_def.renderer_config.draw_grid = draw_grid
     player_def.renderer_config.debug_render_bodies = debug_render_bodies
     player_def.renderer_config.view_type = view_type
+    player_def.renderer_config.sound_enabled =sound_enabled
     return player_def
 
 
@@ -188,10 +190,11 @@ if __name__ == "__main__":
     parser.add_argument("--render_shapes", action='store_true', help="render actual shapes")
     parser.add_argument("--disable_textures", action='store_true', help="don't show images")
     parser.add_argument("--fps", default=60, type=int, help="fps")
-    parser.add_argument("--player_type", default=0, type=int, help="Player type (0=default, 1=observer)")
+    parser.add_argument("--player_type", default=0, type=int, help="Player type (0=default, 10=observer_only)")
     parser.add_argument("--view_type", default=0, type=int, help="View type (0=perspective, 1=world)")
     parser.add_argument("--grid_size", default=None, type=int, help="not = no grid")
     parser.add_argument("--debug_render_bodies", action="store_true", help="pymunk render")
+    parser.add_argument("--disable_sound", action="store_true", help="disable_sound")
 
     # used for both client and server
     parser.add_argument("--port", default=10001, help="the port the server is running on")
@@ -251,10 +254,11 @@ if __name__ == "__main__":
         player_type=args.player_type,
         draw_grid=args.grid_size is not None,
         debug_render_bodies = args.debug_render_bodies,
-        view_type = args.view_type
+        view_type = args.view_type,
+        sound_enabled= not args.disable_sound
     )
 
-    content: Content = get_game_content(game_def)
+    content: Content = load_game_content(game_def)
 
     gamectx.initialize(
         game_def,

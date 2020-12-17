@@ -30,7 +30,7 @@ class GObjectManager:
     def clear_objects(self):
         self.objects:Dict[str,ExtendedGObject] = {}
 
-    def get_latest_by_id(self, obj_id, include_deleted = False)->Tuple[int,GObject]:
+    def get_latest_by_id(self, obj_id, include_deleted = False)->GObject:
         ext_obj = self.objects.get(obj_id,None)
         if ext_obj is None:
             return None

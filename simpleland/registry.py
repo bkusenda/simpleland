@@ -8,14 +8,14 @@ import pprint
 
 # Init Registries
 content_classes = {}
-game_registry = {}
+game_def_registry = {}
 
 
 def load_game_def(game_id)->GameDef:
-    game_def = game_registry.get(game_id)()
+    game_def = game_def_registry.get(game_id)()
     return game_def
 
-def get_game_content(game_def:GameDef) -> Content:
+def load_game_content(game_def:GameDef) -> Content:
     return content_classes.get(game_def.content_id)(game_def.content_config)
 
 # ****************************************
@@ -26,14 +26,8 @@ def get_game_content(game_def:GameDef) -> Content:
 content_classes['space_ship1'] = space_ship1.GameContent
 
 
-def build_game_space_ship1():
-    env = GameDef(
-        content_id = "space_ship1",
-        content_config={'num_feelers':8})
-    #additional config goes here
-    return env
 
 # Game
-game_registry['space_ship1'] = build_game_space_ship1
+game_def_registry['space_ship1'] = space_ship1.space_ship1_game_def
 
 
