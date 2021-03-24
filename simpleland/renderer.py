@@ -16,6 +16,7 @@ from . import gamectx
 import math
 import time
 import pkg_resources
+import logging
 
 def to_pygame(p, surface):
     """Convenience method to convert pymunk coordinates to pygame surface
@@ -49,7 +50,7 @@ class Renderer:
         # These will be source object properties eventually
         self.view_height = 60000.0
         self.view_width = self.view_height * self.aspect_ratio
-        print(f"{self.view_width} by {self.view_width}")
+        logging.info(f"{self.view_width} by {self.view_width}")
         self.center = Vector.zero()
 
         self.images = {}
