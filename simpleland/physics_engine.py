@@ -53,9 +53,9 @@ class PhysicsEngine:
         self.space.collision_slop = 0.9
         self.sim_timestep = self.config.sim_timestep
 
-        dt = 1.0/self.config.tick_rate
+        dt = 0 if self.config.tick_rate == 0 else 1.0/self.config.tick_rate
         self.steps_per_update = math.ceil(dt/self.sim_timestep)
-        actual_tick_rate = 1/ (self.steps_per_update * self.sim_timestep)
+        actual_tick_rate = 0 if self.steps_per_update == 0 else 1/ (self.steps_per_update * self.sim_timestep)
         print("Actual Physics Tick Rate is {}, original {} (change due to enforcing sim_timestep size of {})".format(actual_tick_rate, self.config.tick_rate,self.config.sim_timestep))
 
         # Called at each step when velocity is updated

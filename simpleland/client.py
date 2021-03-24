@@ -165,7 +165,7 @@ class GameClient:
         self.render_delay_in_ms = renderer.config.render_delay_in_ms  # tick gap + latency
         self.frames_per_second = config.frames_per_second
         self.render_last_update = 0
-        self.render_update_freq = (1.0/self.frames_per_second)  * 1000
+        self.render_update_freq = 0 if self.frames_per_second == 0 else (1.0/self.frames_per_second)  * 1000
         self.frame_limit = self.frames_per_second != gamectx.config.tick_rate
 
         self.server_info_history = TimeLoggingContainer(100)

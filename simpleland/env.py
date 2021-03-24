@@ -10,7 +10,7 @@ import threading
 from simpleland.player import  Player
 from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
-from . import gamectx
+from simpleland.core import gamectx
 from simpleland.client import GameClient
 from simpleland.registry import load_game_def, load_game_content
 import time
@@ -18,6 +18,7 @@ from typing import Dict, Any
 # AGENT_KEYMAP = [0,17,5,23,19,1,4]
 import numpy as np
 from simpleland.utils import merged_dict
+from pyinstrument import Profiler
 
 keymap = [23,1,4]
 
@@ -30,8 +31,8 @@ class SimpleLandEnv:
             port = 10001, 
             dry_run=False,
             agent_map={},
-            physics_tick_rate = 60,
-            game_tick_rate = 2000,
+            physics_tick_rate = 0,
+            game_tick_rate = 0,
             sim_timestep = 0.01,
             enable_server = True,
             view_type=0,
@@ -104,6 +105,7 @@ class SimpleLandEnv:
         self.safe_mode = True
         self.running = True
         self.server=None
+        self.dry_run_sample = self.observation_space.sample()
 
         if game_def.server_config.enabled:        
             self.server = GameUDPServer(
@@ -123,7 +125,7 @@ class SimpleLandEnv:
             for agent_id, action in actions.items():
                 client:GameClient = self.agent_clients[agent_id]
                 if self.dry_run:
-                    return self.observation_space.sample(), 1, False, None
+                    return self.dry_run_sample, 1, False, None
                 if client.player is not None:
                     event = InputEvent(
                         player_id  = client.player.get_id(), 
@@ -234,14 +236,24 @@ class SimpleLandEnvSingle(gym.Env):
         return self.env_main.render(mode=mode)
 
 if __name__ == "__main__":
-    agent_map = {str(i):{} for i in range(10)}
+    agent_map = {str(i):{} for i in range(1)}
     
-    env = SimpleLandEnv(agent_map=agent_map)
+    env = SimpleLandEnv(agent_map=agent_map,dry_run=False)
     env.reset()
     done_agents = set()
-    while(True):
+    start_time = time.time()
+    max_steps = 100000
+    profiler = Profiler()
+    profiler.start()
+    for i in range(0,max_steps):
         actions = {agent_id:env.action_space.sample() for agent_id in agent_map.keys()}
         obs, rewards, dones, infos = env.step(actions)
+        
+    
+    steps_per_sec = max_steps/(time.time()-start_time)
+    print(f"steps_per_sec {steps_per_sec}")
+    profiler.stop()
+    print(profiler.output_text(unicode=True, color=True))
 
 
 

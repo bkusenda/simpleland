@@ -22,7 +22,7 @@ class EventManager:
             self.add_event(e)
 
     def get_events(self):
-        return list(self.events.values())
+        return self.events.values()
 
     def get_event_by_id(self, id):
         return self.events[id]

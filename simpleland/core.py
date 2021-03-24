@@ -113,8 +113,6 @@ class GameContext:
     def get_time_scale(self):
         return 60.0/self.config.tick_rate
 
-
-
     def add_local_client(self,client):
         self.local_clients.append(client)
         
@@ -337,8 +335,10 @@ class GameContext:
             self.run_pre_event_processing()
             self.run_event_processing()
             self.run_pre_physics_processing()
-            self.run_physics_processing()
+            # self.run_physics_processing()
         self.tick()
+
+        # TODO: Slow, do we need to run every step?
         self.cleanup()
 
     def run(self):
