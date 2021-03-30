@@ -18,6 +18,10 @@ import time
 import pkg_resources
 import logging
 
+
+def scale(vec,vec2):
+    return Vector(vec.x * vec2.x, vec.y* vec2.y)
+
 def to_pygame(p, surface):
     """Convenience method to convert pymunk coordinates to pygame surface
     local coordinates.
@@ -118,12 +122,12 @@ class Renderer:
         obj_pos = obj.get_body().position
         obj_location1 = (obj_pos + line.a.rotated(obj.get_body().angle) - center)
         obj_location1 = obj_location1.rotated(-angle)
-        p1 = screen_factor * (obj_location1 + screen_view_center)
+        p1 = scale(screen_factor,(obj_location1 + screen_view_center))
         p1 = to_pygame(p1, self._display_surf)
 
         obj_location2 = (obj_pos + line.b.rotated(obj.get_body().angle) - center)
         obj_location2 = obj_location2.rotated(-angle)
-        p2 = screen_factor * (obj_location2 + screen_view_center)
+        p2 = scale(screen_factor, (obj_location2 + screen_view_center))
         p2 = to_pygame(p2, self._display_surf)
 
         pygame.draw.line(self._display_surf,
@@ -169,7 +173,7 @@ class Renderer:
         for v in verts:
             obj_location = (obj_pos + v.rotated(body_angle) - center)
             obj_location = obj_location.rotated(-angle)
-            p = screen_factor * (obj_location + screen_view_center)
+            p = scale(screen_factor,(obj_location + screen_view_center))
             p = to_pygame(p, self._display_surf)
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
@@ -193,7 +197,7 @@ class Renderer:
         for v in verts:
             obj_location = (obj_pos + v.rotated(body_angle) - center)
             obj_location = obj_location.rotated(-angle)
-            p = screen_factor * (obj_location + screen_view_center)
+            p = scale(screen_factor,(obj_location + screen_view_center))
             p = to_pygame(p, self._display_surf)
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
@@ -224,7 +228,7 @@ class Renderer:
                 image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
                 rect = image.get_rect()
 
-                image_loc = screen_factor * ((obj_pos- center).rotated(-angle)  + screen_view_center)
+                image_loc = scale(screen_factor, ((obj_pos- center).rotated(-angle)  + screen_view_center))
                 image_loc = to_pygame(image_loc, self._display_surf)
                 rect.center = image_loc
                 self._display_surf.blit(image,rect)
@@ -267,11 +271,15 @@ class Renderer:
 
     def draw_grid_line(self,p1,p2,center,screen_view_center,color,screen_factor):
         p1 = (p1 - center)
-        p1 = screen_factor * (p1 + screen_view_center)
+        # print(p1)
+        # print(screen_factor)
+        # print(screen_view_center)
+
+        p1 = scale(screen_factor, (p1 + screen_view_center))
         p1 = to_pygame(p1, self._display_surf)
 
         p2 = (p2 - center)
-        p2 = screen_factor * (p2 + screen_view_center)
+        p2 = scale(screen_factor, (p2 + screen_view_center))
         p2 = to_pygame(p2, self._display_surf)
 
         pygame.draw.line(self._display_surf,
@@ -293,15 +301,15 @@ class Renderer:
 
         for line in range(line_num):
             y_pos = y_start + size * line
-            p1 = Vector(x-self.view_width,y_pos)
-            p2 = Vector(x+self.view_width,y_pos)
+            p1 = Vector(float(x-self.view_width),float(y_pos))
+            p2 = Vector(float(x+self.view_width),float(y_pos))
             self.draw_grid_line(p1,p2,center,screen_view_center,color,screen_factor)
 
         x_start = x - size * line_num/2 
         for line in range(line_num):
             x_pos = x_start + size * line
-            p1 = Vector(x_pos,y+self.view_height)
-            p2 = Vector(x_pos,y-self.view_height)
+            p1 = Vector(float(x_pos),float(y+self.view_height))
+            p2 = Vector(float(x_pos),float(y-self.view_height))
             self.draw_grid_line(p1,p2,center,screen_view_center,color,screen_factor)
 
 
