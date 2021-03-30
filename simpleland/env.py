@@ -22,11 +22,11 @@ from pyinstrument import Profiler
 
 keymap = [23,1,4]
 
-class SimpleLandEnv:
+class SimplelandEnv:
 
     def __init__(self, 
             resolution=(200,200), 
-            game_id="space_ship1", 
+            game_id="space1", 
             hostname = 'localhost', 
             port = 10001, 
             dry_run=False,
@@ -34,7 +34,7 @@ class SimpleLandEnv:
             physics_tick_rate = 0,
             game_tick_rate = 0,
             sim_timestep = 0.01,
-            enable_server = True,
+            enable_server = False,
             view_type=0,
             render_shapes=True,
             player_type = 1,
@@ -49,7 +49,9 @@ class SimpleLandEnv:
             game_tick_rate = game_tick_rate,
             sim_timestep=sim_timestep)
 
-        game_def.content_config = merged_dict(game_def.content_config,content_config)
+        game_def.content_config = merged_dict(
+            game_def.content_config,
+            content_config)
         self.content = load_game_content(game_def)
 
         gamectx.initialize(
@@ -176,7 +178,7 @@ class SimpleLandEnv:
             self.server.shutdown()
             self.server.server_close()
 
-class SimpleLandEnvSingle(gym.Env):
+class SimplelandEnvSingle(gym.Env):
 
     def __init__(self,
             frame_skip=0,
@@ -187,7 +189,7 @@ class SimpleLandEnvSingle(gym.Env):
             game_tick_rate=10000):
         print("Starting SL v21")
         self.agent_id = "1"
-        self.env_main = SimpleLandEnv(
+        self.env_main = SimplelandEnv(
             agent_map={self.agent_id:{}},
             enable_server=False,
             game_tick_rate=game_tick_rate,
@@ -198,7 +200,6 @@ class SimpleLandEnvSingle(gym.Env):
         self.observation_space = self.env_main.observation_space
         self.action_space = self.env_main.action_space
         self.frame_skip = frame_skip
-
 
     def reset(self):
         obs = self.env_main.reset()
@@ -238,11 +239,11 @@ class SimpleLandEnvSingle(gym.Env):
 if __name__ == "__main__":
     agent_map = {str(i):{} for i in range(1)}
     
-    env = SimpleLandEnv(agent_map=agent_map,dry_run=False)
+    env = SimplelandEnv(agent_map=agent_map,dry_run=False)
     env.reset()
     done_agents = set()
     start_time = time.time()
-    max_steps = 100000
+    max_steps = 30000
     profiler = Profiler()
     profiler.start()
     for i in range(0,max_steps):
@@ -253,7 +254,7 @@ if __name__ == "__main__":
     steps_per_sec = max_steps/(time.time()-start_time)
     print(f"steps_per_sec {steps_per_sec}")
     profiler.stop()
-    print(profiler.output_text(unicode=True, color=True))
+    print(profiler.output_text(unicode=True, color=True,show_all=True))
 
 
 

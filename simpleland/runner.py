@@ -147,7 +147,7 @@ def get_player_def(
         render_shapes=None,
         disable_textures=None,
         is_human=True,
-        draw_grid=False,
+        grid_size=None,
         debug_render_bodies=False,
         view_type=0,
         sound_enabled = True) -> PlayerDefinition:
@@ -166,7 +166,8 @@ def get_player_def(
     player_def.renderer_config.resolution = resolution
     player_def.renderer_config.render_shapes = render_shapes
     player_def.renderer_config.disable_textures = disable_textures
-    player_def.renderer_config.draw_grid = draw_grid
+    player_def.renderer_config.draw_grid = grid_size is not None
+    player_def.renderer_config.grid_size = grid_size
     player_def.renderer_config.debug_render_bodies = debug_render_bodies
     player_def.renderer_config.view_type = view_type
     player_def.renderer_config.sound_enabled =sound_enabled
@@ -205,11 +206,14 @@ if __name__ == "__main__":
     parser.add_argument("--sim_timestep", default=0.01, type=float, help="sim_timestep, lower (eg 0.01) = more accurate, higher (eg 0.1) = less accurate but faster")
     parser.add_argument("--game_tick_rate", default=60, type=int, help="game_tick_rate")
 
-    parser.add_argument("--game_id", default="space_ship1", help="id of game")
+    parser.add_argument("--game_id", default="space1", help="id of game")
 
     args = parser.parse_args()
 
     print(args.__dict__)
+
+    if not args.enable_server and not args.enable_client and not args.remote_client:
+        args.enable_client = True
 
     if args.enable_server and args.enable_client and args.remote_client:
         print("Error: Server and Remote Client cannot be started from the same process. Please run seperately.")
@@ -252,7 +256,7 @@ if __name__ == "__main__":
         resolution=resolution,
         fps=args.fps,
         player_type=args.player_type,
-        draw_grid=args.grid_size is not None,
+        grid_size=args.grid_size,
         debug_render_bodies = args.debug_render_bodies,
         view_type = args.view_type,
         sound_enabled= not args.disable_sound
@@ -266,7 +270,7 @@ if __name__ == "__main__":
 
     if player_def.client_config.enabled:
         renderer = Renderer(
-            player_def.renderer_config,
+            config = player_def.renderer_config,
             asset_bundle=content.get_asset_bundle())
 
         client = GameClient(

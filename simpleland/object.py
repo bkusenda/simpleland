@@ -46,12 +46,28 @@ class GObject(Base):
         self.data = {} if data is None else data
         self.last_change = None
         self.is_deleted = False
+        self.enabled=True
         self.depth=depth
+        self.image_width, self.image_height = (80,80)
+        self.shape_color = None
+        self._update_position_callback = lambda obj,new_pos: None
+    
+    def set_update_position_callback(self,callback):
+        self._update_position_callback = callback
 
     def get_data_value(self,k, default_value=None):
         return self.data.get(k,default_value)
-    
-    def delete(self):
+
+    def disable(self):
+        self.enabled=False
+
+    def enable(self):
+        self.enabled=True
+
+    def set_shape_color(self,color):
+        self.shape_color = color
+
+    def delete(self):        
         self.is_deleted = True
     
     def set_data_value(self,k,value):
@@ -63,12 +79,20 @@ class GObject(Base):
     def get_id(self):
         return self.id
 
+    def get_image_dims(self):
+        return self.image_width, self.image_height
+    
+    def set_image_dims(self,height,width):
+        self.image_width, self.image_height = (height,width)
+
+    def update_position(self, position: Vector):
+        self._update_position_callback(self,position)
+
     def set_position(self, position: Vector):
-        self.get_body().position = position
+        self.body.position = position
 
     def get_position(self):
-        return self.get_body().position
-
+        return self.body.position
 
     def add_shape(self,shape:Shape, collision_type=1,label=None):
         shape.set_object_id(self.get_id())

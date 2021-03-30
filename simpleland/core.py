@@ -1,11 +1,11 @@
 import json
+from simpleland.physics_engine import PymunkPhysicsEngine
 from typing import List, Set
 from uuid import UUID
 
-from pymunk import Vec2d
 
 from .common import (Body, Circle, Clock, Line
-                     , Polygon, Space, Vector, SimClock)
+                     , Polygon, Space, StepClock, Vector, SimClock)
 from .object import (GObject, ExtendedGObject)
 
 # from .renderer import SLRenderer
@@ -54,7 +54,9 @@ class GameContext:
         self.game_def:GameDef = None
         self.config:GameConfig = None
         self.physics_config:PhysicsConfig = None
-        self.clock = SimClock()
+        self.clock = None
+        StepClock()
+        # self.clock = SimClock()
 
         self.object_manager = None
         self.physics_engine = None
@@ -91,10 +93,17 @@ class GameContext:
         from .event_manager import EventManager
         from .object_manager import GObjectManager
         from .player_manager import PlayerManager
-        from .physics_engine import PhysicsEngine
+        from .physics_engine import GridPhysicsEngine, PymunkPhysicsEngine
 
         self.object_manager = GObjectManager(200)
-        self.physics_engine = PhysicsEngine(self.clock, self.physics_config)
+        print(self.physics_config.engine)
+        if self.physics_config.engine == 'pymunk':
+            self.clock = SimClock()
+            self.physics_engine = PymunkPhysicsEngine(self.clock, self.physics_config)
+        else:
+            self.clock = StepClock()
+            self.physics_engine = GridPhysicsEngine(self.clock, self.physics_config)
+        
         self.player_manager = PlayerManager()
         self.event_manager = EventManager()
         self.state = "RUNNING"
@@ -128,7 +137,7 @@ class GameContext:
         Get existing player or create new one
         """
         if client.player_id is None:
-            player = self.content.new_player(self, player_id=None, player_type=player_type)
+            player = self.content.new_player(player_id=None, player_type=player_type)
             client.player_id = player.get_id()
         else:
             player = self.player_manager.get_player(client.player_id)
@@ -180,10 +189,11 @@ class GameContext:
 
     def run_event_processing(self):
         from .event import (Event, AdminEvent, MechanicalEvent,
-                            PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
+                            PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent,PositioningUpdateEvent)
         new_events = []
         events_to_remove = []
-        for e in self.event_manager.get_events():
+        events_to_process = list(self.event_manager.get_events())
+        for e in events_to_process:
             result_events = []
             if type(e) == AdminEvent:
                 e: AdminEvent = e
@@ -193,9 +203,12 @@ class GameContext:
             elif type(e) == InputEvent:
                 result_events = self.input_event_callback(e)
                 events_to_remove.append(e)
-            elif type(e) == MechanicalEvent:
-                result_events = self._process_mechanical_event(e)
-                events_to_remove.append(e)
+            # elif type(e) == PositioningUpdateEvent:
+            #     result_events = self._process_mechanical_event(e)
+            #     events_to_remove.append(e)
+            # elif type(e) == MechanicalEvent:
+            #     result_events = self._process_mechanical_event(e)
+            #     events_to_remove.append(e)
             elif type(e) == ViewEvent:
                 result_events = self._process_view_event(e)
                 events_to_remove.append(e)
@@ -224,24 +237,27 @@ class GameContext:
             events = self.pre_physics_callback()
             self.event_manager.add_events(events)
 
-    def run_physics_processing(self):
+    def run_physics_processing(self): 
 
         self.physics_engine.update()
 
-        # Check for changes in position or angle and log change time
-        new_position_lookup = {}
-        for k,o in self.object_manager.get_objects_latest().items():
-            angle = o.get_body().angle
-            position = o.get_body().position
-            current_position = {'angle':angle,'position':position}
+        if self.config.track_updates:
+            # TODO: Not efficient
+            # Check for changes in position or angle and log change time
+            new_position_lookup = {}
+            for k,o in self.object_manager.get_objects_latest().items():
+                body = o.get_body()
+                angle = body.angle
+                position = body.position
+                current_position = {'angle':angle,'position':position}
 
-            last_position = self.last_position_lookup.get(k,None)
-            if last_position is not None:
-                if ((last_position['angle'] != current_position['angle'] ) or
-                (last_position['position'] != current_position['position'])):
-                    o.set_last_change(self.clock.get_time())
-            new_position_lookup[k] = current_position
-        self.last_position_lookup = new_position_lookup
+                last_position = self.last_position_lookup.get(k,None)
+                if last_position is not None:
+                    if ((last_position['angle'] != current_position['angle'] ) or
+                    (last_position['position'] != current_position['position'])):
+                        o.set_last_change(self.clock.get_time())
+                new_position_lookup[k] = current_position
+            self.last_position_lookup = new_position_lookup
     
     def tick(self):
         self.clock.tick(self.tick_rate)     
@@ -293,8 +309,8 @@ class GameContext:
             self.event_manager.remove_event_by_id(e.get_id())
         return sound_ids
     
-    def _process_mechanical_event(self,e):
-        raise Exception("NOT IMPLEMENTED")
+    # def _process_mechanical_event(self,e):
+    #     raise Exception("NOT IMPLEMENTED")
         # # TODO: use callback instead
         # direction_delta = e.direction * self.physics_engine.config.velocity_multiplier * self.physics_engine.config.clock_multiplier
         # obj = self.object_manager.get_latest_by_id(e.obj_id)
@@ -328,6 +344,24 @@ class GameContext:
         for client in self.local_clients:
             client.render()
 
+    def wait_for_input(self):
+        import pygame
+        import sys
+
+        wait=True
+        pygame.event.clear()
+        while wait:
+            event = pygame.event.wait()
+            wait = True
+            if event.type == pygame.KEYDOWN:
+                if (event.key == pygame.K_ESCAPE) or (event.type == pygame.QUIT):
+                    pygame.quit()
+                    sys.exit()
+                else:
+                    wait = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                wait = False
+
     def run_step(self):
         if self.config.client_only_mode:
             self.run_event_processing()
@@ -335,16 +369,21 @@ class GameContext:
             self.run_pre_event_processing()
             self.run_event_processing()
             self.run_pre_physics_processing()
-            # self.run_physics_processing()
+            self.run_physics_processing()
         self.tick()
 
         # TODO: Slow, do we need to run every step?
-        self.cleanup()
+        # only needed for net play
+        # self.cleanup()
 
     def run(self):
         while self.state == "RUNNING":
             self.process_client_step()
-            self.render_client_step()
             self.run_step()
+            self.render_client_step()
+            if self.config.wait_for_user_input:
+                self.wait_for_input()
+
+
 
 gamectx = GameContext()

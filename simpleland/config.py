@@ -6,6 +6,7 @@ from typing import Dict, Any
 
 class PhysicsConfig(Base):
     def __init__(self):
+        self.engine = "pymunk"
         self.velocity_multiplier = 200.0
         self.default_max_velocity = 500
         self.default_min_velocity = 10
@@ -16,6 +17,7 @@ class PhysicsConfig(Base):
         self.tick_rate = 60
         self.sim_timestep=0.02
         self.player_angular_vel_max = 3
+        self.grid_size = 80
 
 class RendererConfig(Base):
 
@@ -32,7 +34,7 @@ class RendererConfig(Base):
         self.sound_enabled = True
         self.render_to_screen = True 
         self.draw_grid = False
-        self.grid_size = 20
+        self.grid_size = 80
         self.view_type = 0
         self.debug_render_bodies = False
 
@@ -72,6 +74,10 @@ class GameConfig(Base):
         self.keep_moving = 0
         self.tick_rate = 60
         self.client_only_mode=False
+        self.wait_for_user_input=False
+
+        # Required for tracking position updates
+        self.track_updates = False
 
     def __repr__(self) -> str:
         return pprint.pformat(self.__dict__)

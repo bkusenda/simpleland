@@ -228,4 +228,4 @@ if __name__ == "__main__":
     steps_per_sec = total_steps/(time.time()-start_time)
     print(f"steps_per_sec {steps_per_sec}")
     profiler.stop()
-    print(profiler.output_text(unicode=True, color=True))
+    print(profiler.output_text(unicode=True, color=True,show_all=True))

@@ -67,7 +67,7 @@ class DelayedEvent(Event):
                 **kwargs):
 
         super(DelayedEvent,self).__init__(id,**kwargs)
-        self.execution_step = execution_step
+        self.execution_step = execution_step + gamectx.clock.get_tick_counter()
         self.data=data
         self.func = func
 
@@ -143,6 +143,26 @@ class MechanicalEvent(Event):
         self.obj_id = obj_id
         self.direction = direction
         self.orientation_diff = orientation_diff
+
+class PositioningUpdateEvent(Event):
+
+    @classmethod
+    def build_from_dict(cls,dict_data):
+        return cls(obj_id = dict_data['obj_id'],
+            position_update = dict_data['position_update'],
+            angle_update = dict_data['angle_update'],
+            id = dict_data['id'],
+            kwargs = dict_data)
+
+    def __init__(self, obj_id: str,
+                 position_update: Vector ,
+                 angle_update: float = 0.0,
+                 id=None,
+                 **kwargs):
+        super(PositioningUpdateEvent,self).__init__(id,**kwargs)
+        self.obj_id = obj_id
+        self.position_update = position_update
+        self.angle_update = angle_update
 
 class AdminEvent(Event):
 

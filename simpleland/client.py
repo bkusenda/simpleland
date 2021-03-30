@@ -15,18 +15,14 @@ from typing import Tuple
 
 import lz4.frame
 import numpy as np
-import pymunk
 from pyinstrument import Profiler
-from pymunk import Vec2d
 
 from simpleland.common import (SimClock, Body, Camera, Clock, \
-                               Shape, Vector, TimeLoggingContainer)
+                               Shape, TimeLoggingContainer)
 from simpleland.object import GObject
 from simpleland.config import ClientConfig, GameConfig
 from simpleland.content import Content
 from simpleland.common import StateDecoder, StateEncoder
-from simpleland.itemfactory import ItemFactory, ShapeFactory
-from simpleland.physics_engine import PhysicsEngine
 from simpleland.player import Player, get_input_events
 from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
@@ -186,7 +182,7 @@ class GameClient:
             self.connector_thread.daemon = True
             self.connector_thread.start()
         else:
-            self.player = self.content.new_player(gamectx, player_type=config.player_type)
+            self.player = self.content.new_player(player_type=config.player_type)
 
     def sync_time(self):
         if self.connector is None:

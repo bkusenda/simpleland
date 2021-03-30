@@ -10,7 +10,6 @@ from .common import (get_dict_snapshot, load_dict_snapshot, Body, Circle, Clock,
 from .utils import gen_id
 
 from .object import (GObject, ExtendedGObject)
-from .physics_engine import PhysicsEngine
 from .event import (Event, AdminEvent, MechanicalEvent,
                             PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
 from .event_manager import EventManager
@@ -52,7 +51,9 @@ def get_default_key_map():
     return key_map
 DEFAULT_KEYMAP = get_default_key_map()
 
+import sys
 def get_input_events(player_id) -> List[Event]:
+
 
     events: List[Event] = []
 

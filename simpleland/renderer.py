@@ -3,7 +3,7 @@ from typing import Dict, Any
 
 import pygame
 from .object import GObject
-from .common import Vector, Line, Circle, Polygon
+from .common import Vector, Line, Circle, Polygon, Rectangle
 from .object_manager import GObjectManager
 from PIL import Image
 import numpy as np
@@ -56,7 +56,6 @@ class Renderer:
         self.images = {}
         self.sounds = {}
 
-
         # FPS Counter
         self.fps_counter = TickPerSecCounter(2)
         self.log_info = None
@@ -77,6 +76,8 @@ class Renderer:
             image = pygame.image.load(pkg_resources.resource_filename(__name__,path)).convert_alpha()
             # image = pygame.transform.scale(image,(200,200))
             self.images[k] = image
+            print(k)
+            print(image)
 
     def play_sounds(self, sound_ids):
         if self.config.sound_enabled:
@@ -159,6 +160,31 @@ class Renderer:
                      screen_view_center,
                      angle,
                      center):
+        body = obj.get_body()
+        obj_pos = body.position
+
+        body_angle =body.angle
+        verts = shape.get_vertices()
+        new_verts = []
+        for v in verts:
+            obj_location = (obj_pos + v.rotated(body_angle) - center)
+            obj_location = obj_location.rotated(-angle)
+            p = screen_factor * (obj_location + screen_view_center)
+            p = to_pygame(p, self._display_surf)
+            new_verts.append(p)
+        pygame.draw.polygon(self._display_surf,
+                color,
+                new_verts,
+                0)
+
+    def _draw_rect(self,
+                     obj: GObject,
+                     shape: Rectangle,
+                     color,
+                     screen_factor,
+                     screen_view_center,
+                     angle,
+                     center):
         obj_pos = obj.get_body().position
 
         body_angle =obj.get_body().angle
@@ -173,42 +199,45 @@ class Renderer:
         pygame.draw.polygon(self._display_surf,
                 color,
                 new_verts,
-                1)
+                0)
 
     def _draw_object(self, center, obj, angle, screen_factor, screen_view_center, color=None):
 
-        color = (255, 50, 50)
+        
 
         image_id = obj.get_data_value("image")
         image_used = image_id is not None and not self.config.disable_textures
         if image_used:
             body_angle = obj.get_body().angle
             obj_pos = obj.get_body().position
-            if len(obj.get_shapes()) == 0:
-                return 
-            main_shape = list(obj.get_shapes())[0]
-            body_w, body_h = main_shape.radius *2 , main_shape.radius *2
+            
+            # TODO: fix, main_shape will not always have radius
+            body_w, body_h = obj.get_image_dims()
             image = self.get_image_by_id(image_id)
-            image_size = int(body_w*screen_factor[0]),int(body_h*screen_factor[1])
-            
-            if image_size[0]> 5000:
-                print("zoom out/ to close {}".format(image_size))
-            
-            image = pygame.transform.scale(image,image_size)  
-            image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
-            rect = image.get_rect()
+            if image is not None:
+                image_size = int(body_w*screen_factor[0]),int(body_h*screen_factor[1])
+                
+                if image_size[0]> 5000:
+                    print("zoom out/ to close {}".format(image_size))
+                
+                image = pygame.transform.scale(image,image_size)  
+                image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
+                rect = image.get_rect()
 
-            image_loc = screen_factor * ((obj_pos- center).rotated(-angle)  + screen_view_center)
-            image_loc = to_pygame(image_loc, self._display_surf)
-            rect.center = image_loc
-            self._display_surf.blit(image,rect)
+                image_loc = screen_factor * ((obj_pos- center).rotated(-angle)  + screen_view_center)
+                image_loc = to_pygame(image_loc, self._display_surf)
+                rect.center = image_loc
+                self._display_surf.blit(image,rect)
+            else:
+                image_used= False
 
         if not image_used or self.config.render_shapes:
             for i, shape in enumerate(obj.get_shapes()):
-                if i == 1:
-                    color = (100, 200, 200)
-                else:
-                    color = (255, 50, 50)
+                if color is None:
+                    if i == 1:
+                        color = (100, 200, 200)
+                    else:
+                        color = (255, 50, 50)
 
                 if type(shape) == Line:
                     self._draw_line(obj,
@@ -236,48 +265,44 @@ class Renderer:
                                     center=center)
 
 
-    def _draw_grid(self, center, angle, screen_factor, screen_view_center, color = (100, 80, 80),size = 20):      
-        
-        for line in range(0,size*2):
+    def draw_grid_line(self,p1,p2,center,screen_view_center,color,screen_factor):
+        p1 = (p1 - center)
+        p1 = screen_factor * (p1 + screen_view_center)
+        p1 = to_pygame(p1, self._display_surf)
 
-            obj_pos1 = Vector(-size,line-size)
-            obj_location1 = (obj_pos1 - center)
-            obj_location1 = obj_location1.rotated(-angle)
-            p1 = screen_factor * (obj_location1 + screen_view_center)
-            p1 = to_pygame(p1, self._display_surf)
+        p2 = (p2 - center)
+        p2 = screen_factor * (p2 + screen_view_center)
+        p2 = to_pygame(p2, self._display_surf)
 
-            obj_pos2 = Vector(size,line-size)
-            obj_location2 = (obj_pos2 - center)
-            obj_location2 = obj_location2.rotated(-angle)
-            p2 = screen_factor * (obj_location2 + screen_view_center)
-            p2 = to_pygame(p2, self._display_surf)
+        pygame.draw.line(self._display_surf,
+                color,
+                to_pygame(p1,self._display_surf),
+                to_pygame(p2,self._display_surf),
+                1)
 
-            pygame.draw.line(self._display_surf,
-                            color,
-                            p1,
-                            p2,
-                            1)
 
-        for line in range(0,size*2):
 
-            obj_pos1 = Vector(line-size,-size)
-            obj_location1 = (obj_pos1 - center)
-            obj_location1 = obj_location1.rotated(-angle)
-            p1 = screen_factor * (obj_location1 + screen_view_center)
-            p1 = to_pygame(p1, self._display_surf)
+    def _draw_grid(self, center, angle, screen_factor, screen_view_center, color = (50, 50, 50), size = 20, view_type=0):
+        line_num = int(self.view_width/size) + 1
 
-            obj_pos2 = Vector(line-size,size)
-            obj_location2 = (obj_pos2 - center)
-            obj_location2 = obj_location2.rotated(-angle)
-            p2 = screen_factor * (obj_location2 + screen_view_center)
-            p2 = to_pygame(p2, self._display_surf)
+        x = int(center.x/size) * size 
+        y = int(center.y/size) * size 
 
-            pygame.draw.line(self._display_surf,
-                            color,
-                            p1,
-                            p2,
-                        1)
 
+        y_start = y - size * line_num/2 
+
+        for line in range(line_num):
+            y_pos = y_start + size * line
+            p1 = Vector(x-self.view_width,y_pos)
+            p2 = Vector(x+self.view_width,y_pos)
+            self.draw_grid_line(p1,p2,center,screen_view_center,color,screen_factor)
+
+        x_start = x - size * line_num/2 
+        for line in range(line_num):
+            x_pos = x_start + size * line
+            p1 = Vector(x_pos,y+self.view_height)
+            p2 = Vector(x_pos,y-self.view_height)
+            self.draw_grid_line(p1,p2,center,screen_view_center,color,screen_factor)
 
 
     # TODO: Clean this up
@@ -304,7 +329,7 @@ class Renderer:
         # TODO: make max customizeable 
         self.update_view(max(camera.get_distance(),1))
 
-        view_obj = None
+        view_obj:GObject = None
         center = Vector(self.view_width/2,self.view_height/2)
         angle=0
         if self.config.view_type == 0:
@@ -312,6 +337,10 @@ class Renderer:
             if view_obj is not None:
                 center = view_obj.get_body().position
                 angle = view_obj.get_body().angle
+        elif self.config.view_type == 1:
+            center_obj = object_manager.get_by_id(player.get_object_id(), render_time)
+            if center_obj is not None:
+                center = center_obj.get_body().position
 
         center = center - camera.position_offset
         screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
@@ -319,16 +348,19 @@ class Renderer:
 
         obj_list_sorted_by_depth= object_manager.get_objects_for_timestamp_by_depth(render_time)
         if self.config.draw_grid:
-            self._draw_grid(center, angle, screen_factor, screen_view_center, self.config.grid_size)
+            self._draw_grid(center, angle, screen_factor, screen_view_center, size=self.config.grid_size, view_type= self.config.view_type)
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
+            obj:GObject
             for k, obj in render_obj_dict.items():
+                if not obj.enabled:
+                    continue
                 if view_obj is not None and k == view_obj.get_id():
                     continue
                 # elif abs((center - obj.get_body().position).length) > camera.get_distance() and obj.get_data_value('type') != 'static':
                 #     continue
-                self._draw_object(center, obj, angle, screen_factor, screen_view_center)
-            if view_obj is not None and depth == view_obj.depth:
-                self._draw_object(center, view_obj, angle, screen_factor, screen_view_center)
+                self._draw_object(center, obj, angle, screen_factor, screen_view_center, obj.shape_color)
+            if view_obj is not None and view_obj.enabled and depth == view_obj.depth:
+                self._draw_object(center, view_obj, angle, screen_factor, screen_view_center, view_obj.shape_color)
             
 
         if self.config.show_console:

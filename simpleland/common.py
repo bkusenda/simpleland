@@ -47,10 +47,8 @@ def get_dict_snapshot(obj, exclude_keys = {}):
         elif type(v) is list:
             data[k] = []
             for vv in v:
-
                 data[k].append(get_dict_snapshot(vv))
         else:
-            
             pass
             #print("Skipping snapshotting of:{} with value {}".format(k, v))
     return {"_type":_type,"data": data}
@@ -82,13 +80,12 @@ class SimClock:
     def _current_time(self):
         return time.time() * self.resolution
     
-    def copy(self):
-        return SimClock(self.start_time)
-
     def get_start_time(self):
         return self.start_time
     
     def tick(self,tick_rate):
+        if tick_rate ==0:
+            return
         self.pygame_clock.tick(tick_rate)
         self.tick_time = self.get_exact_time()
         self.tick_counter +=1
@@ -104,11 +101,39 @@ class SimClock:
         self.start_time = time
         self.tick_time = self.get_exact_time()
 
-    def reset(self):
-        self.start_time = self._current_time()
-
     def get_exact_time(self):
         return self._current_time() - self.start_time
+
+
+
+class StepClock:
+    
+    def __init__(self, start_time= 0):
+        self.start_time = start_time
+        self.tick_time = 0
+        print("USING STEP CLOCK")
+
+    def _current_time(self):
+        return self.tick_time
+
+    def get_start_time(self):
+        return self.start_time
+    
+    def tick(self,tick_rate=None):
+        self.tick_time +=1
+        return self.tick_time
+
+    def get_time(self):
+        return self.tick_time
+
+    def get_tick_counter(self):
+        return self.tick_time
+
+    def set_absolute_time(self,time):
+        self.tick_time = time
+
+    def get_exact_time(self):
+        return self.tick_time
 
 # source: https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
 class Singleton(type):
@@ -158,7 +183,6 @@ class Shape(pymunk.Shape, Base):
         self.object_id= None
         self.id = gen_id()
         self.label = None
-
     
     def get_id(self):
         return self.id
@@ -197,6 +221,26 @@ class Polygon(Shape, pymunk.Poly):
 
     def __init__(self, body, vertices,**kwargs):
         pymunk.Poly.__init__(self,body, vertices,**kwargs)
+        Shape.__init__(self)
+    
+    def get_snapshot(self):
+        data = self.get_common_info()
+        data['params'] = {
+                "vertices":[v for v in self.get_vertices()],
+            }
+        return data
+
+class Rectangle(Shape,pymunk.Poly):
+
+    def __init__(self, body, center,width,height,**kwargs):
+        w =width/2
+        h = height/2
+
+        v1 = Vector(center.x - w,center.y + h)
+        v2 = Vector(center.x + w,center.y + h)
+        v3 = Vector(center.x + w,center.y - h)
+        v4 = Vector(center.x - w,center.y - h)
+        pymunk.Poly.__init__(self,body, vertices=[v1,v2,v3,v4],**kwargs)
         Shape.__init__(self)
     
     def get_snapshot(self):
@@ -286,14 +330,17 @@ class TimeLoggingContainer:
         return next_timestamp, next_obj
 
     def get_latest(self):
-        return self.get_latest_with_timestamp()[1]
+        if self.counter == 0:
+            return None, None
+        idx = (self.counter-1) % self.log_size
+        return self.log[idx]
 
     def get_latest_with_timestamp(self):
         if self.counter == 0:
             return None, None
-        lastest_counter = self.counter-1
-        obj = self.log[lastest_counter % self.log_size]
-        timestamp = self.timestamps[lastest_counter % self.log_size]
+        idx = (self.counter-1) % self.log_size
+        obj = self.log[idx]
+        timestamp = self.timestamps[idx]
         return timestamp, obj
 
 class ShapeGroup(Base):

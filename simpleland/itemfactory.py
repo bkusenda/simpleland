@@ -15,7 +15,7 @@ from .utils import gen_id
 import math
 
 
-class ShapeFactory(object):
+class ShapeFactory:
 
     @classmethod
     def attach_circle(cls, obj: GObject, radius=5, pos=(0, 0), collision_type=COLLISION_TYPE['default'], friction=0.2):
@@ -24,7 +24,44 @@ class ShapeFactory(object):
         body.moment = inertia
         circle = Circle(body, radius=radius, offset=pos)
         circle.friction = friction
+        obj.set_image_dims(radius*2,radius*2)
         obj.add_shape(circle, collision_type=collision_type)
+
+    @classmethod
+    def attach_rectangle(cls, obj: GObject, width=80, height=80, collision_type=COLLISION_TYPE['default']):
+        body = obj.get_body()
+        h = height/2
+        w = width/2
+        p1 = Vector(-w, -1 * h)
+        p2 = Vector(-1 * w, h)
+        p3 = Vector(w, h)
+        p4 = Vector(w, -1 * h)
+        obj.set_image_dims(width,height)
+        p = Polygon(body, vertices=[p1, p2, p3, p4])
+        obj.add_shape(p, collision_type=collision_type)
+
+    @classmethod
+    def attach_triangle(cls, obj: GObject, side_length=12, collision_type=COLLISION_TYPE['default']):
+        body = obj.get_body()
+        p1 = Vector(0, side_length)
+        p2 = Vector(side_length / 2, 0)
+        p3 = Vector(-1 / 2 * side_length, 0)
+        p = Polygon(body, vertices=[p1, p2, p3])
+        obj.add_shape(p, collision_type=collision_type)
+
+    @classmethod
+    def attach_poly(cls, obj: GObject, size=10, num_sides=3, collision_type=COLLISION_TYPE['default']):
+        body = obj.get_body()
+        verts = []
+        for i in range(num_sides):
+            angle = math.pi + 2.0 * math.pi * i / num_sides
+            x = (size/2.0) * math.sin(angle)
+            y = (size/2.0) * math.cos(angle)
+            verts.append(Vector(x, y))
+
+        p = Polygon(body, vertices=verts)
+        obj.set_image_dims(size,size)
+        obj.add_shape(p, collision_type=collision_type)
 
     @classmethod
     def attach_line_array(cls, obj: GObject, length=3, num=12, thickness=1, collision_type=COLLISION_TYPE['default']):
@@ -65,56 +102,7 @@ class ShapeFactory(object):
         p = Polygon(body, vertices=[p1, p2, p3, p4])
         obj.add_shape(p, collision_type=collision_type)
 
-    @classmethod
-    def attach_rectangle(cls, obj: GObject, width=1, height=3, collision_type=COLLISION_TYPE['default']):
-        body = obj.get_body()
-        h = height/2
-        w = width/2
-        p1 = Vector(-1 * w, -1 * h)
-        p2 = Vector(-1 * w, h)
-        p3 = Vector(w, h)
-        p4 = Vector(w, -1 * h)
-        p = Polygon(body, vertices=[p1, p2, p3, p4])
-        obj.add_shape(p, collision_type=collision_type)
-
-    @classmethod
-    def attach_triangle(cls, obj: GObject, side_length=12, collision_type=COLLISION_TYPE['default']):
-        body = obj.get_body()
-        p1 = Vector(0, side_length)
-        p2 = Vector(side_length / 2, 0)
-        p3 = Vector(-1 / 2 * side_length, 0)
-        p = Polygon(body, vertices=[p1, p2, p3])
-        obj.add_shape(p, collision_type=collision_type)
-
-    @classmethod
-    def attach_poly(cls, obj: GObject, size=10, num_sides=3, collision_type=COLLISION_TYPE['default']):
-        body = obj.get_body()
-        verts = []
-        for i in range(num_sides):
-            angle = math.pi + 2.0 * math.pi * i / num_sides
-            x = (size/2.0) * math.sin(angle)
-            y = (size/2.0) * math.cos(angle)
-            verts.append(Vector(x, y))
-
-        p = Polygon(body, vertices=verts)
-        obj.add_shape(p, collision_type=collision_type)
-
-
-class ItemFactory(object):
-
-    @classmethod
-    def border(cls, body=None, position=Vector(0, 0), size=5, thickness=3, collision_type=COLLISION_TYPE['default']):
-        obj = GObject(body)
-        obj.set_position(position=position)
-        ShapeFactory.attach_square(obj, side_length=size, thickness=thickness, collision_type=collision_type)
-        return obj
-
-    @classmethod
-    def box(cls, body=None, position=Vector(0, 0), size=5, collision_type=COLLISION_TYPE['default']):
-        obj = GObject(body)
-        obj.set_position(position=position)
-        ShapeFactory.attach_psquare(obj, side_length=size, collision_type=collision_type)
-        return obj
+class ItemFactory:
 
     @classmethod
     def circle(cls, body=None, position=Vector(0, 0), radius=5, collision_type=COLLISION_TYPE['default']):
@@ -128,4 +116,19 @@ class ItemFactory(object):
         obj = GObject(body)
         obj.set_position(position=position)
         ShapeFactory.attach_triangle(obj, side_length=size, collision_type=collision_type)
+        return obj
+
+
+    @classmethod
+    def border(cls, body=None, position=Vector(0, 0), size=5, thickness=3, collision_type=COLLISION_TYPE['default']):
+        obj = GObject(body)
+        obj.set_position(position=position)
+        ShapeFactory.attach_square(obj, side_length=size, thickness=thickness, collision_type=collision_type)
+        return obj
+
+    @classmethod
+    def box(cls, body=None, position=Vector(0, 0), size=5, collision_type=COLLISION_TYPE['default']):
+        obj = GObject(body)
+        obj.set_position(position=position)
+        ShapeFactory.attach_psquare(obj, side_length=size, collision_type=collision_type)
         return obj

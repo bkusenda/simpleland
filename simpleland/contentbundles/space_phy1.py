@@ -20,23 +20,23 @@ from ..utils import gen_id
 from ..content import Content
 
 from ..asset_bundle import AssetBundle
-from .input_callbacks import input_event_callback
+from .input_callbacks_space_phy1 import input_event_callback
 from ..common import COLLISION_TYPE
 import numpy as np
-from ..config import GameDef
+from ..config import GameDef, PhysicsConfig
 
 #############
 # Game Defs #
 #############
-def space_ship1_game_def():
+def game_def():
     env = GameDef(
-        content_id = "space_ship1",
+        content_id = "space_phy1",
         content_config={
             'space_size':400,
             'player_start_energy':8,
             'player_energy_decay_ticks':120,
             'food_energy':5,
-            'food_count':1,
+            'food_count':3,
             'asteroid_count':0,
             'num_feelers':8,
             'feeler_length':700,
@@ -316,10 +316,11 @@ class GameContent(Content):
     def get_asset_bundle(self):
         return self.asset_bundle
 
-    def get_observation(self, ob: GObject):
-        vals = ob.get_data_value('sensor_types') + ob.get_data_value('sensor_dists')
-        velocity: Vec2d = ob.get_body().velocity
-        angular_velocity = ob.get_body().angular_velocity
+    def get_observation(self, obj: GObject):
+        vals = obj.get_data_value('sensor_types') + obj.get_data_value('sensor_dists')
+        b = obj.get_body()
+        velocity: Vec2d = b.velocity
+        angular_velocity = b.angular_velocity
         vals = [10000 if val is None else val for val in vals] + [velocity.x, velocity.y, angular_velocity]
         return np.array(vals)
 
@@ -462,6 +463,8 @@ class GameContent(Content):
                     new_events.append(new_ship_event)
 
             return new_events
+        # def pre_physics_callback():
+        #     return []
 
         gamectx.set_pre_physics_callback(pre_physics_callback)
         gamectx.set_input_event_callback(input_event_callback)
