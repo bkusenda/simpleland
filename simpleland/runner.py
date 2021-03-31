@@ -206,7 +206,7 @@ if __name__ == "__main__":
     parser.add_argument("--sim_timestep", default=0.01, type=float, help="sim_timestep, lower (eg 0.01) = more accurate, higher (eg 0.1) = less accurate but faster")
     parser.add_argument("--game_tick_rate", default=60, type=int, help="game_tick_rate")
 
-    parser.add_argument("--game_id", default="space1", help="id of game")
+    parser.add_argument("--game_id", default="space_grid1", help="id of game")
 
     args = parser.parse_args()
 

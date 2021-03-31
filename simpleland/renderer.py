@@ -224,6 +224,7 @@ class Renderer:
                 if image_size[0]> 5000:
                     print("zoom out/ to close {}".format(image_size))
                 
+
                 image = pygame.transform.scale(image,image_size)  
                 image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
                 rect = image.get_rect()
@@ -269,19 +270,14 @@ class Renderer:
                                     center=center)
 
 
-    def draw_grid_line(self,p1,p2,center,screen_view_center,color,screen_factor):
-        p1 = (p1 - center)
-        # print(p1)
-        # print(screen_factor)
-        # print(screen_view_center)
-
+    def draw_grid_line(self,p1,p2,angle,center,screen_view_center,color,screen_factor):
+        p1 = (p1 - center).rotated(angle)
         p1 = scale(screen_factor, (p1 + screen_view_center))
         p1 = to_pygame(p1, self._display_surf)
 
-        p2 = (p2 - center)
+        p2 = (p2 - center).rotated(angle)
         p2 = scale(screen_factor, (p2 + screen_view_center))
         p2 = to_pygame(p2, self._display_surf)
-
         pygame.draw.line(self._display_surf,
                 color,
                 to_pygame(p1,self._display_surf),
@@ -289,29 +285,26 @@ class Renderer:
                 1)
 
 
-
     def _draw_grid(self, center, angle, screen_factor, screen_view_center, color = (50, 50, 50), size = 20, view_type=0):
-        line_num = int(self.view_width/size) + 1
+        line_num = int(self.view_width/size) + 4
 
-        x = int(center.x/size) * size 
-        y = int(center.y/size) * size 
+        x = int(center.x/size) * size   - size/2
+        y = int(center.y/size) * size  - size/2
 
+        y_start = -(y - size * line_num)
+        y_center = Vector(center.x,-center.y)
+        for line in range(line_num *2):
+            y_pos = y_start - size * line
+            p1 = Vector(x-self.view_width,y_pos)
+            p2 = Vector(x+self.view_width,y_pos)
+            self.draw_grid_line(p1,p2,angle,y_center,screen_view_center,color,screen_factor)
 
-        y_start = y - size * line_num/2 
-
-        for line in range(line_num):
-            y_pos = y_start + size * line
-            p1 = Vector(float(x-self.view_width),float(y_pos))
-            p2 = Vector(float(x+self.view_width),float(y_pos))
-            self.draw_grid_line(p1,p2,center,screen_view_center,color,screen_factor)
-
-        x_start = x - size * line_num/2 
-        for line in range(line_num):
+        x_start = x - size * line_num 
+        for line in range(line_num *2):
             x_pos = x_start + size * line
-            p1 = Vector(float(x_pos),float(y+self.view_height))
-            p2 = Vector(float(x_pos),float(y-self.view_height))
-            self.draw_grid_line(p1,p2,center,screen_view_center,color,screen_factor)
-
+            p1 = Vector(x_pos,y-self.view_height)
+            p2 = Vector(x_pos,y+self.view_height)
+            self.draw_grid_line(p1,p2,angle,center,screen_view_center,color,screen_factor)
 
     # TODO: Clean this up
     def process_frame(self,

@@ -1,2 +1,5 @@
 __pytest_cacche
 __pycache__
+build
+.ipynb_checkpoints/
+.vscode/

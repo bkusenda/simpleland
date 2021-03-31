@@ -26,7 +26,7 @@ class SimplelandEnv:
 
     def __init__(self, 
             resolution=(200,200), 
-            game_id="space1", 
+            game_id="space_grid1", 
             hostname = 'localhost', 
             port = 10001, 
             dry_run=False,

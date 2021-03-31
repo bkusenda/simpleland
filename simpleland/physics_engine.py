@@ -28,7 +28,6 @@ def get_default_velocity_callback(clock, config):
     return limit_velocity
 
 def get_default_position_callback(clock, config):
-    print("hi")
     def position_callback(body:Body, dt):
         init_p = body.position
         pymunk.Body.update_position(body,dt)
@@ -37,47 +36,7 @@ def get_default_position_callback(clock, config):
             body.last_change = clock.get_time()
     return position_callback
 
-# class PhysicsEngine:
-#     """
-#     Handles physics events and collision
-#     """
-
-#     def __init__(self,clock:SimClock,config:PhysicsConfig):
-#         self.config = config
-#         self.clock = clock
-#         self.space = Space(threaded=True)
-#         self.space.threads = 2
-#         self.space.idle_speed_threshold = 0.01
-#         self.space.sleep_time_threshold = 0.5
-#         self.space.damping = self.config.space_dampening
-#         self.space.collision_slop = 0.9
-#         self.sim_timestep = self.config.sim_timestep
-
-#         dt = 0 if self.config.tick_rate == 0 else 1.0/self.config.tick_rate
-#         self.steps_per_update = math.ceil(dt/self.sim_timestep)
-#         actual_tick_rate = 0 if self.steps_per_update == 0 else 1/ (self.steps_per_update * self.sim_timestep)
-#         print("Actual Physics Tick Rate is {}, original {} (change due to enforcing sim_timestep size of {})".format(actual_tick_rate, self.config.tick_rate,self.config.sim_timestep))
-
-#         # Called at each step when velocity is updated
-#         self.velocity_callback = get_default_velocity_callback(self.clock,self.config)
-        
-#         # Called at each step when position is updated
-#         self.position_callback= get_default_position_callback(self.clock,self.config)
-
-#     def set_collision_callback(self, callback, collision_type_a=COLLISION_TYPE['default'], collision_type_b=COLLISION_TYPE['default']):
-#         pass
-
-#     def add_object(self, obj: GObject):
-#         pass
-
-#     def remove_object(self,obj):
-#         pass
-
-#     def update(self):
-#         pass
-
 class GridSpace:
-
     
 
     def __init__(self):

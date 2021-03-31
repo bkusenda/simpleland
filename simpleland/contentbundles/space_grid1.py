@@ -1,3 +1,4 @@
+from simpleland import physics_engine
 import random
 from typing import Dict, Any, Tuple
 
@@ -20,29 +21,58 @@ from ..utils import gen_id
 from ..content import Content
 
 from ..asset_bundle import AssetBundle
-from .input_callbacks_space_phy1 import input_event_callback
+from .input_callbacks_grid1 import input_event_callback
 from ..common import COLLISION_TYPE
 import numpy as np
 from ..config import GameDef, PhysicsConfig
 
+
+
+test_map = (
+    f"xxxxxxxxxxxxxxxxxxxxxxxx\n"
+    f"x                 bbbbbx\n"
+    f"x                  s  bx\n"
+    f"x     f               bx\n"
+    f"x                     bx\n"
+    f"x    b                bx\n"
+    f"x    bbb               x\n"
+    f"x f            f       x\n"
+    f"x            xxx  f    x\n"
+    f"x       f              x\n"
+    f"x                      x\n"
+    f"x          b           x\n"
+    f"x       f  b           x\n"
+    f"x       bbbbb          x\n"
+    f"x          b    f      x\n"
+    f"x                      x\n"
+    f"xb                     x\n"
+    f"xb                     x\n"
+    f"xbs                    x\n"
+    f"xbbb                   x\n"
+    f"xxxxxxxxxxxxxxxxxxxxxxxx\n"
+)
 #############
 # Game Defs #
 #############
 def game_def():
-    env = GameDef(
-        content_id = "space_phy1",
+    game_def = GameDef(
+        content_id = "space_grid1",
         content_config={
-            'space_size':600,
-            'player_start_energy':8,
-            'player_energy_decay_ticks':120,
+            'space_size':800,
+            'player_start_energy':35,
+            'player_energy_decay_ticks':1,
             'food_energy':5,
-            'food_count':3,
-            'asteroid_count':3,
+            'food_count':1,
+            'asteroid_count':0,
             'num_feelers':8,
-            'feeler_length':700,
-            "space_border" : 600
+            'feeler_length':200,
+            "space_border" : 200,
+            "block_size":80
             })
-    return env
+    game_def.physics_config.grid_size = 80
+    game_def.physics_config.engine = "grid"
+    game_def.game_config.wait_for_user_input=True
+    return game_def
 
 def load_asset_bundle():
     image_assets = {}
@@ -52,7 +82,7 @@ def load_asset_bundle():
     image_assets['2'] = 'assets/ship2.png'
     image_assets['energy1'] = 'assets/energy1.png'
     image_assets['asteroid2'] = 'assets/asteroid1.png'
-    image_assets['lava1'] = 'assets/lava1.png'
+    image_assets['lava'] = 'assets/lava1.png'
 
     sound_assets = {}
     sound_assets['bleep2'] = 'assets/sounds/bleep2.wav'
@@ -68,41 +98,42 @@ def get_random_pos():
         random.random() * gamectx.content.config['space_size'],
         random.random() * gamectx.content.config['space_size'])
 
-def get_valid_position_for_obj(obj: GObject):
-    objs = []
-    for obj_id, obj in gamectx.object_manager.get_objects_latest().items():
-        objs.append(obj)
 
-    too_close = True
-    pos = None
-    max_tries = 20
-    tries = 0
+def vec_to_coord(v):
+    block_size = gamectx.content.config['block_size']
+    return (int(v.x / block_size),int(v.y / block_size))
 
-    while(too_close and tries < max_tries):
-        too_close = False
-        pos = get_random_pos()
-        for o in objs:
-            dist = (pos - o.get_position()).length
-            obj_bodies = 10
-            if dist <= obj_bodies:
-                too_close = True
-                tries += 1
-                break
-    return pos
+def coord_to_vec(coord):
+    block_size = gamectx.content.config['block_size']
+    return Vector(float(coord[0] * block_size),float(coord[1] * block_size))
 
 
-def add_food():
-    o = GObject(Body(mass=0.001, moment=0))
 
-    o.set_data_value("energy", gamectx.content.food_energy)
+def add_food(position):
+    o = GObject(Body())
+    o.set_data_value("energy", gamectx.content.config['food_energy'])
     o.set_data_value("type", "food")
     o.set_data_value("image", "energy1")
+    o.set_position(position=position)
     o.set_last_change(gamectx.clock.get_time())
+
     ShapeFactory.attach_circle(o, radius=50)
-    pos = get_valid_position_for_obj(o)
-    o.set_position(position=Vector(200,200))
     gamectx.add_object(o)
     gamectx.data['food_counter'] = gamectx.data.get('food_counter', 0) + 1
+
+
+
+def add_block(position, type="block", shape_color=(100, 100, 100)):
+    o = GObject(Body())
+    o.set_data_value("type", type)
+    o.set_data_value("image",type)
+    o.set_position(position=position)
+    o.set_last_change(gamectx.clock.get_time())
+    o.shape_color = shape_color
+
+    ShapeFactory.attach_rectangle(o,width=80,height=80)
+    gamectx.add_object(o)
+
 
 
 def add_asteroid():
@@ -114,37 +145,23 @@ def add_asteroid():
     o.set_last_change(gamectx.clock.get_time())
 
     o.get_body().angle = random.random() * 360
-    # ShapeFactory.attach_rectangle(o, 2, 2)
-    #ShapeFactory.attach_poly(o, size=10,num_sides=40)
-    ShapeFactory.attach_circle(o, 100,collision_type=COLLISION_TYPE['default'])
+    ShapeFactory.attach_circle(o, 100)
 
     gamectx.add_object(o)
 
 
 def add_player_ship(player:Player):
-    if player.player_type == 1:
-        player_object = GObject(Body(mass=10, moment=0, body_type=Body.KINEMATIC))
-        player_object.set_data_value("rotation_multiplier", 1)
-        player_object.set_data_value("velocity_multiplier", 200)
-        player_object.set_data_value("is_kinematic", True)
-    else:
-        player_object = GObject(Body(mass=2, moment=0))
-        player_object.set_data_value("rotation_multiplier", 0.1)
-        player_object.set_data_value("velocity_multiplier", 100)
-        player_object.set_data_value("is_kinematic", False)
+    player_object = GObject(Body(mass=2, moment=0))
+    player_object.set_data_value("rotation_multiplier", 1)
+    player_object.set_data_value("velocity_multiplier", 1)
+    player_object.set_data_value("is_kinematic", False)
 
 
     player_object.set_data_value("type", "player")
-    player_object.set_data_value("energy", gamectx.content.player_start_energy)
     player_object.set_data_value("image", "1")
     player_object.set_data_value("player_id", player.get_id())
     ShapeFactory.attach_circle(player_object, radius=40)
 
-    ShapeFactory.attach_line_array(player_object,
-                                   length=gamectx.content.feeler_length,
-                                   num=gamectx.content.num_feelers,
-                                   thickness=1,
-                                   collision_type=COLLISION_TYPE['sensor'])
     player.attach_object(player_object)
     gamectx.add_object(player_object)
     # TODO, filter non sensor objects
@@ -154,7 +171,7 @@ def add_player_ship(player:Player):
     return player_object
 
 
-def process_food_collision(food_obj, player_obj):
+def process_food_collision(player_obj,food_obj):
     food_energy = food_obj.get_data_value('energy')
     player_energy = player_obj.get_data_value('energy')
     player_obj.set_data_value("energy",
@@ -172,9 +189,9 @@ def process_food_collision(food_obj, player_obj):
 
     # respawn food
     def food_event_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
-        add_food()
+        add_food(food_obj.get_position())
         return []
-    new_food_event = DelayedEvent(food_event_callback, execution_step=0)
+    new_food_event = DelayedEvent(food_event_callback, execution_step=6)
     gamectx.event_manager.add_event(new_food_event)
     gamectx.event_manager.add_event(sound_event)
     return False
@@ -205,90 +222,33 @@ def process_sensor_collision(sensor_info, obj_info):
     sensor_info['obj'].set_data_value('sensor_types', sensor_types)
     return False
 
+def process_lava_collision(player_obj,lava_obj):
+    player_obj.set_data_value("energy",0)
+    return False
+
+
 # TODO, move to standard event callback
 
 
-def default_collision_callback(arbiter: pymunk.Arbiter, space, data):
-    food_obj_lookup = []
-    player_obj_lookup = []
-    other_obj_lookup = []
-    static_obj_lookup = []
-    objs_ids = set()
-    for s in arbiter.shapes:
-        s: Shape = s
-        o = gamectx.object_manager.get_latest_by_id(s.get_object_id())
-        if o is None:
-            return False
-        objs_ids.add(o.get_id())
-        info = {'obj': o, 'shape': s, 'type': o.get_data_value("type")}
+def default_collision_callback(obj1:GObject,obj2:GObject):
 
-        if o.get_data_value("type") == "food":
-            food_obj_lookup.append(info)
-        elif o.get_data_value("type") == "player":
-            player_obj_lookup.append(info)
-        elif o.get_data_value("type") == "static":
-            static_obj_lookup.append(info)
-        else:
-            other_obj_lookup.append(info)
+    if obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "food":
+        return process_food_collision(obj1, obj2)
+    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "lava":
+        return process_lava_collision(obj1, obj2)
 
-    if len(food_obj_lookup) == 1 and len(player_obj_lookup) == 1:
-        player_obj = player_obj_lookup[0]['obj']
-        food_obj = food_obj_lookup[0]['obj']
-        return process_food_collision(food_obj, player_obj)
-    elif len(player_obj_lookup)==1 and len(static_obj_lookup)>=1:
-        player_obj:GObject = player_obj_lookup[0]['obj']
-
-        if player_obj.get_data_value('is_kinematic'):
-            contact_points_set:contact_point_set.ContactPointSet = arbiter.contact_point_set
-            angle = player_obj.get_body().velocity.get_angle_between(contact_points_set.normal)                
-            # midpoint = Vec2d(0,0)
-            # for contact_point in contact_points_set.points:
-            #     midpoint = midpoint+(contact_point.point_a + contact_point.point_b)/2
-            
-            # new_vel = (midpoint-player_obj.get_position())
-
-            player_obj.get_body().velocity =-1 * player_obj.get_body().velocity.rotated(2 * angle)
-        return True
-    # elif len(player_obj_lookup)==1 and len(other_obj_lookup)==1:
-    #     player_obj:GObject = player_obj_lookup[0]['obj']
-
-    #     if player_obj.get_data_value('is_kinematic'):
-    #         contact_points_set:contact_point_set.ContactPointSet = arbiter.contact_point_set
-    #         contact_points_set:contact_point_set.ContactPointSet = arbiter.contact_point_set
-    #         angle = player_obj.get_body().velocity.get_angle_between(contact_points_set.normal)                
-    #         # player_obj.get_body().velocity =-1 * player_obj.get_body().velocity.rotated(2 * angle)
-                
-    #         player_obj.get_body().velocity =Vec2d(0,0) #-1 * player_obj.get_body().velocity.rotated(2 * angle)
-
-    #     return True 
-
-    else:
-        return True
+    return True
 
 
-def sensor_collision_callback(arbiter: pymunk.Arbiter, space, data):
+def sensor_collision_callback(obj1:GObject,obj2:GObject):
+    print("Sensor collision")
 
-    sensor_objs = []
-    other_objs = []
 
-    objs_ids = set()
-    for s in arbiter.shapes:
-        s: Shape = s
-        o = gamectx.object_manager.get_latest_by_id(s.get_object_id())
-        if o is None:
-            return False
-        objs_ids.add(o.get_id())
-        info = {'obj': o, 'shape': s, 'type': o.get_data_value("type")}
-        if s.sensor:
-            sensor_objs.append(info)
-        else:
-            other_objs.append(info)
-
-    if len(sensor_objs) == 1 and len(other_objs) == 1:
-        sensor_info = sensor_objs[0]
-        obj_info = other_objs[0]
-        return process_sensor_collision(sensor_info, obj_info)
-
+item_types = ['lava','food','block','player']
+item_map = {k:i for i,k in enumerate(item_types)}
+item_type_count = len(item_types)
+vision_distance = 2
+debug=False
 
 class GameContent(Content):
 
@@ -306,6 +266,8 @@ class GameContent(Content):
         self.num_feelers = config['num_feelers']
         self.feeler_length = config['feeler_length']
 
+        self.spawn_locations = []
+
     def _initialize(self):
         gamectx.remove_all_objects()
         gamectx.remove_all_events()
@@ -313,14 +275,36 @@ class GameContent(Content):
 
     def get_asset_bundle(self):
         return self.asset_bundle
-
+        
     def get_observation(self, obj: GObject):
-        vals = obj.get_data_value('sensor_types') + obj.get_data_value('sensor_dists')
-        b = obj.get_body()
-        velocity: Vec2d = b.velocity
-        angular_velocity = b.angular_velocity
-        vals = [10000 if val is None else val for val in vals] + [velocity.x, velocity.y, angular_velocity]
-        return np.array(vals)
+        obj_coord = gamectx.physics_engine.vec_to_coord(obj.get_position())
+        xvis = vision_distance
+        yvis = vision_distance
+        col_min =  obj_coord[0] - xvis
+        col_max =  obj_coord[0] + xvis
+        row_min =  obj_coord[1] - yvis
+        row_max =  obj_coord[1] + yvis
+        results = []
+        for r in range(row_max, row_min-1,-1):
+            row_results = []
+            for c in range(col_min,col_max+1):
+                obj_ids = gamectx.physics_engine.space.get_objs_at((c,r))
+                if len(obj_ids)>0:
+                    obj_id = obj_ids[0]
+                    obj_seen = gamectx.object_manager.get_latest_by_id(obj_id)
+                    row_results.append(item_map.get(obj_seen.get_data_value('type')))
+    
+                else:
+                    row_results.append(item_type_count)
+            results.append(row_results)
+        if debug:
+            print("------------------")
+            for row in results:
+                print("".join([str(c) for c in row]))
+            print("------------------")
+
+        return np.array(results)
+
 
     def get_observation_space(self):
         from gym.spaces import Box
@@ -369,6 +353,7 @@ class GameContent(Content):
                 uid=player_id,
                 camera=Camera(distance=cam_distance),
                 player_type=player_type)
+            
             gamectx.add_player(player)
 
         if player_type == 10:
@@ -378,9 +363,8 @@ class GameContent(Content):
         if player_object is None:
             add_player_ship(player)
             player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
-        # Set position
-        new_pos = get_valid_position_for_obj(player_object)
-        player_object.set_position(position=Vec2d(400,400))
+        
+        self.spawn_player(player_object)
 
         def event_callback(event: PeriodicEvent, data: Dict[str, Any], om: GObjectManager):
             obj = om.get_latest_by_id(data['obj_id'])
@@ -399,6 +383,13 @@ class GameContent(Content):
         gamectx.event_manager.add_event(decay_event)
         return player
 
+    def spawn_player(self,player_object:GObject):
+        loc = random.choice(self.spawn_locations)
+        player_object.set_position(position=coord_to_vec(loc))
+        player_object.set_data_value("energy", gamectx.content.player_start_energy)
+
+
+
     # **********************************
     # GAME LOAD
     # **********************************
@@ -406,22 +397,30 @@ class GameContent(Content):
     def load(self):
         self._initialize()
 
-        # Create Wall
-        wall = ItemFactory.border(Body(body_type=pymunk.Body.STATIC),
-                                  Vector(0, 0),
-                                  size=self.space_size+self.space_border,
-                                  collision_type=COLLISION_TYPE['default'])
+        lines = test_map.split("\n")
+        items=[]
+        self.spawn_locations=[]
+        for ridx,line in enumerate(lines):
+            for cidx,ch in enumerate(line):
+                if ch == 'b':
+                    add_block(coord_to_vec((cidx,ridx)))
+                elif ch == 'x':
+                    add_block(coord_to_vec((cidx,ridx)),type="lava",shape_color=(200,100,100))
+                elif ch == 'f':
+                    add_food(coord_to_vec((cidx,ridx)))
+                elif ch == 's':
+                    self.spawn_locations.append((cidx,ridx))
 
-        wall.set_data_value("type", "static")
-        gamectx.add_object(wall)
+                    #items.append(('food',(ridx,cidx)))
+        
 
-        # Create some Asteroids
-        for i in range(self.asteroid_count):
-            add_asteroid()
+        # # # Create some Asteroids
+        # # for i in range(self.asteroid_count):
+        # #     add_asteroid()
 
-        # Add food
-        for i in range(self.food_count):
-            add_food()
+        # # Add food
+        # for i in range(self.food_count):
+        #     add_food()
 
         gamectx.physics_engine.set_collision_callback(
             default_collision_callback,
@@ -440,29 +439,32 @@ class GameContent(Content):
                     continue
 
                 o = gamectx.object_manager.get_latest_by_id(p.get_object_id())
-                if o is None or o.is_deleted:
+
+               
+                if o is None or o.is_deleted or not o.enabled:
                     continue
                 reset_sensor_data(o)
                 if o.get_data_value("energy") <= 0:
+                    
                     lives_used = p.get_data_value("lives_used", 0)
                     p.set_data_value("lives_used", lives_used+1)
+                    o.disable()
+                    
 
                     # Delete and create event
                     def event_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
-                        self.load()
-                        self.new_player(player_id=data['player_id'])
+                        o.enable()
+                        self.spawn_player(o)
                         return []
 
                     new_ship_event = DelayedEvent(
                         func=event_callback,
-                        execution_step=0,
+                        execution_step=1,
                         data={'player_id': p.get_id()})
 
                     new_events.append(new_ship_event)
 
             return new_events
-        # def pre_physics_callback():
-        #     return []
 
         gamectx.set_pre_physics_callback(pre_physics_callback)
         gamectx.set_input_event_callback(input_event_callback)
@@ -483,4 +485,7 @@ class GameContent(Content):
                 renderer.render_to_console(lines, x=5, y=5)
 
                 if obj is None:
-                    renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)
+                    if player.get_data_value("lives_used",0) ==0:
+                        renderer.render_to_console(['Ready Player One'], x=50, y=50, fsize=50)                    
+                    else:
+                        renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)

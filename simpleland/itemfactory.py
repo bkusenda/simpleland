@@ -46,6 +46,7 @@ class ShapeFactory:
         p1 = Vector(0, side_length)
         p2 = Vector(side_length / 2, 0)
         p3 = Vector(-1 / 2 * side_length, 0)
+        obj.set_image_dims(side_length/2,side_length/2)
         p = Polygon(body, vertices=[p1, p2, p3])
         obj.add_shape(p, collision_type=collision_type)
 
@@ -80,6 +81,7 @@ class ShapeFactory:
         p2 = Vector(0, side_length)
         p3 = Vector(side_length, side_length)
         p4 = Vector(side_length, 0)
+        obj.set_image_dims(side_length,side_length)
 
         l1 = Line(body, p1, p2, thickness)
         l2 = Line(body, p2, p3, thickness)
