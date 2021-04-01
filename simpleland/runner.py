@@ -119,8 +119,9 @@ def get_game_def(
         physics_tick_rate=None,
         game_tick_rate=None,
         sim_timestep=None,
+        content_overrides={}
 ) -> GameDef:
-    game_def = load_game_def(game_id)
+    game_def = load_game_def(game_id, content_overrides)
 
     game_def.server_config.enabled = enable_server
     game_def.server_config.hostname = '0.0.0.0'
@@ -192,7 +193,7 @@ if __name__ == "__main__":
     parser.add_argument("--disable_textures", action='store_true', help="don't show images")
     parser.add_argument("--fps", default=60, type=int, help="fps")
     parser.add_argument("--player_type", default=0, type=int, help="Player type (0=default, 10=observer_only)")
-    parser.add_argument("--view_type", default=0, type=int, help="View type (0=perspective, 1=world)")
+    parser.add_argument("--view_type", default=0, type=int, help="NOT USED at moment: View type (0=perspective, 1=world)")
     parser.add_argument("--grid_size", default=None, type=int, help="not = no grid")
     parser.add_argument("--debug_render_bodies", action="store_true", help="pymunk render")
     parser.add_argument("--disable_sound", action="store_true", help="disable_sound")
@@ -207,6 +208,7 @@ if __name__ == "__main__":
     parser.add_argument("--game_tick_rate", default=60, type=int, help="game_tick_rate")
 
     parser.add_argument("--game_id", default="space_grid1", help="id of game")
+    parser.add_argument("--content_overrides", default="{}", type=str,help="JSON string containing content updates. eg --content_overrides='{\"player_start_energy\":35}'")
 
     args = parser.parse_args()
 
@@ -232,7 +234,8 @@ if __name__ == "__main__":
         port=args.port,
         game_tick_rate=args.game_tick_rate,
         physics_tick_rate=args.physics_tick_rate,
-        sim_timestep=args.sim_timestep
+        sim_timestep=args.sim_timestep,
+        content_overrides = json.loads(args.content_overrides)
     )
 
     # Get resolution

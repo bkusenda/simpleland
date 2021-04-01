@@ -211,7 +211,7 @@ class ExtendedGObject(TimeLoggingContainer):
     def get_interpolated(self, timestamp):
         prev_obj, prev_timestamp, next_obj, next_timestamp = self.get_pair_by_timestamp(timestamp)
         if prev_obj is None:
-            return None
+            return next_obj
         if next_obj is None:
             return prev_obj
 

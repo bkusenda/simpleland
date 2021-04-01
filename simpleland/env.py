@@ -20,7 +20,7 @@ import numpy as np
 from simpleland.utils import merged_dict
 from pyinstrument import Profiler
 
-keymap = [23,1,4]
+# keymap = [23,1,4]
 
 class SimplelandEnv:
 
@@ -69,7 +69,7 @@ class SimplelandEnv:
                 remote_client=False,
                 hostname=hostname,
                 port = port,
-                resolution = resolution,#agent_info['resolution'],
+                resolution = resolution,
                 fps=game_tick_rate,
                 render_shapes=render_shapes,
                 player_type=player_type,
@@ -96,10 +96,11 @@ class SimplelandEnv:
 
         self.dry_run = dry_run
   
-        self.action_space = spaces.Discrete(len(keymap))
-        # self.observation_space = spaces.Box(0, 255, (resolution[0], resolution[1],3))
-        self.observation_space = self.content.get_observation_space()
-        logging.info("Ob space: {}".format(self.observation_space))
+        # TODO: make different for each client
+        self.action_spaces = {agent_id:self.content.get_action_space() for agent_id in self.agent_clients.keys()}
+        self.observation_spaces = {agent_id:self.content.get_observation_space() for agent_id in self.agent_clients.keys()}
+        
+        logging.info("Ob spaces: {}".format(self.observation_spaces))
         self.action_freq = 1
         self.step_counter = 0
         
@@ -107,7 +108,8 @@ class SimplelandEnv:
         self.safe_mode = True
         self.running = True
         self.server=None
-        self.dry_run_sample = self.observation_space.sample()
+        self.first_start = True
+
 
         if game_def.server_config.enabled:        
             self.server = GameUDPServer(
@@ -127,12 +129,12 @@ class SimplelandEnv:
             for agent_id, action in actions.items():
                 client:GameClient = self.agent_clients[agent_id]
                 if self.dry_run:
-                    return self.dry_run_sample, 1, False, None
+                    return self.observation_spaces[agent_id], 1, False, None
                 if client.player is not None:
                     event = InputEvent(
                         player_id  = client.player.get_id(), 
                         input_data = {
-                            'inputs':[keymap[action]],
+                            'inputs':[self.content.keymap[action]],
                             'mouse_pos': "",
                             'mouse_rel': "",
                             'focused': ""
@@ -149,7 +151,6 @@ class SimplelandEnv:
 
         if self.step_counter % self.action_freq ==0:
             for agent_id,client in self.agent_clients.items():
-                # ob = client.get_observation(type="sensor")
                 ob, reward, done, info = client.content.get_step_info(player= client.player)
                 obs[agent_id] = ob
                 dones[agent_id] = done
@@ -160,16 +161,19 @@ class SimplelandEnv:
         return obs,rewards,dones,infos
 
     def render(self, mode=None):
-        if self.dry_run:
-            return self.observation_space.sample()
         # TODO: add rendering for observer window
         for agent_id,client in self.agent_clients.items():
+            if self.dry_run:
+                return self.observation_spaces[agent_id].sample()
             client.render(force=True)
             return client.get_rgb_array()
 
-
     def reset(self) -> Dict[str,Any]:
-        # self.content.load(gamectx)
+        if self.first_start:
+            self.content.load()
+            self.first_start = False
+        else:
+            self.content.reset()
         self.obs, _, _, _ = self.step({})
         return self.obs
 
@@ -197,8 +201,8 @@ class SimplelandEnvSingle(gym.Env):
             view_type=view_type,
             player_type=player_type,
             render_shapes=render_shapes)
-        self.observation_space = self.env_main.observation_space
-        self.action_space = self.env_main.action_space
+        self.observation_space = self.env_main.observation_spaces[self.agent_id]
+        self.action_space = self.env_main.action_spaces[self.agent_id]
         self.frame_skip = frame_skip
 
     def reset(self):
@@ -238,17 +242,32 @@ class SimplelandEnvSingle(gym.Env):
 
 if __name__ == "__main__":
     agent_map = {str(i):{} for i in range(1)}
+    debug = False
     
     env = SimplelandEnv(agent_map=agent_map,dry_run=False)
-    env.reset()
     done_agents = set()
     start_time = time.time()
     max_steps = 30000
     profiler = Profiler()
     profiler.start()
+    obs = env.reset()
+    rewards, dones, infos = {}, {},{}
+
     for i in range(0,max_steps):
-        actions = {agent_id:env.action_space.sample() for agent_id in agent_map.keys()}
+        if debug:
+            for id, ob in obs.items():
+                print(f"Player: {id}")
+                print(obs[id])
+                if len(rewards)> 0:
+                    print(rewards[id])
+                    print(dones[id])
+                    print(infos[id])
+                print(f"Game Step:{gamectx.clock.get_time()}")
+                print("----------")
+            input()
+        actions = {agent_id:action_space.sample() for agent_id,action_space in env.action_spaces.items()}
         obs, rewards, dones, infos = env.step(actions)
+
         
     
     steps_per_sec = max_steps/(time.time()-start_time)

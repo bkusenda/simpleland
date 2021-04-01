@@ -1,3 +1,4 @@
+from pymunk.vec2d import Vec2d
 from simpleland.utils import TickPerSecCounter
 from typing import Dict, Any
 
@@ -17,6 +18,7 @@ import math
 import time
 import pkg_resources
 import logging
+from .player import Camera
 
 
 def scale(vec,vec2):
@@ -312,11 +314,13 @@ class Renderer:
                     player:Player,
                     additional_data: Dict[str, Any]={}):
 
+
+        
         if not self.initialized:
             self.initialize()
+        
 
-        if player is None:
-            return
+
         object_manager = gamectx.object_manager
         # import pdb;pdb.set_trace()
         self._display_surf.fill((0, 0, 0))
@@ -326,23 +330,28 @@ class Renderer:
             draw_options = pymunk.pygame_util.DrawOptions(self._display_surf)
             gamectx.physics_engine.space.debug_draw(draw_options)
 
-        camera = player.get_camera()
-        # TODO: make max customizeable 
-        self.update_view(max(camera.get_distance(),1))
-
+        angle = 0
+        camera:Camera = None
+        center:Vector = None
         view_obj:GObject = None
-        center = Vector(self.view_width/2,self.view_height/2)
-        angle=0
-        if self.config.view_type == 0:
+        if player:
+            camera = player.get_camera()
+            view_type = player.get_data_value('view_type',0)
             view_obj = object_manager.get_by_id(player.get_object_id(), render_time)
             if view_obj is not None:
                 center = view_obj.get_body().position
-                angle = view_obj.get_body().angle
-        elif self.config.view_type == 1:
-            center_obj = object_manager.get_by_id(player.get_object_id(), render_time)
-            if center_obj is not None:
-                center = center_obj.get_body().position
+                if view_type == 0:
+                    angle = view_obj.get_body().angle
+            else:
+                center = Vector(self.view_width/2,self.view_height/2)
+        else:
+            camera = Camera()
+            center = Vector(self.view_width/2,self.view_height/2)
+               
 
+        # TODO: make max customizeable 
+        self.update_view(max(camera.get_distance(),1))
+        
         center = center - camera.position_offset
         screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
         screen_view_center = Vector(self.view_width, self.view_height) / 2.0

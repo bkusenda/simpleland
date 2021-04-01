@@ -330,6 +330,7 @@ class TimeLoggingContainer:
         return next_timestamp, next_obj
 
     def get_latest(self):
+        
         if self.counter == 0:
             return None, None
         idx = (self.counter-1) % self.log_size

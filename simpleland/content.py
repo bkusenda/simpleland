@@ -32,6 +32,10 @@ class Content:
         raise NotImplementedError()
 
     @abstractmethod
+    def get_action_space(self):
+        raise NotImplementedError()
+
+    @abstractmethod
     def get_step_reward(self,player:Player):
         """
         get reward for agent

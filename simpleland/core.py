@@ -55,8 +55,6 @@ class GameContext:
         self.config:GameConfig = None
         self.physics_config:PhysicsConfig = None
         self.clock = None
-        StepClock()
-        # self.clock = SimClock()
 
         self.object_manager = None
         self.physics_engine = None
@@ -68,16 +66,12 @@ class GameContext:
 
         self.tick_rate = None
         self.id = gen_id()
-        self.pre_event_processing_callback = lambda game: []
-        self.pre_physics_callback = lambda game: []
-        self.input_event_callback = lambda event, game: []
-
-
+        self.pre_event_processing_callback = lambda : []
+        self.pre_physics_callback = lambda : []
+        self.input_event_callback = lambda event: []
         self.clients = {}
         self.local_clients = []
         self.data = {}
-
-
 
     def reset_data(self):
         self.data = {}
@@ -143,7 +137,6 @@ class GameContext:
             player = self.player_manager.get_player(client.player_id)
         return player
 
-
     def change_game_state(self, new_state):
         gamectx_state = new_state
 
@@ -184,7 +177,7 @@ class GameContext:
         TODO: redo callbacks, use function overrides instead
         """
         if self.pre_event_processing_callback is not None:
-            events = self.pre_event_processing_callback(self)
+            events = self.pre_event_processing_callback()
             self.event_manager.add_events(events)
 
     def run_event_processing(self):
@@ -203,12 +196,6 @@ class GameContext:
             elif type(e) == InputEvent:
                 result_events = self.input_event_callback(e)
                 events_to_remove.append(e)
-            # elif type(e) == PositioningUpdateEvent:
-            #     result_events = self._process_mechanical_event(e)
-            #     events_to_remove.append(e)
-            # elif type(e) == MechanicalEvent:
-            #     result_events = self._process_mechanical_event(e)
-            #     events_to_remove.append(e)
             elif type(e) == ViewEvent:
                 result_events = self._process_view_event(e)
                 events_to_remove.append(e)
@@ -238,9 +225,7 @@ class GameContext:
             self.event_manager.add_events(events)
 
     def run_physics_processing(self): 
-
         self.physics_engine.update()
-
         if self.config.track_updates:
             # TODO: Not efficient
             # Check for changes in position or angle and log change time
@@ -309,26 +294,6 @@ class GameContext:
             self.event_manager.remove_event_by_id(e.get_id())
         return sound_ids
     
-    # def _process_mechanical_event(self,e):
-    #     raise Exception("NOT IMPLEMENTED")
-        # # TODO: use callback instead
-        # direction_delta = e.direction * self.physics_engine.config.velocity_multiplier * self.physics_engine.config.clock_multiplier
-        # obj = self.object_manager.get_latest_by_id(e.obj_id)
-        # if obj is None:
-        #     return []
-        # obj.set_last_change(self.clock.get_time())
-        # body = obj.get_body()
-
-        # direction_delta = direction_delta.rotated(body.angle)
-        # body.apply_impulse_at_world_point(direction_delta, body.position)
-        # # body.angle += 0.1 * (e.orientation_diff * self.physics_engine.config.orientation_multiplier)
-        # body.angular_velocity += (e.orientation_diff * self.physics_engine.config.orientation_multiplier)
-
-        # if body.angular_velocity > 2:
-        #     body.angular_velocity = 2
-        # elif body.angular_velocity < -2:
-        #     body.angular_velocity = -2
-        # return []
 
     def _process_view_event(self, e):
         # TODO: use callback instead
@@ -367,10 +332,12 @@ class GameContext:
             self.run_event_processing()
         else:
             self.run_pre_event_processing()
-            self.run_event_processing()
+            if self.step_counter>0:
+                self.run_event_processing()
             self.run_pre_physics_processing()
             self.run_physics_processing()
         self.tick()
+        self.step_counter +=1
 
         # TODO: Slow, do we need to run every step?
         # only needed for net play
@@ -382,6 +349,14 @@ class GameContext:
             self.run_step()
             self.render_client_step()
             if self.config.wait_for_user_input:
+                for player in self.player_manager.players_map.values():
+                    observation, reward, done, info = self.content.get_step_info(player)
+                    print(f"Player: {player.get_id()}")
+                    print(observation)
+                    print(reward)
+                    print(done)
+                    print(info)
+                    print("----------")
                 self.wait_for_input()
 
 

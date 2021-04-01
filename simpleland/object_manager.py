@@ -32,11 +32,12 @@ class GObjectManager:
 
     def get_latest_by_id(self, obj_id, include_deleted = False)->GObject:
         ext_obj = self.objects.get(obj_id,None)
+        
         if ext_obj is None:
             return None
         else:
             o = ext_obj.get_latest()
-            if not include_deleted and o.is_deleted:
+            if o.is_deleted and not include_deleted:
                 return None
             else:
                 return o

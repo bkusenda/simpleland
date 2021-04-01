@@ -182,7 +182,7 @@ class GameClient:
             self.connector_thread.daemon = True
             self.connector_thread.start()
         else:
-            self.player = self.content.new_player(player_type=config.player_type)
+            self.player = self.content.new_player(client_id = config.client_id, player_type=config.player_type)
 
     def sync_time(self):
         if self.connector is None:

@@ -6,12 +6,20 @@ import pygame
 
 import sys
 import math
+
+
 def input_event_callback(input_event: InputEvent) -> List[Event]:
     player = gamectx.player_manager.get_player(input_event.player_id)
-    # FRAME STEP Motation
-
     if player is None:
         return []
+    if player.get_data_value("view_type") == 0:
+        return input_event_callback_fpv(input_event,player)
+    else:
+        return input_event_callback_3rd(input_event,player)
+
+
+def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
+    
     events= []
     grid_size = gamectx.physics_engine.config.grid_size
     keys = set(input_event.input_data['inputs'])
@@ -19,7 +27,6 @@ def input_event_callback(input_event: InputEvent) -> List[Event]:
     obj = gamectx.object_manager.get_latest_by_id(player.get_object_id())
     if obj is None:
         return events
-    gamectx.content.get_observation(obj)
 
     velocity_multiplier = obj.get_data_value('velocity_multiplier')
 
@@ -63,12 +70,8 @@ def input_event_callback(input_event: InputEvent) -> List[Event]:
     return events
 
 
-def input_event_callback_fpv(input_event: InputEvent) -> List[Event]:
-    player = gamectx.player_manager.get_player(input_event.player_id)
-    # FRAME STEP Motation
+def input_event_callback_fpv(input_event: InputEvent, player) -> List[Event]:
 
-    if player is None:
-        return []
     events= []
     grid_size = gamectx.physics_engine.config.grid_size
     keys = set(input_event.input_data['inputs'])

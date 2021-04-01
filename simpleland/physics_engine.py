@@ -139,7 +139,6 @@ class GridPhysicsEngine:
                         continue
                     collition_types1 = [shape.collision_type for shape in obj.get_shapes()]
                     collition_types2 = [shape.collision_type for shape in obj2.get_shapes()]
-                    collision_effect = False
                     for col_type1 in collition_types1:
                         for col_type2 in collition_types2:
                             if self.collision_callbacks.get((col_type1,col_type2))(obj,obj2):

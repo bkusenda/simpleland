@@ -54,21 +54,24 @@ test_map = (
 #############
 # Game Defs #
 #############
-def game_def():
+def game_def(content_overrides = {}):
+
+    content_config={
+        'space_size':800,
+        'player_start_energy':35,
+        'player_energy_decay_ticks':1,
+        'food_energy':5,
+        'food_count':1,
+        'asteroid_count':0,
+        "space_border" : 200,
+        "block_size":80
+        }
+    content_config.update(content_overrides)
+
     game_def = GameDef(
         content_id = "space_grid1",
-        content_config={
-            'space_size':800,
-            'player_start_energy':35,
-            'player_energy_decay_ticks':1,
-            'food_energy':5,
-            'food_count':1,
-            'asteroid_count':0,
-            'num_feelers':8,
-            'feeler_length':200,
-            "space_border" : 200,
-            "block_size":80
-            })
+        content_config = content_config
+    )
     game_def.physics_config.grid_size = 80
     game_def.physics_config.engine = "grid"
     game_def.game_config.wait_for_user_input=True
@@ -88,16 +91,6 @@ def load_asset_bundle():
     sound_assets['bleep2'] = 'assets/sounds/bleep2.wav'
     return AssetBundle(image_assets=image_assets, sound_assets=sound_assets)
 
-def reset_sensor_data(obj: GObject):
-    sensor_lookup = obj.get_data_value("sensor_lookup")
-    obj.set_data_value("sensor_types", [0 for i in range(len(sensor_lookup))])
-    obj.set_data_value("sensor_dists", [None for i in range(len(sensor_lookup))])
-
-def get_random_pos():
-    return Vector(
-        random.random() * gamectx.content.config['space_size'],
-        random.random() * gamectx.content.config['space_size'])
-
 
 def vec_to_coord(v):
     block_size = gamectx.content.config['block_size']
@@ -106,8 +99,6 @@ def vec_to_coord(v):
 def coord_to_vec(coord):
     block_size = gamectx.content.config['block_size']
     return Vector(float(coord[0] * block_size),float(coord[1] * block_size))
-
-
 
 def add_food(position):
     o = GObject(Body())
@@ -121,8 +112,6 @@ def add_food(position):
     gamectx.add_object(o)
     gamectx.data['food_counter'] = gamectx.data.get('food_counter', 0) + 1
 
-
-
 def add_block(position, type="block", shape_color=(100, 100, 100)):
     o = GObject(Body())
     o.set_data_value("type", type)
@@ -130,46 +119,61 @@ def add_block(position, type="block", shape_color=(100, 100, 100)):
     o.set_position(position=position)
     o.set_last_change(gamectx.clock.get_time())
     o.shape_color = shape_color
-
     ShapeFactory.attach_rectangle(o,width=80,height=80)
     gamectx.add_object(o)
 
 
-
-def add_asteroid():
-    o = GObject(Body(mass=50, moment=0), depth=0)
-    o.set_position(position=get_random_pos())
-    o.set_data_value("energy", 100)
-    o.set_data_value("type", "asteroid")
-    o.set_data_value("image", "asteroid2")
-    o.set_last_change(gamectx.clock.get_time())
-
-    o.get_body().angle = random.random() * 360
-    ShapeFactory.attach_circle(o, 100)
-
-    gamectx.add_object(o)
-
-
-def add_player_ship(player:Player):
+def add_player_ship(player:Player,position:Vector):
     player_object = GObject(Body(mass=2, moment=0))
     player_object.set_data_value("rotation_multiplier", 1)
     player_object.set_data_value("velocity_multiplier", 1)
-    player_object.set_data_value("is_kinematic", False)
-
 
     player_object.set_data_value("type", "player")
     player_object.set_data_value("image", "1")
     player_object.set_data_value("player_id", player.get_id())
+    player_object.set_position(position=position)
     ShapeFactory.attach_circle(player_object, radius=40)
 
     player.attach_object(player_object)
     gamectx.add_object(player_object)
-    # TODO, filter non sensor objects
-    sensor_lookup = {shape.get_id(): i for i, shape in enumerate([s for s in player_object.get_shapes() if s.collision_type == COLLISION_TYPE["sensor"]])}
-    player_object.set_data_value('sensor_lookup', sensor_lookup)
-    reset_sensor_data(player_object)
     return player_object
 
+
+def energy_decay_callback(event: PeriodicEvent, data: Dict[str, Any], om: GObjectManager):
+    obj = om.get_latest_by_id(data['obj_id'])
+    if obj is None or obj.is_deleted:
+        return [], True
+
+    new_energy = max(obj.get_data_value("energy") - 1, 0)
+    obj.set_data_value('energy', new_energy)
+    obj.set_last_change(gamectx.clock.get_time())
+    return [], False
+
+def spawn_player(player:Player, reset = False):
+    player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+    loc = random.choice(gamectx.content.spawn_locations)
+
+    if player_object is None:
+        add_player_ship(player,coord_to_vec(loc))
+        player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+    else:
+        player_object.update_position(position=coord_to_vec(loc))
+
+    player_object.set_data_value(
+        "energy", 
+        gamectx.content.player_start_energy)
+    if reset:
+        player.set_data_value("lives_used",0)
+        player.set_data_value("food_collected",0)
+
+        decay_event = PeriodicEvent(
+            energy_decay_callback,
+            execution_step_interval=gamectx.content.player_energy_decay_ticks,
+            data={'obj_id': player_object.get_id()})
+        gamectx.event_manager.add_event(decay_event)
+            
+    return player_object
+        
 
 def process_food_collision(player_obj,food_obj):
     food_energy = food_obj.get_data_value('energy')
@@ -197,51 +201,50 @@ def process_food_collision(player_obj,food_obj):
     return False
 
 
-def process_sensor_collision(sensor_info, obj_info):
-    s = sensor_info['shape']
-    sensor_pos: Vector = sensor_info['obj'].get_position()
-    obj_pos: Vector = obj_info['obj'].get_position()
-    distance = sensor_pos.get_distance(obj_pos)
-    sensor_lookup = sensor_info['obj'].get_data_value('sensor_lookup')
-    idx = sensor_lookup[s.get_id()]
-
-    # Set sensor dists
-    sensor_dists = sensor_info['obj'].get_data_value('sensor_dists')
-    if sensor_dists[idx] is None or distance < sensor_dists[idx]:
-        sensor_dists[idx] = distance
-    else:
-        return False
-    sensor_info['obj'].set_data_value('sensor_dists', sensor_dists)
-
-    sensor_types = sensor_info['obj'].get_data_value('sensor_types')
-    objtype = obj_info['obj'].get_data_value('type')
-    if objtype == "food":
-        sensor_types[idx] = 1
-    else:
-        sensor_types[idx] = 2
-    sensor_info['obj'].set_data_value('sensor_types', sensor_types)
-    return False
-
 def process_lava_collision(player_obj,lava_obj):
     player_obj.set_data_value("energy",0)
     return False
 
 
-# TODO, move to standard event callback
-
-
 def default_collision_callback(obj1:GObject,obj2:GObject):
-
     if obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "food":
         return process_food_collision(obj1, obj2)
     elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "lava":
         return process_lava_collision(obj1, obj2)
-
     return True
 
+def pre_event_callback():
+    new_events = []
+    for k, p in gamectx.player_manager.players_map.items():
+        if p.get_object_id() is None:
+            continue
 
-def sensor_collision_callback(obj1:GObject,obj2:GObject):
-    print("Sensor collision")
+        o = gamectx.object_manager.get_latest_by_id(p.get_object_id())
+
+        
+        if o is None or o.is_deleted or not o.enabled:
+            continue
+
+        if o.get_data_value("energy") <= 0:
+            
+            lives_used = p.get_data_value("lives_used", 0)
+            p.set_data_value("lives_used", lives_used+1)
+            o.disable()
+
+            def event_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
+                o.enable()
+                spawn_player(p)
+                return []
+
+            new_ship_event = DelayedEvent(
+                func=event_callback,
+                execution_step=0,
+                data={'player_id': p.get_id()})
+
+            new_events.append(new_ship_event)
+
+    return new_events
+
 
 
 item_types = ['lava','food','block','player']
@@ -252,10 +255,10 @@ debug=False
 
 class GameContent(Content):
 
+    
     def __init__(self, config):
         super().__init__(config)
         self.asset_bundle = load_asset_bundle()
-
         self.space_size = config['space_size']
         self.space_border = config['space_border']
         self.player_start_energy = config['player_start_energy']
@@ -263,19 +266,36 @@ class GameContent(Content):
         self.food_energy = config['food_energy']
         self.food_count = config['food_count']
         self.asteroid_count = config['asteroid_count']
-        self.num_feelers = config['num_feelers']
-        self.feeler_length = config['feeler_length']
-
         self.spawn_locations = []
+        self.player_count=0
+        self.keymap = [23,19,4,1]
 
     def _initialize(self):
-        gamectx.remove_all_objects()
-        gamectx.remove_all_events()
-        gamectx.reset_data()
+        print("INitializing")
+    
+    # def _initialize(self):
+    #     gamectx.remove_all_objects()
+    #     gamectx.remove_all_events()
+    #     gamectx.reset_data()
 
     def get_asset_bundle(self):
         return self.asset_bundle
-        
+    
+    def reset(self):
+        gamectx.remove_all_events()
+        for player in gamectx.player_manager.players_map.values():
+            spawn_player(player,reset=True)    
+    
+    def get_observation_space(self):
+        from gym import spaces
+        x_dim = (vision_distance * 2 + 1)
+        y_dim = x_dim
+        return spaces.Box(low=-float("inf"), high=float("inf"), shape=(x_dim,y_dim))
+
+    def get_action_space(self):
+        from gym import spaces
+        return spaces.Discrete(len(self.keymap))
+
     def get_observation(self, obj: GObject):
         obj_coord = gamectx.physics_engine.vec_to_coord(obj.get_position())
         xvis = vision_distance
@@ -306,11 +326,6 @@ class GameContent(Content):
         return np.array(results)
 
 
-    def get_observation_space(self):
-        from gym.spaces import Box
-        num = self.num_feelers * 2 + 3
-        return Box(low=-float("inf"), high=float("inf"), shape=(num,))
-
     def get_step_info(self, player: Player) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         observation = None
         done = False
@@ -320,7 +335,6 @@ class GameContent(Content):
             obj_id = player.get_object_id()
             obj = gamectx.object_manager.get_latest_by_id(obj_id)
             observation = self.get_observation(obj)
-
             if obj is not None:
                 energy = obj.get_data_value("energy")
                 info['energy'] = energy
@@ -340,65 +354,14 @@ class GameContent(Content):
             info['msg'] = "no player found"
         return observation, reward, done, info
 
-    def new_player(self,  player_id=None, player_type=0) -> Player:
-        # Create Player
-        if player_id is None:
-            player_id = gen_id()
-        player = gamectx.player_manager.get_player(player_id)
-        if player is None:
-            cam_distance = self.space_size + self.space_border
-            if player_type == 10:
-                cam_distance = self.space_size + self.space_border
-            player = Player(
-                uid=player_id,
-                camera=Camera(distance=cam_distance),
-                player_type=player_type)
-            
-            gamectx.add_player(player)
-
-        if player_type == 10:
-            return player
-
-        player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
-        if player_object is None:
-            add_player_ship(player)
-            player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
-        
-        self.spawn_player(player_object)
-
-        def event_callback(event: PeriodicEvent, data: Dict[str, Any], om: GObjectManager):
-            obj = om.get_latest_by_id(data['obj_id'])
-            if obj is None or obj.is_deleted:
-                return [], True
-            new_energy = max(obj.get_data_value("energy") - 1, 0)
-            obj.set_data_value('energy', new_energy)
-            obj.set_last_change(gamectx.clock.get_time())
-            return [], False
-
-        decay_event = PeriodicEvent(
-            event_callback,
-            execution_step_interval=self.player_energy_decay_ticks,
-            data={'obj_id': player_object.get_id()})
-
-        gamectx.event_manager.add_event(decay_event)
-        return player
-
-    def spawn_player(self,player_object:GObject):
-        loc = random.choice(self.spawn_locations)
-        player_object.set_position(position=coord_to_vec(loc))
-        player_object.set_data_value("energy", gamectx.content.player_start_energy)
-
-
 
     # **********************************
     # GAME LOAD
     # **********************************
-
     def load(self):
-        self._initialize()
 
         lines = test_map.split("\n")
-        items=[]
+
         self.spawn_locations=[]
         for ridx,line in enumerate(lines):
             for cidx,ch in enumerate(line):
@@ -411,72 +374,61 @@ class GameContent(Content):
                 elif ch == 's':
                     self.spawn_locations.append((cidx,ridx))
 
-                    #items.append(('food',(ridx,cidx)))
-        
-
-        # # # Create some Asteroids
-        # # for i in range(self.asteroid_count):
-        # #     add_asteroid()
-
-        # # Add food
-        # for i in range(self.food_count):
-        #     add_food()
-
         gamectx.physics_engine.set_collision_callback(
             default_collision_callback,
             COLLISION_TYPE['default'],
             COLLISION_TYPE['default'])
 
-        gamectx.physics_engine.set_collision_callback(
-            sensor_collision_callback,
-            COLLISION_TYPE['sensor'],
-            COLLISION_TYPE['default'])
-
-        def pre_physics_callback():
-            new_events = []
-            for k, p in gamectx.player_manager.players_map.items():
-                if p.get_object_id() is None:
-                    continue
-
-                o = gamectx.object_manager.get_latest_by_id(p.get_object_id())
-
-               
-                if o is None or o.is_deleted or not o.enabled:
-                    continue
-                reset_sensor_data(o)
-                if o.get_data_value("energy") <= 0:
-                    
-                    lives_used = p.get_data_value("lives_used", 0)
-                    p.set_data_value("lives_used", lives_used+1)
-                    o.disable()
-                    
-
-                    # Delete and create event
-                    def event_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
-                        o.enable()
-                        self.spawn_player(o)
-                        return []
-
-                    new_ship_event = DelayedEvent(
-                        func=event_callback,
-                        execution_step=1,
-                        data={'player_id': p.get_id()})
-
-                    new_events.append(new_ship_event)
-
-            return new_events
-
-        gamectx.set_pre_physics_callback(pre_physics_callback)
+        gamectx.set_pre_event_processing_callback(pre_event_callback)
         gamectx.set_input_event_callback(input_event_callback)
 
+
+    # **********************************
+    # NEW PLAYER
+    # **********************************
+    def new_player(self, client_id, player_id=None, player_type=0) -> Player:
+        if self.player_count > len(self.spawn_locations):
+            raise Exception("Players cannot exceed spawn locations")
+        # Create Player
+        if player_id is None:
+            player_id = gen_id()
+        player = gamectx.player_manager.get_player(player_id)
+        if player is None:
+            cam_distance = self.space_size + self.space_border
+            if player_type == 10:
+                cam_distance = self.space_size + self.space_border
+            player = Player(
+                client_id = client_id,
+                uid=player_id,
+                camera=Camera(distance=cam_distance),
+                player_type=player_type)
+            
+            gamectx.add_player(player)
+
+        player.set_data_value("view_type",1)
+
+        if player_type == 10:
+            return player
+       
+        spawn_player(player,reset=True)
+        print("IM A NEW PLAYER")
+
+        return player
+
+
+    # **********************************
+    # Additional Rendering
+    # **********************************
     def post_process_frame(self, render_time, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:
             lines = []
             lines.append("Lives Used: {}".format(player.get_data_value("lives_used", 0)))
 
             obj = gamectx.object_manager.get_by_id(player.get_object_id(), render_time)
+            obj_energy = 0
             if obj is not None:
-                lines.append("Current Energy: {}".format(obj.get_data_value("energy", 0)))
+                obj_energy = obj.get_data_value("energy", "NA")
+                lines.append("Current Energy: {}".format(obj_energy))
                 lines.append("Current Velocity: {}".format(obj.get_body()._get_velocity()))
                 lines.append("Current Angular Vel: {}".format(obj.get_body()._get_angular_velocity()))
                 lines.append("Observation: {}".format(self.get_observation(obj)[:8]))
@@ -484,8 +436,5 @@ class GameContent(Content):
             if renderer.config.show_console:
                 renderer.render_to_console(lines, x=5, y=5)
 
-                if obj is None:
-                    if player.get_data_value("lives_used",0) ==0:
-                        renderer.render_to_console(['Ready Player One'], x=50, y=50, fsize=50)                    
-                    else:
-                        renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)
+                if obj_energy == 0:
+                    renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)

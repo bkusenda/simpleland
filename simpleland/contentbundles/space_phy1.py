@@ -356,7 +356,7 @@ class GameContent(Content):
             info['msg'] = "no player found"
         return observation, reward, done, info
 
-    def new_player(self,  player_id=None, player_type=0) -> Player:
+    def new_player(self,client_id,  player_id=None, player_type=0) -> Player:
         # Create Player
         if player_id is None:
             player_id = gen_id()
@@ -366,10 +366,13 @@ class GameContent(Content):
             if player_type == 10:
                 cam_distance = self.space_size + self.space_border
             player = Player(
+                client_id=client_id,
                 uid=player_id,
                 camera=Camera(distance=cam_distance),
                 player_type=player_type)
             gamectx.add_player(player)
+
+        player.set_data_value("view_type",0)
 
         if player_type == 10:
             return player

@@ -104,6 +104,7 @@ class Player(Base):
         player = cls()
         player.uid = data['uid']
         player.control_obj_id = data['obj_id']
+        player.client_id = data['client_id']
         player.player_type = data['player_type']
         player.data = data.get('data',{})
 
@@ -111,12 +112,13 @@ class Player(Base):
             player.camera = Camera(**data['camera']['data'])
         return player
 
-    def __init__(self, uid=None, data=None, player_type =0, camera=None):
+    def __init__(self, client_id=None, uid=None, data=None, player_type =0, camera=None):
         """
 
         :return:
         """
         self.uid = uid
+        self.client_id = client_id
         self.player_type = player_type
         self.camera = camera
         self.control_obj_id = None
