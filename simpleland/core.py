@@ -314,8 +314,8 @@ class GameContext:
         import sys
 
         wait=True
-        pygame.event.clear()
         while wait:
+            pygame.event.clear()
             event = pygame.event.wait()
             wait = True
             if event.type == pygame.KEYDOWN:
@@ -332,10 +332,12 @@ class GameContext:
             self.run_event_processing()
         else:
             self.run_pre_event_processing()
+
             if self.step_counter>0:
                 self.run_event_processing()
             self.run_pre_physics_processing()
             self.run_physics_processing()
+
         self.tick()
         self.step_counter +=1
 

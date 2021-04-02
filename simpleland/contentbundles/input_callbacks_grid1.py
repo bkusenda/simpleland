@@ -28,6 +28,13 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
     if obj is None:
         return events
 
+    
+    if not obj.enabled:
+        return []
+    elif player.get_data_value("episode_over",False):
+        print("Episode is over. Reset required")
+        return events
+
     velocity_multiplier = obj.get_data_value('velocity_multiplier')
 
 

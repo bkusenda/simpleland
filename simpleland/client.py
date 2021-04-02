@@ -233,7 +233,6 @@ class GameClient:
         self.sync_time()
         
         self.render_time = max(0, gamectx.clock.get_time() - self.render_delay_in_ms)
-
         # Get Input Events and put in output buffer
         # TODO: make logic cleaner
         if self.player is not None:

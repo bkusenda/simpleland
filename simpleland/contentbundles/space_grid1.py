@@ -51,7 +51,9 @@ test_map = (
     f"xbbb                   x\n"
     f"xxxxxxxxxxxxxxxxxxxxxxxx\n"
 )
-#############
+
+
+############
 # Game Defs #
 #############
 def game_def(content_overrides = {}):
@@ -152,19 +154,19 @@ def energy_decay_callback(event: PeriodicEvent, data: Dict[str, Any], om: GObjec
 def spawn_player(player:Player, reset = False):
     player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
     loc = random.choice(gamectx.content.spawn_locations)
-
+    position = coord_to_vec(loc)
     if player_object is None:
-        add_player_ship(player,coord_to_vec(loc))
+        add_player_ship(player,position=position)
         player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
     else:
-        player_object.update_position(position=coord_to_vec(loc))
+        player_object.update_position(position=position)
 
-    player_object.set_data_value(
-        "energy", 
-        gamectx.content.player_start_energy)
+    player_object.set_data_value("energy",  gamectx.content.player_start_energy)
     if reset:
         player.set_data_value("lives_used",0)
-        player.set_data_value("food_collected",0)
+        player.set_data_value("food_reward_count",0)
+        player.set_data_value("episode_over",False)
+        player_object.enable()
 
         decay_event = PeriodicEvent(
             energy_decay_callback,
@@ -173,16 +175,18 @@ def spawn_player(player:Player, reset = False):
         gamectx.event_manager.add_event(decay_event)
             
     return player_object
-        
+
+
+
 
 def process_food_collision(player_obj,food_obj):
     food_energy = food_obj.get_data_value('energy')
     player_energy = player_obj.get_data_value('energy')
     player_obj.set_data_value("energy",
                               player_energy + food_energy)
-    food_count = player_obj.get_data_value('food_count', 0)
-    player_obj.set_data_value("food_count",
-                              food_count + 1)
+    food_reward_count = player_obj.get_data_value('food_reward_count', 0)
+    food_reward_count +=1
+    player_obj.set_data_value("food_reward_count",food_reward_count)
     player_obj.set_last_change(gamectx.clock.get_time())
     food_counter = gamectx.data.get('food_counter', 0)
     gamectx.data['food_counter'] = food_counter - 1
@@ -213,6 +217,9 @@ def default_collision_callback(obj1:GObject,obj2:GObject):
         return process_lava_collision(obj1, obj2)
     return True
 
+##########################
+#pre_event_callback
+##########################
 def pre_event_callback():
     new_events = []
     for k, p in gamectx.player_manager.players_map.items():
@@ -228,20 +235,21 @@ def pre_event_callback():
         if o.get_data_value("energy") <= 0:
             
             lives_used = p.get_data_value("lives_used", 0)
-            p.set_data_value("lives_used", lives_used+1)
+            lives_used+=1
+            p.set_data_value("lives_used", lives_used)
             o.disable()
-
-            def event_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
-                o.enable()
-                spawn_player(p)
-                return []
-
-            new_ship_event = DelayedEvent(
-                func=event_callback,
-                execution_step=0,
-                data={'player_id': p.get_id()})
-
-            new_events.append(new_ship_event)
+            if lives_used<=3:
+                def respawn_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
+                    o.enable()
+                    spawn_player(p)
+                    return []
+                respawn_event = DelayedEvent(
+                    func=respawn_callback,
+                    execution_step=0,
+                    data={'player_id': p.get_id()})
+                new_events.append(respawn_event)
+            else:
+                p.set_data_value("episode_over",True)
 
     return new_events
 
@@ -251,7 +259,6 @@ item_types = ['lava','food','block','player']
 item_map = {k:i for i,k in enumerate(item_types)}
 item_type_count = len(item_types)
 vision_distance = 2
-debug=False
 
 class GameContent(Content):
 
@@ -317,11 +324,6 @@ class GameContent(Content):
                 else:
                     row_results.append(item_type_count)
             results.append(row_results)
-        if debug:
-            print("------------------")
-            for row in results:
-                print("".join([str(c) for c in row]))
-            print("------------------")
 
         return np.array(results)
 
@@ -335,21 +337,19 @@ class GameContent(Content):
             obj_id = player.get_object_id()
             obj = gamectx.object_manager.get_latest_by_id(obj_id)
             observation = self.get_observation(obj)
-            if obj is not None:
-                energy = obj.get_data_value("energy")
-                info['energy'] = energy
-                if energy <= 0:
-                    done = True
-                elif energy <= 5:
-                    reward = 1
-                else:
-                    reward = 1
-            else:
-                info['msg'] = "no player obj"
-                done = True
+            done = player.get_data_value("episode_over",False)
+            info['lives_used'] = player.get_data_value("lives_used")
+            energy = obj.get_data_value("energy")
+            info['energy'] = energy
 
+            # Claim food rewards
+            food_reward_count = player.get_data_value("food_reward_count",0)
+            player.set_data_value("food_reward_count",0)
+            reward = food_reward_count
+            if energy == 0:
+                reward += -1
             if done:
-                reward = 1
+                reward += -10                
         else:
             info['msg'] = "no player found"
         return observation, reward, done, info
@@ -404,15 +404,10 @@ class GameContent(Content):
                 player_type=player_type)
             
             gamectx.add_player(player)
-
         player.set_data_value("view_type",1)
-
         if player_type == 10:
             return player
-       
         spawn_player(player,reset=True)
-        print("IM A NEW PLAYER")
-
         return player
 
 
@@ -435,6 +430,5 @@ class GameContent(Content):
 
             if renderer.config.show_console:
                 renderer.render_to_console(lines, x=5, y=5)
-
                 if obj_energy == 0:
                     renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)

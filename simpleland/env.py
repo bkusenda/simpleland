@@ -101,7 +101,6 @@ class SimplelandEnv:
         self.observation_spaces = {agent_id:self.content.get_observation_space() for agent_id in self.agent_clients.keys()}
         
         logging.info("Ob spaces: {}".format(self.observation_spaces))
-        self.action_freq = 1
         self.step_counter = 0
         
         self.ob = None
@@ -125,22 +124,21 @@ class SimplelandEnv:
     def step(self, actions):
 
         # get actions from agents
-        if self.step_counter % self.action_freq == 0:
-            for agent_id, action in actions.items():
-                client:GameClient = self.agent_clients[agent_id]
-                if self.dry_run:
-                    return self.observation_spaces[agent_id], 1, False, None
-                if client.player is not None:
-                    event = InputEvent(
-                        player_id  = client.player.get_id(), 
-                        input_data = {
-                            'inputs':[self.content.keymap[action]],
-                            'mouse_pos': "",
-                            'mouse_rel': "",
-                            'focused': ""
-                            })
-                    client.player.add_event(event)
-                    client.run_step()
+        for agent_id, action in actions.items():
+            client:GameClient = self.agent_clients[agent_id]
+            if self.dry_run:
+                return self.observation_spaces[agent_id], 1, False, None
+            if client.player is not None:
+                event = InputEvent(
+                    player_id  = client.player.get_id(), 
+                    input_data = {
+                        'inputs':[self.content.keymap[action]],
+                        'mouse_pos': "",
+                        'mouse_rel': "",
+                        'focused': ""
+                        })
+                client.player.add_event(event)
+                client.run_step()
             
         gamectx.run_step()
 
@@ -148,14 +146,19 @@ class SimplelandEnv:
         dones = {}
         rewards = {}
         infos ={}
+  
+        all_done = True
+        for agent_id,client in self.agent_clients.items():
+            ob, reward, done, info = client.content.get_step_info(player= client.player)
+            obs[agent_id] = ob
+            dones[agent_id] = done
+            rewards[agent_id] = reward
+            infos[agent_id] = info
+            if not done:
+                all_done= False
 
-        if self.step_counter % self.action_freq ==0:
-            for agent_id,client in self.agent_clients.items():
-                ob, reward, done, info = client.content.get_step_info(player= client.player)
-                obs[agent_id] = ob
-                dones[agent_id] = done
-                rewards[agent_id] = reward
-                infos[agent_id] = info
+        dones['_all_']= all_done
+    
         self.step_counter +=1
 
         return obs,rewards,dones,infos
@@ -251,9 +254,14 @@ if __name__ == "__main__":
     profiler = Profiler()
     profiler.start()
     obs = env.reset()
-    rewards, dones, infos = {}, {},{}
+    dones = {"_all_":True}
+    episode_count = 0
 
     for i in range(0,max_steps):
+        if dones['_all_']:
+            obs = env.reset()
+            rewards, dones, infos = {}, {},{}
+            episode_count+=1
         if debug:
             for id, ob in obs.items():
                 print(f"Player: {id}")
@@ -262,11 +270,13 @@ if __name__ == "__main__":
                     print(rewards[id])
                     print(dones[id])
                     print(infos[id])
-                print(f"Game Step:{gamectx.clock.get_time()}")
+                print(f"Episode {episode_count} Game Step:{gamectx.clock.get_time()}")
                 print("----------")
             input()
         actions = {agent_id:action_space.sample() for agent_id,action_space in env.action_spaces.items()}
         obs, rewards, dones, infos = env.step(actions)
+
+
 
         
     
