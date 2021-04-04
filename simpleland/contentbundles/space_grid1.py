@@ -64,7 +64,6 @@ test_map_b2 = (
     f"xxxxxxxxxxxxxxxxx\n"
 )
 
-
 test_map = (
     f"bbbbbbbbbbbbbbbbb\n"
     f"b  f   f   bbbbbb\n"
@@ -75,6 +74,29 @@ test_map = (
     f"bbbb        f   b\n"
     f"bbbbbbbbbbbbbbbbb\n"
 )
+
+
+test_map = (
+    f"bbbbbbbbbbbbbbbbb\n"
+    f"b  f   f   bbbbbb\n"
+    f"b           s  bb\n"
+    f"b     x   f    bb\n"
+    f"b  f           bb\n"
+    f"b     f   f    bb\n"
+    f"b  f           bb\n"
+    f"b     f   f    bb\n"
+    f"b  f           bb\n"
+    f"b     f   f    bb\n"
+    f"b  f           bb\n"
+    f"b     f   f    bb\n"
+    f"b  f           bb\n"
+    f"bbs     f       b\n"
+    f"bbbb        f   b\n"
+    f"bbbbbbbbbbbbbbbbb\n"
+)
+
+
+
 
 
 # test_map = (

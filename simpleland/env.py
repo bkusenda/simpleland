@@ -30,7 +30,7 @@ class SimplelandEnv:
             hostname = 'localhost', 
             port = 10001, 
             dry_run=False,
-            agent_map={'1':{}},
+            agent_map={'1':{},'2':{}},
             physics_tick_rate = 0,
             game_tick_rate = 0,
             sim_timestep = 0.01,
@@ -85,8 +85,8 @@ class SimplelandEnv:
 
             # Render config changes
             player_def.renderer_config.sdl_audio_driver = 'dsp'
-            # player_def.renderer_config.render_to_screen = False
-            # player_def.renderer_config.sdl_video_driver = 'dummy'
+            player_def.renderer_config.render_to_screen = False
+            player_def.renderer_config.sdl_video_driver = 'dummy'
             player_def.renderer_config.sound_enabled = False
             player_def.renderer_config.show_console = False
             
