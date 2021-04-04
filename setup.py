@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
-from Cython.Build import cythonize
+# from Cython.Build import cythonize
 
 setup(
-    ext_modules = cythonize(["simpleland/physics_engine.pyx","simpleland/core.pyx"]),
+    # ext_modules = cythonize(["simpleland/physics_engine.pyx","simpleland/core.pyx"]),
     name="simpleland",
     version="0.0.1",
     author="Brandyn Kusenda",

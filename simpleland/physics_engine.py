@@ -37,7 +37,7 @@ def get_default_position_callback(clock, config):
     return position_callback
 
 class GridSpace:
-    
+
 
     def __init__(self):
         self.coord_to_obj= {}
@@ -90,8 +90,7 @@ class GridPhysicsEngine:
         self.grid_size = self.config.grid_size
         self.clock = clock
         self.space = GridSpace()
-        self.position_updates = []
-
+        self.position_updates = {}
         self.collision_callbacks ={}
 
     def vec_to_coord(self,v):
@@ -109,6 +108,11 @@ class GridPhysicsEngine:
         self.collision_callbacks[(collision_type_a,collision_type_b)] = callback
         self.collision_callbacks[(collision_type_b,collision_type_a)] = callback
 
+    # def get_objects_at(self,coord):
+    #     obj_ids = self.space.get_objs_at(coord)
+    #     return obj_ids
+
+
     def add_object(self, obj: GObject):
         body = obj.body
         body.last_change = self.clock.get_time()
@@ -116,7 +120,8 @@ class GridPhysicsEngine:
         self.update_obj_position(obj,obj.get_position())
 
     def update_obj_position(self,obj:GObject,new_pos):
-        self.position_updates.append((obj,new_pos))
+        # print(f"UPDATE POS OF {obj.get_data_value('type')} {obj.get_id()} {new_pos}")
+        self.position_updates[obj.get_id()] = (obj,new_pos)
 
     def remove_object(self,obj):
         self.space.remove_obj(obj.get_id())
@@ -124,14 +129,14 @@ class GridPhysicsEngine:
     def update(self):
         obj:GObject
 
-        for obj,new_pos in self.position_updates:
+        for obj,new_pos in self.position_updates.values():
             if not obj.enabled:
                 continue
             new_pos = Vector(round(new_pos.x),round(new_pos.y))
             coord =self.vec_to_coord(new_pos)
             coll_objs_ids = self.space.get_objs_at(coord)
-            collision_effect = False
 
+            collision_effect = False
             for obj_id_2 in coll_objs_ids:
                 if obj_id_2 != obj.get_id():
                     obj2:GObject = self.space.get_obj_by_id(obj_id_2)
@@ -143,12 +148,13 @@ class GridPhysicsEngine:
                         for col_type2 in collition_types2:
                             if self.collision_callbacks.get((col_type1,col_type2))(obj,obj2):
                                 collision_effect = True
+                    
 
             if not collision_effect:
                 self.space.move_obj_to(coord,obj)
                 obj.body.position = new_pos
 
-        self.position_updates = []
+        self.position_updates = {}
 
 
 

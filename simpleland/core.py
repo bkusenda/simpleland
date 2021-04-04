@@ -66,9 +66,10 @@ class GameContext:
 
         self.tick_rate = None
         self.id = gen_id()
-        self.pre_event_processing_callback = lambda : []
+        self.pre_event_callback = lambda : []
         self.pre_physics_callback = lambda : []
         self.input_event_callback = lambda event: []
+        self.post_physics_callback  = lambda : []
         self.clients = {}
         self.local_clients = []
         self.data = {}
@@ -143,11 +144,14 @@ class GameContext:
     def set_input_event_callback(self, callback):
         self.input_event_callback = callback
 
-    def set_pre_event_processing_callback(self, callback):
-        self.pre_event_processing_callback = callback
+    def set_pre_event_callback(self, callback):
+        self.pre_event_callback = callback
 
     def set_pre_physics_callback(self, callback):
         self.pre_physics_callback = callback
+
+    def set_post_physics_callback(self, callback):
+        self.post_physics_callback = callback
 
     def create_snapshot(self,last_update_timestamp):
         snapshot_timestamp = self.clock.get_time()
@@ -176,8 +180,8 @@ class GameContext:
         """
         TODO: redo callbacks, use function overrides instead
         """
-        if self.pre_event_processing_callback is not None:
-            events = self.pre_event_processing_callback()
+        if self.pre_event_callback is not None:
+            events = self.pre_event_callback()
             self.event_manager.add_events(events)
 
     def run_event_processing(self):
@@ -224,6 +228,11 @@ class GameContext:
             events = self.pre_physics_callback()
             self.event_manager.add_events(events)
 
+    def run_post_physics_processing(self):
+        if self.post_physics_callback is not None:
+            events = self.post_physics_callback()
+            self.event_manager.add_events(events)
+
     def run_physics_processing(self): 
         self.physics_engine.update()
         if self.config.track_updates:
@@ -260,6 +269,7 @@ class GameContext:
         obj.delete()
         obj.set_last_change(self.clock.get_time())
         self.physics_engine.remove_object(obj)
+        self.object_manager.remove_by_id(obj.get_id())
         for p in self.player_manager.players_map.values():
             if obj.get_id() == p.get_object_id():
                 p.control_obj_id = None
@@ -332,11 +342,10 @@ class GameContext:
             self.run_event_processing()
         else:
             self.run_pre_event_processing()
-
-            if self.step_counter>0:
-                self.run_event_processing()
+            self.run_event_processing()
             self.run_pre_physics_processing()
             self.run_physics_processing()
+            self.run_post_physics_processing()
 
         self.tick()
         self.step_counter +=1
@@ -346,7 +355,10 @@ class GameContext:
         # self.cleanup()
 
     def run(self):
+        done = True
         while self.state == "RUNNING":
+            if done:
+                self.content.reset()
             self.process_client_step()
             self.run_step()
             self.render_client_step()
@@ -354,12 +366,15 @@ class GameContext:
                 for player in self.player_manager.players_map.values():
                     observation, reward, done, info = self.content.get_step_info(player)
                     print(f"Player: {player.get_id()}")
-                    print(observation)
+                    # print(observation)
                     print(reward)
                     print(done)
                     print(info)
                     print("----------")
                 self.wait_for_input()
+
+                
+                    
 
 
 

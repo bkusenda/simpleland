@@ -82,8 +82,6 @@ class Renderer:
             image = pygame.image.load(pkg_resources.resource_filename(__name__,path)).convert_alpha()
             # image = pygame.transform.scale(image,(200,200))
             self.images[k] = image
-            print(k)
-            print(image)
 
     def play_sounds(self, sound_ids):
         if self.config.sound_enabled:
@@ -149,7 +147,7 @@ class Renderer:
         obj_pos = obj.get_body().position + circle.offset # TODO: Doesn't work with offset
         obj_location = (obj_pos - center)
         obj_location = obj_location.rotated(-angle)
-        p = screen_factor * (obj_location + screen_view_center)
+        p = scale(screen_factor,(obj_location + screen_view_center))
         p = to_pygame(p, self._display_surf)
         size = int(circle.radius * screen_factor[0])
         pygame.draw.circle(self._display_surf,
@@ -318,8 +316,6 @@ class Renderer:
         
         if not self.initialized:
             self.initialize()
-        
-
 
         object_manager = gamectx.object_manager
         # import pdb;pdb.set_trace()

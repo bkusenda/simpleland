@@ -35,12 +35,13 @@ class PeriodicEvent(Event):
                 func, 
                 id=None, 
                 execution_step_interval=None, 
+                run_immediately = False,
                 data={},
                 **kwargs):
 
         super(PeriodicEvent,self).__init__(id,**kwargs)
         self.execution_step_interval = execution_step_interval
-        self.last_run = None
+        self.last_run = None if run_immediately else gamectx.clock.get_tick_counter()
         self.data=data
         self.func = func
 

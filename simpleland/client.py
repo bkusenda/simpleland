@@ -162,7 +162,7 @@ class GameClient:
         self.frames_per_second = config.frames_per_second
         self.render_last_update = 0
         self.render_update_freq = 0 if self.frames_per_second == 0 else (1.0/self.frames_per_second)  * 1000
-        self.frame_limit = self.frames_per_second != gamectx.config.tick_rate
+        self.frame_limit = False# self.frames_per_second != gamectx.config.tick_rate
 
         self.server_info_history = TimeLoggingContainer(100)
         self.player: Player = None  # TODO: move to history data managed for rendering consistency

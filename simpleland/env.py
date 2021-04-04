@@ -30,7 +30,7 @@ class SimplelandEnv:
             hostname = 'localhost', 
             port = 10001, 
             dry_run=False,
-            agent_map={},
+            agent_map={'1':{}},
             physics_tick_rate = 0,
             game_tick_rate = 0,
             sim_timestep = 0.01,
@@ -61,6 +61,13 @@ class SimplelandEnv:
         # Build Clients
         self.agent_map = agent_map
         self.agent_clients = {}
+
+        # PISTARLAB REQUIREMENTS
+        self.players= list(self.agent_map.keys())
+        self.num_players = len(self.players)
+        self.possible_players = self.players
+        self.max_num_players = self.num_players
+
         player_def = None
         for agent_id, agent_info in agent_map.items():
             player_def = get_player_def(
@@ -78,10 +85,11 @@ class SimplelandEnv:
 
             # Render config changes
             player_def.renderer_config.sdl_audio_driver = 'dsp'
-            player_def.renderer_config.render_to_screen = True
-            # self.config_manager.renderer_config.sdl_video_driver = 'dummy'
+            # player_def.renderer_config.render_to_screen = False
+            # player_def.renderer_config.sdl_video_driver = 'dummy'
             player_def.renderer_config.sound_enabled = False
             player_def.renderer_config.show_console = False
+            
 
             renderer = Renderer(
                 player_def.renderer_config,
@@ -157,13 +165,13 @@ class SimplelandEnv:
             if not done:
                 all_done= False
 
-        dones['_all_']= all_done
+        dones['__all__']= all_done
     
         self.step_counter +=1
 
         return obs,rewards,dones,infos
 
-    def render(self, mode=None):
+    def render(self, mode=None, player_id=None):
         # TODO: add rendering for observer window
         for agent_id,client in self.agent_clients.items():
             if self.dry_run:
@@ -172,11 +180,7 @@ class SimplelandEnv:
             return client.get_rgb_array()
 
     def reset(self) -> Dict[str,Any]:
-        if self.first_start:
-            self.content.load()
-            self.first_start = False
-        else:
-            self.content.reset()
+        self.content.reset()
         self.obs, _, _, _ = self.step({})
         return self.obs
 
@@ -188,7 +192,6 @@ class SimplelandEnv:
 class SimplelandEnvSingle(gym.Env):
 
     def __init__(self,
-            frame_skip=0,
             content_config={},
             render_shapes=True,
             player_type=1,
@@ -206,36 +209,15 @@ class SimplelandEnvSingle(gym.Env):
             render_shapes=render_shapes)
         self.observation_space = self.env_main.observation_spaces[self.agent_id]
         self.action_space = self.env_main.action_spaces[self.agent_id]
-        self.frame_skip = frame_skip
 
     def reset(self):
         obs = self.env_main.reset()
         return obs.get(self.agent_id)
 
     def step(self,action):
-        total_reward = 0
-        ob = None
-        done = False
-        info = {}
-        i = 0
-        reward_list = []
-        ready = False
-        while not ready:
-            obs,rewards,dones,infos = self.env_main.step({self.agent_id:action})
-            ob, reward, done, info = obs[self.agent_id],rewards[self.agent_id],dones[self.agent_id],infos[self.agent_id]
-            # TODO: check for obs mode render use image as obs space
-
-            total_reward +=reward
-            reward_list.append(reward)
-            if done:
-                ready = True # if done found, exit loop
-            elif ob is None: # if ob is missing, retry
-                time.sleep(0.01)
-                continue
-            elif i >= self.frame_skip: # if frames skipped reached, exit loop
-                ready = True
-            i +=1
-        return ob, max(reward_list), done, info
+        obs,rewards,dones,infos = self.env_main.step({self.agent_id:action})
+        ob, reward, done, info = obs[self.agent_id],rewards[self.agent_id],dones[self.agent_id],infos[self.agent_id]            
+        return ob, reward, done, info
 
     def close(self):
         self.env_main.close()
@@ -246,23 +228,33 @@ class SimplelandEnvSingle(gym.Env):
 if __name__ == "__main__":
     agent_map = {str(i):{} for i in range(1)}
     debug = False
-    
+    time_profile = True
+    mem_profile = False
+    if mem_profile:
+        import tracemalloc
+        tracemalloc.start()
     env = SimplelandEnv(agent_map=agent_map,dry_run=False)
     done_agents = set()
     start_time = time.time()
-    max_steps = 30000
-    profiler = Profiler()
-    profiler.start()
-    obs = env.reset()
-    dones = {"_all_":True}
+    max_steps = 20000
+    profiler = None
+    if time_profile:
+        profiler = Profiler()
+        profiler.start()
+    dones = {"__all__":True}
     episode_count = 0
+    actions = {}
 
     for i in range(0,max_steps):
-        if dones['_all_']:
+        if dones.get('__all__'):
+            #print("RESETTING")
             obs = env.reset()
-            rewards, dones, infos = {}, {},{}
+            rewards, dones, infos = {}, {'__all__':False},{}
             episode_count+=1
+        else:
+            obs, rewards, dones, infos = env.step(actions)
         if debug:
+            env.render()
             for id, ob in obs.items():
                 print(f"Player: {id}")
                 print(obs[id])
@@ -272,18 +264,27 @@ if __name__ == "__main__":
                     print(infos[id])
                 print(f"Episode {episode_count} Game Step:{gamectx.clock.get_time()}")
                 print("----------")
-            input()
-        actions = {agent_id:action_space.sample() for agent_id,action_space in env.action_spaces.items()}
-        obs, rewards, dones, infos = env.step(actions)
+            action = input()
+            try:
+                action = int(action)
+            except:
+                action = None
+            actions={'0':action}
+        else:
+            actions = {agent_id:action_space.sample() for agent_id,action_space in env.action_spaces.items()}
+        if mem_profile and (env.step_counter % 10000 == 0):
+            current, peak = tracemalloc.get_traced_memory()
+            print(f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
 
-
-
-        
-    
+    if mem_profile:
+        current, peak = tracemalloc.get_traced_memory()
+        print(f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
+        tracemalloc.stop()    
     steps_per_sec = max_steps/(time.time()-start_time)
     print(f"steps_per_sec {steps_per_sec}")
-    profiler.stop()
-    print(profiler.output_text(unicode=True, color=True,show_all=True))
+    if time_profile:
+        profiler.stop()
+        print(profiler.output_text(unicode=True, color=True,show_all=True))
 
 
 

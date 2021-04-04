@@ -28,7 +28,7 @@ from ..config import GameDef, PhysicsConfig
 
 
 
-test_map = (
+test_map_b1 = (
     f"xxxxxxxxxxxxxxxxxxxxxxxx\n"
     f"x                 bbbbbx\n"
     f"x                  s  bx\n"
@@ -53,6 +53,40 @@ test_map = (
 )
 
 
+test_map_b2 = (
+    f"xxxxxxxxxxxxxxxxx\n"
+    f"x  f   f   bbbbbx\n"
+    f"x           s  bx\n"
+    f"x     f   f    bx\n"
+    f"x  f           bx\n"
+    f"xbs     f       x\n"
+    f"xbbb        f   x\n"
+    f"xxxxxxxxxxxxxxxxx\n"
+)
+
+
+test_map = (
+    f"bbbbbbbbbbbbbbbbb\n"
+    f"b  f   f   bbbbbb\n"
+    f"b           s  bb\n"
+    f"b     f   f    bb\n"
+    f"b  f           bb\n"
+    f"bbs     f       b\n"
+    f"bbbb        f   b\n"
+    f"bbbbbbbbbbbbbbbbb\n"
+)
+
+
+# test_map = (
+#     f"bbbbbbbbbbbbbbbbb\n"
+#     f"b x             b\n"
+#     f"b s         f  xb\n"
+#     f"bbbbbbbbbbbbbbbbb\n"
+# )
+
+# test_map = (
+#     f"s   f\n"
+# )
 ############
 # Game Defs #
 #############
@@ -60,7 +94,7 @@ def game_def(content_overrides = {}):
 
     content_config={
         'space_size':800,
-        'player_start_energy':35,
+        'player_start_energy':20,
         'player_energy_decay_ticks':1,
         'food_energy':5,
         'food_count':1,
@@ -124,7 +158,6 @@ def add_block(position, type="block", shape_color=(100, 100, 100)):
     ShapeFactory.attach_rectangle(o,width=80,height=80)
     gamectx.add_object(o)
 
-
 def add_player_ship(player:Player,position:Vector):
     player_object = GObject(Body(mass=2, moment=0))
     player_object.set_data_value("rotation_multiplier", 1)
@@ -139,7 +172,6 @@ def add_player_ship(player:Player,position:Vector):
     player.attach_object(player_object)
     gamectx.add_object(player_object)
     return player_object
-
 
 def energy_decay_callback(event: PeriodicEvent, data: Dict[str, Any], om: GObjectManager):
     obj = om.get_latest_by_id(data['obj_id'])
@@ -166,8 +198,8 @@ def spawn_player(player:Player, reset = False):
         player.set_data_value("lives_used",0)
         player.set_data_value("food_reward_count",0)
         player.set_data_value("episode_over",False)
+        player.events = []
         player_object.enable()
-
         decay_event = PeriodicEvent(
             energy_decay_callback,
             execution_step_interval=gamectx.content.player_energy_decay_ticks,
@@ -177,9 +209,7 @@ def spawn_player(player:Player, reset = False):
     return player_object
 
 
-
-
-def process_food_collision(player_obj,food_obj):
+def process_food_collision(player_obj:GObject,food_obj):
     food_energy = food_obj.get_data_value('energy')
     player_energy = player_obj.get_data_value('energy')
     player_obj.set_data_value("energy",
@@ -191,16 +221,28 @@ def process_food_collision(player_obj,food_obj):
     food_counter = gamectx.data.get('food_counter', 0)
     gamectx.data['food_counter'] = food_counter - 1
     gamectx.remove_object(food_obj)
+    # player_id = player_obj.get_data_value("player_id")
+    # player = gamectx.player_manager.get_player(player_id)
+    # player_obj.disable()
+    # player.set_data_value("episode_over",True)
+
+
+
+    # respawn food
+    # def food_event_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
+    #     # if gamectx.physics_engine.space.food_obj.get_position()
+    #     obj_ids = gamectx.physics_engine.space.get_objs_at(gamectx.physics_engine.vec_to_coord(food_obj.get_position()))
+    #     # if len(obj_ids)>0:
+    #     #     return [DelayedEvent(food_event_callback, execution_step=random.randint(10,16))]
+    #     # else:
+    #     add_food(food_obj.get_position())
+    #     return []
+    # new_food_event = DelayedEvent(food_event_callback, execution_step=random.randint(10,16))
+    # gamectx.event_manager.add_event(new_food_event)
+
     sound_event = SoundEvent(
         creation_time=gamectx.clock.get_time(),
         sound_id="bleep2")
-
-    # respawn food
-    def food_event_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
-        add_food(food_obj.get_position())
-        return []
-    new_food_event = DelayedEvent(food_event_callback, execution_step=6)
-    gamectx.event_manager.add_event(new_food_event)
     gamectx.event_manager.add_event(sound_event)
     return False
 
@@ -215,12 +257,14 @@ def default_collision_callback(obj1:GObject,obj2:GObject):
         return process_food_collision(obj1, obj2)
     elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "lava":
         return process_lava_collision(obj1, obj2)
-    return True
+    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "block":
+        return True
+    return False
 
 ##########################
 #pre_event_callback
 ##########################
-def pre_event_callback():
+def post_physics_callback():
     new_events = []
     for k, p in gamectx.player_manager.players_map.items():
         if p.get_object_id() is None:
@@ -228,7 +272,6 @@ def pre_event_callback():
 
         o = gamectx.object_manager.get_latest_by_id(p.get_object_id())
 
-        
         if o is None or o.is_deleted or not o.enabled:
             continue
 
@@ -238,25 +281,36 @@ def pre_event_callback():
             lives_used+=1
             p.set_data_value("lives_used", lives_used)
             o.disable()
-            if lives_used<=3:
-                def respawn_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
-                    o.enable()
-                    spawn_player(p)
-                    return []
-                respawn_event = DelayedEvent(
-                    func=respawn_callback,
-                    execution_step=0,
-                    data={'player_id': p.get_id()})
-                new_events.append(respawn_event)
-            else:
-                p.set_data_value("episode_over",True)
+            # if lives_used<=3:
+            #     def respawn_callback(event: DelayedEvent, data: Dict[str, Any], om: GObjectManager):
+            #         o.enable()
+            #         spawn_player(p)
+            #         return []
+            #     respawn_event = DelayedEvent(
+            #         func=respawn_callback,
+            #         execution_step=0,
+            #         data={'player_id': p.get_id()})
+            #     new_events.append(respawn_event)
+            # else:
+            p.set_data_value("episode_over",True)
+    gamectx.content.allow_user_input =True
 
     return new_events
 
 
+def pre_physics_callback():
+    
+    return []
 
 item_types = ['lava','food','block','player']
-item_map = {k:i for i,k in enumerate(item_types)}
+item_map = {}
+for i,k in enumerate(item_types):
+    v = np.zeros(len(item_types)+1)
+    v[i] =1
+    item_map[k] = v
+default_v = np.zeros(len(item_types)+1)
+default_v[len(item_types)] = 1
+
 item_type_count = len(item_types)
 vision_distance = 2
 
@@ -273,31 +327,57 @@ class GameContent(Content):
         self.food_energy = config['food_energy']
         self.food_count = config['food_count']
         self.asteroid_count = config['asteroid_count']
-        self.spawn_locations = []
+        self.allow_user_input = True
+        
         self.player_count=0
         self.keymap = [23,19,4,1]
 
-    def _initialize(self):
-        print("INitializing")
-    
-    # def _initialize(self):
-    #     gamectx.remove_all_objects()
-    #     gamectx.remove_all_events()
-    #     gamectx.reset_data()
+
+        self.spawn_locations = []
+        self.food_locations = []
+        self.loaded = False
 
     def get_asset_bundle(self):
         return self.asset_bundle
     
     def reset(self):
+        self.allow_user_input = False
+        if not self.loaded:
+            self.load()
+        #gamectx.remove_all_objects()
         gamectx.remove_all_events()
+        
+        def food_event_callback(event: PeriodicEvent, data: Dict[str, Any], om: GObjectManager):
+            self.spawn_food(limit=1)
+            return [],True
+        new_food_event = PeriodicEvent(food_event_callback, execution_step_interval=random.randint(10,16))
+        gamectx.event_manager.add_event(new_food_event)
+
+        self.spawn_food()
+        self.spawn_players()
+
+
+    def spawn_players(self):
         for player in gamectx.player_manager.players_map.values():
-            spawn_player(player,reset=True)    
+            spawn_player(player,reset=True)
+
+    def spawn_food(self,limit = None):
+        # Spawn food
+        spawn_count = 0
+        for i, coord in enumerate(self.food_locations):
+            if len(gamectx.physics_engine.space.get_objs_at(coord))==0:
+                add_food(coord_to_vec(coord))
+                spawn_count+=1
+                if limit is not None and spawn_count >= limit:
+                    return
+
     
     def get_observation_space(self):
         from gym import spaces
         x_dim = (vision_distance * 2 + 1)
         y_dim = x_dim
-        return spaces.Box(low=-float("inf"), high=float("inf"), shape=(x_dim,y_dim))
+        chans = len(item_types) +1
+        return spaces.Box(low=0, high=1, shape=(x_dim,y_dim,chans))
 
     def get_action_space(self):
         from gym import spaces
@@ -320,11 +400,9 @@ class GameContent(Content):
                     obj_id = obj_ids[0]
                     obj_seen = gamectx.object_manager.get_latest_by_id(obj_id)
                     row_results.append(item_map.get(obj_seen.get_data_value('type')))
-    
                 else:
-                    row_results.append(item_type_count)
+                    row_results.append(default_v)
             results.append(row_results)
-
         return np.array(results)
 
 
@@ -343,13 +421,13 @@ class GameContent(Content):
             info['energy'] = energy
 
             # Claim food rewards
-            food_reward_count = player.get_data_value("food_reward_count",0)
-            player.set_data_value("food_reward_count",0)
+            food_reward_count = obj.get_data_value("food_reward_count",0)
+            obj.set_data_value("food_reward_count",0)
             reward = food_reward_count
-            if energy == 0:
-                reward += -1
+            # if energy == 0:
+            #     reward += -1
             if done:
-                reward += -10                
+                reward = -5                
         else:
             info['msg'] = "no player found"
         return observation, reward, done, info
@@ -365,22 +443,25 @@ class GameContent(Content):
         self.spawn_locations=[]
         for ridx,line in enumerate(lines):
             for cidx,ch in enumerate(line):
+                coord = (cidx,ridx)
                 if ch == 'b':
-                    add_block(coord_to_vec((cidx,ridx)))
+                    add_block(coord_to_vec(coord))
                 elif ch == 'x':
-                    add_block(coord_to_vec((cidx,ridx)),type="lava",shape_color=(200,100,100))
+                    add_block(coord_to_vec(coord),type="lava",shape_color=(200,100,100))
                 elif ch == 'f':
-                    add_food(coord_to_vec((cidx,ridx)))
+                    self.food_locations.append(coord)
                 elif ch == 's':
-                    self.spawn_locations.append((cidx,ridx))
-
+                    self.spawn_locations.append(coord)
+                
         gamectx.physics_engine.set_collision_callback(
             default_collision_callback,
             COLLISION_TYPE['default'],
             COLLISION_TYPE['default'])
 
-        gamectx.set_pre_event_processing_callback(pre_event_callback)
+        gamectx.set_pre_physics_callback(pre_physics_callback)
         gamectx.set_input_event_callback(input_event_callback)
+        gamectx.set_post_physics_callback(post_physics_callback)
+        self.loaded=True
 
 
     # **********************************
@@ -407,7 +488,7 @@ class GameContent(Content):
         player.set_data_value("view_type",1)
         if player_type == 10:
             return player
-        spawn_player(player,reset=True)
+        player_object = spawn_player(player,reset=True)
         return player
 
 

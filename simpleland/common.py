@@ -84,9 +84,8 @@ class SimClock:
         return self.start_time
     
     def tick(self,tick_rate):
-        if tick_rate ==0:
-            return
-        self.pygame_clock.tick(tick_rate)
+        if tick_rate !=0: 
+            self.pygame_clock.tick(tick_rate)
         self.tick_time = self.get_exact_time()
         self.tick_counter +=1
         return self.tick_time

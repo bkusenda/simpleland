@@ -50,7 +50,6 @@ class GObjectManager:
             return ext_obj.get_interpolated(timestamp)
 
     def remove_by_id(self, obj_id):
-        self.objects[obj_id]
         del self.objects[obj_id]
 
     def get_objects_for_timestamp_by_depth(self,timestamp):
