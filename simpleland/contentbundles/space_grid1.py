@@ -216,6 +216,7 @@ def spawn_player(player:Player, reset = False):
         player_object.update_position(position=position)
 
     player_object.set_data_value("energy",  gamectx.content.player_start_energy)
+    player.set_data_value("allow_input",False)
     if reset:
         player.set_data_value("lives_used",0)
         player.set_data_value("food_reward_count",0)
@@ -293,11 +294,13 @@ def post_physics_callback():
             continue
 
         o = gamectx.object_manager.get_latest_by_id(p.get_object_id())
+        
 
         if o is None or o.is_deleted or not o.enabled:
             continue
 
         if o.get_data_value("energy") <= 0:
+            p.set_data_value("allow_input",False)
             
             lives_used = p.get_data_value("lives_used", 0)
             lives_used+=1
@@ -315,7 +318,9 @@ def post_physics_callback():
             #     new_events.append(respawn_event)
             # else:
             p.set_data_value("episode_over",True)
-    gamectx.content.allow_user_input =True
+        else:
+            p.set_data_value("allow_input",True)
+    
 
     return new_events
 
@@ -349,7 +354,6 @@ class GameContent(Content):
         self.food_energy = config['food_energy']
         self.food_count = config['food_count']
         self.asteroid_count = config['asteroid_count']
-        self.allow_user_input = True
         
         self.player_count=0
         self.keymap = [23,19,4,1]
@@ -363,7 +367,6 @@ class GameContent(Content):
         return self.asset_bundle
     
     def reset(self):
-        self.allow_user_input = False
         if not self.loaded:
             self.load()
         #gamectx.remove_all_objects()

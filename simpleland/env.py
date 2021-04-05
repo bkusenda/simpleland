@@ -85,8 +85,8 @@ class SimplelandEnv:
 
             # Render config changes
             player_def.renderer_config.sdl_audio_driver = 'dsp'
-            player_def.renderer_config.render_to_screen = False
-            player_def.renderer_config.sdl_video_driver = 'dummy'
+            # player_def.renderer_config.render_to_screen = False
+            # player_def.renderer_config.sdl_video_driver = 'dummy'
             player_def.renderer_config.sound_enabled = False
             player_def.renderer_config.show_console = False
             
@@ -173,9 +173,16 @@ class SimplelandEnv:
 
     def render(self, mode=None, player_id=None):
         # TODO: add rendering for observer window
-        for agent_id,client in self.agent_clients.items():
+        if player_id is None:
+            for agent_id,client in self.agent_clients.items():
+                if self.dry_run:
+                    return self.observation_spaces[agent_id].sample()
+                client.render(force=True)
+                return client.get_rgb_array()
+        else:
+            client = self.agent_clients[player_id]
             if self.dry_run:
-                return self.observation_spaces[agent_id].sample()
+                return self.observation_spaces[player_id].sample()
             client.render(force=True)
             return client.get_rgb_array()
 
@@ -224,12 +231,13 @@ class SimplelandEnvSingle(gym.Env):
 
     def render(self,mode=None):
         return self.env_main.render(mode=mode)
-
+import time
 if __name__ == "__main__":
-    agent_map = {str(i):{} for i in range(1)}
-    debug = False
+    agent_map = {str(i):{} for i in range(2)}
+    debug = True
     time_profile = True
     mem_profile = False
+    render = True
     if mem_profile:
         import tracemalloc
         tracemalloc.start()
@@ -253,9 +261,13 @@ if __name__ == "__main__":
             episode_count+=1
         else:
             obs, rewards, dones, infos = env.step(actions)
+        
+      
+        
         if debug:
-            env.render()
+            actions={}
             for id, ob in obs.items():
+                env.render(player_id=id)  
                 print(f"Player: {id}")
                 print(obs[id])
                 if len(rewards)> 0:
@@ -264,12 +276,14 @@ if __name__ == "__main__":
                     print(infos[id])
                 print(f"Episode {episode_count} Game Step:{gamectx.clock.get_time()}")
                 print("----------")
-            action = input()
-            try:
-                action = int(action)
-            except:
-                action = None
-            actions={'0':action}
+                action = env.action_spaces[id].sample() #input()
+                print(action)
+                time.sleep(1)
+                try:
+                    action = int(action)
+                except:
+                    action = None
+                actions[id]=action
         else:
             actions = {agent_id:action_space.sample() for agent_id,action_space in env.action_spaces.items()}
         if mem_profile and (env.step_counter % 10000 == 0):

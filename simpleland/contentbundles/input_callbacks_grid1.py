@@ -9,9 +9,10 @@ import math
 
 
 def input_event_callback(input_event: InputEvent) -> List[Event]:
-    if not gamectx.content.allow_user_input:
-        return []
+
     player = gamectx.player_manager.get_player(input_event.player_id)
+    if not player.get_data_value("allow_input",False):
+        return []
     if player is None:
         return []
     if player.get_data_value("view_type") == 0:
