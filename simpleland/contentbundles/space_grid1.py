@@ -220,7 +220,8 @@ def spawn_player(player:Player, reset = False):
     if reset:
         player.set_data_value("lives_used",0)
         player.set_data_value("food_reward_count",0)
-        player.set_data_value("episode_over",False)
+        player.set_data_value("reset_required",False)
+        player.set_data_value("allow_obs",True)
         player.events = []
         player_object.enable()
         decay_event = PeriodicEvent(
@@ -247,7 +248,7 @@ def process_food_collision(player_obj:GObject,food_obj):
     # player_id = player_obj.get_data_value("player_id")
     # player = gamectx.player_manager.get_player(player_id)
     # player_obj.disable()
-    # player.set_data_value("episode_over",True)
+    # player.set_data_value("reset_required",True)
 
 
 
@@ -317,7 +318,7 @@ def post_physics_callback():
             #         data={'player_id': p.get_id()})
             #     new_events.append(respawn_event)
             # else:
-            p.set_data_value("episode_over",True)
+            p.set_data_value("reset_required",True)
         else:
             p.set_data_value("allow_input",True)
     
@@ -381,6 +382,12 @@ class GameContent(Content):
         self.spawn_food()
         self.spawn_players()
 
+    def reset_required(self):
+        for player in gamectx.player_manager.players_map.values():
+            if not player.get_data_value("reset_required",True):
+                return False
+        return True
+
 
     def spawn_players(self):
         for player in gamectx.player_manager.players_map.values():
@@ -437,10 +444,16 @@ class GameContent(Content):
         reward = 0
         info = {}
         if player is not None:
+            if not player.get_data_value("allow_obs",False):
+                return None,None,None,None
+
             obj_id = player.get_object_id()
             obj = gamectx.object_manager.get_latest_by_id(obj_id)
             observation = self.get_observation(obj)
-            done = player.get_data_value("episode_over",False)
+            done = player.get_data_value("reset_required",False)
+            if done:
+                player.set_data_value("allow_obs",False)
+
             info['lives_used'] = player.get_data_value("lives_used")
             energy = obj.get_data_value("energy")
             info['energy'] = energy
@@ -462,7 +475,7 @@ class GameContent(Content):
     # GAME LOAD
     # **********************************
     def load(self):
-
+        self.loaded = False
         lines = test_map.split("\n")
 
         self.spawn_locations=[]
@@ -486,8 +499,8 @@ class GameContent(Content):
         gamectx.set_pre_physics_callback(pre_physics_callback)
         gamectx.set_input_event_callback(input_event_callback)
         gamectx.set_post_physics_callback(post_physics_callback)
-        self.loaded=True
 
+        self.loaded=True
 
     # **********************************
     # NEW PLAYER

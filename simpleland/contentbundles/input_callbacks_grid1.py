@@ -34,7 +34,7 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
     
     if not obj.enabled:
         return []
-    elif player.get_data_value("episode_over",False):
+    elif player.get_data_value("reset_required",False):
         print("Episode is over. Reset required")
         return events
 

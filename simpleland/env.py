@@ -25,7 +25,7 @@ from pyinstrument import Profiler
 class SimplelandEnv:
 
     def __init__(self, 
-            resolution=(200,200), 
+            resolution=(1280,720), 
             game_id="space_grid1", 
             hostname = 'localhost', 
             port = 10001, 
@@ -36,7 +36,7 @@ class SimplelandEnv:
             sim_timestep = 0.01,
             enable_server = False,
             view_type=0,
-            render_shapes=True,
+            render_shapes=False,
             player_type = 1,
             content_config = {}):
         
@@ -155,21 +155,31 @@ class SimplelandEnv:
         rewards = {}
         infos ={}
   
-        all_done = True
         for agent_id,client in self.agent_clients.items():
-            ob, reward, done, info = client.content.get_step_info(player= client.player)
+            ob, reward, done, info = self.content.get_step_info(player= client.player)
+            if ob is None:
+                continue
             obs[agent_id] = ob
             dones[agent_id] = done
             rewards[agent_id] = reward
             infos[agent_id] = info
-            if not done:
-                all_done= False
 
-        dones['__all__']= all_done
+        dones['__all__']= self.content.reset_required()
     
         self.step_counter +=1
 
         return obs,rewards,dones,infos
+
+    def stats(self,player_id=None) :
+        return {'step_counter':self.step_counter}
+
+    def runtime_config(self) :
+        return {'hi':self.step_counter}
+
+    def runtime_config_update(self):
+        return True, "msg"
+
+    
 
     def render(self, mode=None, player_id=None):
         # TODO: add rendering for observer window
@@ -234,7 +244,7 @@ class SimplelandEnvSingle(gym.Env):
 import time
 if __name__ == "__main__":
     agent_map = {str(i):{} for i in range(2)}
-    debug = True
+    debug = False
     time_profile = True
     mem_profile = False
     render = True
@@ -255,19 +265,17 @@ if __name__ == "__main__":
 
     for i in range(0,max_steps):
         if dones.get('__all__'):
-            #print("RESETTING")
             obs = env.reset()
             rewards, dones, infos = {}, {'__all__':False},{}
             episode_count+=1
         else:
             obs, rewards, dones, infos = env.step(actions)
         
-      
-        
         if debug:
             actions={}
             for id, ob in obs.items():
-                env.render(player_id=id)  
+                if render:
+                    env.render(player_id=id)  
                 print(f"Player: {id}")
                 print(obs[id])
                 if len(rewards)> 0:
@@ -278,14 +286,16 @@ if __name__ == "__main__":
                 print("----------")
                 action = env.action_spaces[id].sample() #input()
                 print(action)
-                time.sleep(1)
+                time.sleep(.1)
                 try:
                     action = int(action)
                 except:
                     action = None
                 actions[id]=action
         else:
-            actions = {agent_id:action_space.sample() for agent_id,action_space in env.action_spaces.items()}
+            if render:
+                env.render()  
+            actions = {agent_id:env.action_spaces[agent_id].sample() for agent_id in env.obs.keys()}
         if mem_profile and (env.step_counter % 10000 == 0):
             current, peak = tracemalloc.get_traced_memory()
             print(f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
