@@ -48,12 +48,12 @@ class PeriodicEvent(Event):
     def get_id(self):
         return self.id
 
-    def run(self, om:GObjectManager):
+    def run(self):
         game_step = gamectx.clock.get_tick_counter()
         new_events = []
         remove_event = None
         if self.last_run is None or self.last_run + self.execution_step_interval <= game_step:
-            new_events, remove_event = self.func(self,self.data,om)
+            new_events, remove_event = self.func(self,self.data)
             self.last_run = game_step
 
         return [], False
@@ -75,11 +75,14 @@ class DelayedEvent(Event):
     def get_id(self):
         return self.id
 
-    def run(self, om:GObjectManager):
+    def run(self):
         game_step = gamectx.clock.get_tick_counter()
+        print(f"cur_step: {game_step}, ex step:{self.execution_step}")
+
         new_events = []
         if  self.execution_step <= game_step:
-            new_events = self.func(self,self.data,om)
+            print("HERE")
+            new_events = self.func(self,self.data)
             return new_events, True
         return new_events, False
 

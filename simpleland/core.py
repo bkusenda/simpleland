@@ -187,41 +187,53 @@ class GameContext:
     def run_event_processing(self):
         from .event import (Event, AdminEvent, MechanicalEvent,
                             PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent,PositioningUpdateEvent)
-        new_events = []
+        all_new_events = []
         events_to_remove = []
-        events_to_process = list(self.event_manager.get_events())
-        for e in events_to_process:
-            result_events = []
+        events_set = set(self.event_manager.get_events())
+        while len(events_set)>0:
+            e = events_set.pop()
+        
+            new_events = []
             if type(e) == AdminEvent:
                 e: AdminEvent = e
                 if e.value == 'QUIT':
                     self.change_game_state("QUITING")
                     events_to_remove.append(e)
             elif type(e) == InputEvent:
-                result_events = self.input_event_callback(e)
+                new_events = self.input_event_callback(e)
+                
                 events_to_remove.append(e)
             elif type(e) == ViewEvent:
-                result_events = self._process_view_event(e)
+                new_events = self._process_view_event(e)
                 events_to_remove.append(e)
 
             elif type(e) == DelayedEvent:
                 e: DelayedEvent = e
-                result_events, delete_event = e.run(self.object_manager)
-                if delete_event:
+                new_events, remove_event = e.run()
+                if remove_event:
+                    print("Remove event")
                     events_to_remove.append(e)
             elif type(e) == PeriodicEvent:
                 e: PeriodicEvent = e
-                result_events, remove_event = e.run(self.object_manager)
-                # NOT REMOVED
+                new_events, remove_event = e.run()
                 if remove_event:
                     events_to_remove.append(e)
 
-            new_events.extend(result_events)
+            # Add to queue to be processed
+            for new_e in new_events:
+                events_set.add(new_e)
 
+
+            all_new_events.extend(new_events)
+
+        # Add new events
+        print(f"NEW EVENTS:{all_new_events}")
+        self.event_manager.add_events(all_new_events)
+
+        # Remove completed events        
         for e in events_to_remove:
             self.event_manager.remove_event_by_id(e.get_id())
-
-        self.event_manager.add_events(new_events)
+       
 
     def run_pre_physics_processing(self):
         if self.pre_physics_callback is not None:

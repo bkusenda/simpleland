@@ -24,6 +24,9 @@ class EventManager:
     def get_events(self):
         return self.events.values()
 
+    def get_event_dict(self):
+        return self.events
+
     def get_event_by_id(self, id):
         return self.events[id]
 
