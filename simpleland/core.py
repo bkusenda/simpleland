@@ -111,11 +111,14 @@ class GameContext:
             print("Loading Game Content.")
             content.load()
 
+    def speed_factor(self):
+        if self.tick_rate:
+            return self.tick_rate
+        else:
+            return 1
+
     def get_content(self):
         return self.content
-
-    def get_time_scale(self):
-        return 60.0/self.config.tick_rate
 
     def add_local_client(self,client):
         self.local_clients.append(client)
@@ -211,7 +214,6 @@ class GameContext:
                 e: DelayedEvent = e
                 new_events, remove_event = e.run()
                 if remove_event:
-                    print("Remove event")
                     events_to_remove.append(e)
             elif type(e) == PeriodicEvent:
                 e: PeriodicEvent = e
@@ -227,7 +229,6 @@ class GameContext:
             all_new_events.extend(new_events)
 
         # Add new events
-        print(f"NEW EVENTS:{all_new_events}")
         self.event_manager.add_events(all_new_events)
 
         # Remove completed events        
@@ -374,15 +375,17 @@ class GameContext:
             self.process_client_step()
             self.run_step()
             self.render_client_step()
+            for player in self.player_manager.players_map.values():
+                observation, reward, done, info = self.content.get_step_info(player)
             if self.config.wait_for_user_input:
-                for player in self.player_manager.players_map.values():
-                    observation, reward, done, info = self.content.get_step_info(player)
-                    print(f"Player: {player.get_id()}")
-                    # print(observation)
-                    print(reward)
-                    print(done)
-                    print(info)
-                    print("----------")
+                print(f"Player: {player.get_id()}")
+                # print(observation)
+                print(reward)
+                print(done)
+                print(info)
+                print("----------")
+
+
                 self.wait_for_input()
 
                 

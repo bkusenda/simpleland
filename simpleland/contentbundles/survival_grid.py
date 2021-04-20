@@ -123,7 +123,7 @@ def game_def(content_overrides = {}):
         "block_size":80,
         "player_config":{
             "health_start": 100,
-            "health_gen": 5,
+            "health_gen": 1,
             "health_max": 100,
             "health_gen_period":5,
             "stamina_max": 100,
@@ -133,7 +133,7 @@ def game_def(content_overrides = {}):
             "energy_max": 100,
             "energy_decay_period": 5,
             "energy_decay" : 5,
-            "low_energy_health_penalty":-20,
+            "low_energy_health_penalty":20,
             "strength": 1,
             "inventory_size":1 
             },
@@ -176,17 +176,75 @@ def game_def(content_overrides = {}):
     )
     game_def.physics_config.grid_size = 80
     game_def.physics_config.engine = "grid"
-    game_def.game_config.wait_for_user_input=True
+    game_def.game_config.wait_for_user_input=False
     return game_def
 
 def load_asset_bundle():
     image_assets = {}
-    image_assets['1'] = 'assets/redfighter0006.png'
-    image_assets['1_thrust'] = 'assets/redfighter0006_thrust.png'
+    image_assets['1'] = ('assets/redfighter0006.png',None)
+    image_assets['1_thrust'] = ('assets/redfighter0006_thrust.png',None)
 
-    image_assets['2'] = 'assets/ship2.png'
-    image_assets['energy1'] = 'assets/energy1.png'
-    image_assets['lava'] = 'assets/lava1.png'
+    image_assets['2'] = ('assets/ship2.png',None)
+    image_assets['energy1'] = ('assets/energy1.png',None)
+    image_assets['lava'] = ('assets/lava1.png',None)
+
+    image_assets['player_idle_down_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"1")
+    image_assets['player_idle_down_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"2")
+    image_assets['player_idle_down_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"3")
+    image_assets['player_idle_down_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"4")
+    image_assets['player_idle_down_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"5")
+    image_assets['player_idle_down_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"6")
+
+    image_assets['player_idle_up_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"1")
+    image_assets['player_idle_up_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"2")
+    image_assets['player_idle_up_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"3")
+    image_assets['player_idle_up_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"4")
+    image_assets['player_idle_up_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"5")
+    image_assets['player_idle_up_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"6")
+
+    image_assets['player_idle_right_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"1")
+    image_assets['player_idle_right_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"2")
+    image_assets['player_idle_right_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"3")
+    image_assets['player_idle_right_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"4")
+    image_assets['player_idle_right_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"5")
+    image_assets['player_idle_right_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"6")
+
+    image_assets['player_idle_left_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"1")
+    image_assets['player_idle_left_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"2")
+    image_assets['player_idle_left_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"3")
+    image_assets['player_idle_left_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"4")
+    image_assets['player_idle_left_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"5")
+    image_assets['player_idle_left_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"6")
+
+
+    image_assets['player_walk_down_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"1")
+    image_assets['player_walk_down_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"2")
+    image_assets['player_walk_down_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"3")
+    image_assets['player_walk_down_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"4")
+    image_assets['player_walk_down_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"5")
+    image_assets['player_walk_down_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"6")
+
+    image_assets['player_walk_up_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"1")
+    image_assets['player_walk_up_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"2")
+    image_assets['player_walk_up_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"3")
+    image_assets['player_walk_up_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"4")
+    image_assets['player_walk_up_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"5")
+    image_assets['player_walk_up_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"6")
+
+    image_assets['player_walk_right_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"1")
+    image_assets['player_walk_right_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"2")
+    image_assets['player_walk_right_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"3")
+    image_assets['player_walk_right_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"4")
+    image_assets['player_walk_right_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"5")
+    image_assets['player_walk_right_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"6")
+
+    image_assets['player_walk_left_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"1")
+    image_assets['player_walk_left_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"2")
+    image_assets['player_walk_left_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"3")
+    image_assets['player_walk_left_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"4")
+    image_assets['player_walk_left_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"5")
+    image_assets['player_walk_left_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"6")
+
 
     sound_assets = {}
     sound_assets['bleep2'] = 'assets/sounds/bleep2.wav'
@@ -205,7 +263,8 @@ def add_food(position):
     o = GObject(Body())
     o.set_data_value("energy", gamectx.content.config['food_energy'])
     o.set_data_value("type", "food")
-    o.set_data_value("image", "energy1")
+    o.set_image_id("energy1")
+    
     o.set_position(position=position)
     o.set_last_change(gamectx.clock.get_time())
 
@@ -216,7 +275,7 @@ def add_food(position):
 def add_block(position, type="block", shape_color=(100, 100, 100)):
     o = GObject(Body())
     o.set_data_value("type", type)
-    o.set_data_value("image",type)
+    o.set_image_id(type)
     o.set_position(position=position)
     o.set_last_change(gamectx.clock.get_time())
     o.shape_color = shape_color
@@ -229,7 +288,8 @@ def add_player_ship(player:Player,position:Vector):
     player_object.set_data_value("velocity_multiplier", 1)
 
     player_object.set_data_value("type", "player")
-    player_object.set_data_value("image", "1")
+    
+    player_object.set_image_id("player_down_1")
     player_object.set_data_value("player_id", player.get_id())
     player_object.set_position(position=position)
     ShapeFactory.attach_circle(player_object, radius=40)
@@ -238,6 +298,68 @@ def add_player_ship(player:Player,position:Vector):
     gamectx.add_object(player_object)
     return player_object
 
+#########################
+### RENDER FUNCTIONS ####
+#########################
+
+def obj_update_fn(obj:GObject):
+    # render_poses = obj.get_data_value("render_poses",None)
+    # total_ticks = obj.get_data_value("total_ticks",0)
+    # cur_tick = gamectx.clock.get_tick_counter()
+    # if render_poses and cur_tick in render_poses:
+    #     obj.view_position = render_poses[cur_tick]
+    #     return
+    # elif render_poses and cur_tick > total_ticks:
+    #     obj.set_data_value("render_poses",None)
+    #     obj.set_data_value("total_ticks",0)
+    #     obj.view_position  = None
+
+
+
+    return None
+
+def view_position_fn(obj:GObject):
+    action_data = obj.get_data_value("action")
+    if action_data:
+        cur_tick = gamectx.clock.get_tick_counter()
+        if action_data['start_tick'] + action_data['ticks'] > cur_tick:
+            if action_data['type'] == 'walk':
+                idx = cur_tick - action_data['start_tick']
+                view_position = action_data['step_size'] * idx *  action_data['direction'] + action_data['start_position']
+                return view_position               
+        else:
+            obj.set_data_value("action",None)
+    return obj.get_position()
+
+import math
+def sprite_id_fn(obj:GObject, angle):
+    angle_num = obj.body.angle/math.pi
+    direction = "down"
+    if angle_num < 0.25 and angle_num >= -0.25:
+        direction = "up"
+    elif angle_num > 0.25 and angle_num <= 0.75:
+        direction = "left"
+    elif angle_num < -0.25 and angle_num >= -0.75:
+        direction = "right"
+    elif abs(angle_num) >= 0.75:
+        direction = "down"
+
+    action_data = obj.get_data_value("action")
+    cur_tick = gamectx.clock.get_tick_counter()
+    sprites_list = gamectx.content.player_idle_sprites
+
+    if action_data is not None:
+        if action_data['start_tick'] + action_data['ticks'] > cur_tick:            
+            if action_data['type'] == 'walk':
+                action_idx = (cur_tick - action_data['start_tick'])
+                sprites_list = gamectx.content.player_walk_sprites
+                sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))               
+                return sprites_list[direction][ sprite_idx]
+           
+    sprite_idx = int(cur_tick//gamectx.content.speed_factor())
+    return sprites_list[direction][ sprite_idx % len(sprites_list[direction])]
+
+
 def spawn_player(player:Player, reset = False):
     player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
     loc = random.choice(gamectx.content.spawn_locations)
@@ -245,14 +367,19 @@ def spawn_player(player:Player, reset = False):
     if player_object is None:
         add_player_ship(player,position=position)
         player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+        player_object.set_update_fn(obj_update_fn)
+        player_object.set_view_position_fn(view_position_fn)
+        player_object.set_sprite_id_fn(sprite_id_fn)
+
     else:
         player_object.update_position(position=position)
-
+        
     player_object.set_data_value("energy",  gamectx.content.config['player_config']['energy_start'])
     player_object.set_data_value("health",gamectx.content.config['player_config']['health_start'])
     player_object.set_data_value("stamina",gamectx.content.config['player_config']['stamina_max'])
     player_object.set_data_value("next_energy_decay",0)
     player_object.set_data_value("next_health_gen",0)
+
     player.set_data_value("allow_input",False)
     if reset:
         player.set_data_value("lives_used",0)
@@ -273,10 +400,12 @@ def spawn_player(player:Player, reset = False):
 
 
 def process_food_collision(player_obj:GObject,food_obj):
+    
     food_energy = food_obj.get_data_value('energy')
     player_energy = player_obj.get_data_value('energy')
     player_obj.set_data_value("energy",
                               player_energy + food_energy)
+    print(f"YAYA FOOD! {player_energy} => {player_energy + food_energy}")
     food_reward_count = player_obj.get_data_value('food_reward_count', 0)
     food_reward_count +=1
     player_obj.set_data_value("food_reward_count",food_reward_count)
@@ -329,21 +458,21 @@ def post_physics_callback():
                 energy = max(0,o.get_data_value("energy") - gamectx.content.config['player_config']['energy_decay'])
                 o.set_data_value('energy', energy)
                 if energy<=0:
-                    health = max(o.get_data_value("health") - gamectx.content.config['player_config']['low_energy_health_penalty'])
+                    health = o.get_data_value("health") - gamectx.content.config['player_config']['low_energy_health_penalty']
                     o.set_data_value('health', health)
-                o.set_data_value("next_energy_decay", cur_time + gamectx.content.config['player_config']['energy_decay_period'])
+                o.set_data_value("next_energy_decay", cur_time + (gamectx.content.config['player_config']['energy_decay_period'] * gamectx.content.speed_factor()))
 
             # Health regen
             if cur_time > o.get_data_value("next_health_gen",0):
                 health = min(gamectx.content.config['player_config']['health_max'],o.get_data_value("health") + gamectx.content.config['player_config']['health_gen'])
                 o.set_data_value('health', health)
-                o.set_data_value("next_health_gen", cur_time + gamectx.content.config['player_config']['health_gen_period'])
+                o.set_data_value("next_health_gen", cur_time + (gamectx.content.config['player_config']['health_gen_period'] * gamectx.content.speed_factor()))
 
             # Stamina regen
             if cur_time > o.get_data_value("next_stamina_gen",0):
                 stamina = min(gamectx.content.config['player_config']['stamina_max'],o.get_data_value("stamina") + gamectx.content.config['player_config']['stamina_gen'])
                 o.set_data_value('stamina', stamina)
-                o.set_data_value("next_stamina_gen", cur_time + gamectx.content.config['player_config']['stamina_gen_period'])
+                o.set_data_value("next_stamina_gen", cur_time + (gamectx.content.config['player_config']['stamina_gen_period'] * gamectx.content.speed_factor()))
 
             # Check for death
             if o.get_data_value("health") <= 0:
@@ -390,6 +519,7 @@ class GameContent(Content):
         self.food_energy = config['food_energy']
         self.food_count = config['food_count']
         
+        
         self.player_count=0
         self.keymap = [23,19,4,1]
 
@@ -397,6 +527,20 @@ class GameContent(Content):
         self.spawn_locations = []
         self.food_locations = []
         self.loaded = False
+        self.player_idle_sprites = { 
+            'down': ['player_idle_down_1','player_idle_down_2','player_idle_down_3','player_idle_down_4','player_idle_down_5','player_idle_down_6'],
+            'up': ['player_idle_up_1','player_idle_up_2','player_idle_up_3','player_idle_up_4','player_idle_up_5','player_idle_up_6'],
+            'left': ['player_idle_left_1','player_idle_left_2','player_idle_left_3','player_idle_left_4','player_idle_left_5','player_idle_left_6'],
+            'right': ['player_idle_right_1','player_idle_right_2','player_idle_right_3','player_idle_right_4','player_idle_right_5','player_idle_right_6']}
+        self.player_walk_sprites = { 
+            'down': ['player_walk_down_1','player_walk_down_2','player_walk_down_3','player_walk_down_4','player_walk_down_5','player_walk_down_6'],
+            'up': ['player_walk_up_1','player_walk_up_2','player_walk_up_3','player_walk_up_4','player_walk_up_5','player_walk_up_6'],
+            'left': ['player_walk_left_1','player_walk_left_2','player_walk_left_3','player_walk_left_4','player_walk_left_5','player_walk_left_6'],
+            'right': ['player_walk_right_1','player_walk_right_2','player_walk_right_3','player_walk_right_4','player_walk_right_5','player_walk_right_6']}
+
+
+    def speed_factor(self):
+        return max(gamectx.speed_factor() * 1/4,1)
 
     def get_asset_bundle(self):
         return self.asset_bundle
@@ -410,7 +554,7 @@ class GameContent(Content):
         def food_event_callback(event: PeriodicEvent, data: Dict[str, Any]):
             self.spawn_food(limit=1)
             return [],True
-        new_food_event = PeriodicEvent(food_event_callback, execution_step_interval=random.randint(10,16))
+        new_food_event = PeriodicEvent(food_event_callback, execution_step_interval=random.randint(10,16) * self.speed_factor())
         gamectx.event_manager.add_event(new_food_event)
 
         self.spawn_food()
@@ -586,5 +730,5 @@ class GameContent(Content):
 
             if renderer.config.show_console:
                 renderer.render_to_console(lines, x=5, y=5)
-                if obj_energy == 0:
+                if obj_health <= 0:
                     renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)

@@ -23,7 +23,8 @@ from simpleland.object import GObject
 from simpleland.config import ClientConfig, GameConfig
 from simpleland.content import Content
 from simpleland.common import StateDecoder, StateEncoder
-from simpleland.player import Player, get_input_events
+from simpleland.player import Player
+from simpleland.inputs import get_input_events
 from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
 from simpleland.event import InputEvent
@@ -238,7 +239,7 @@ class GameClient:
         if self.player is not None:
             events = []
             if self.config.is_human:
-                input_events = get_input_events(self.player.get_id())
+                input_events = get_input_events(self.player)
                 events.extend(input_events)
             events.extend(self.player.pull_input_events())
             gamectx.event_manager.add_events(events)

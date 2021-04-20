@@ -1,7 +1,7 @@
 import pymunk
 import pygame
 from .utils import gen_id
-from typing import List, Dict
+from typing import Callable, List, Dict
 import time
 
 from .common import Shape, Vector, load_dict_snapshot, Base, Body, dict_to_state, get_shape_from_dict, Camera
@@ -51,9 +51,28 @@ class GObject(Base):
         self.image_width, self.image_height = (80,80)
         self.shape_color = None
         self._update_position_callback = lambda obj,new_pos: None
+
+        self.update_fn:Callable = lambda obj : None
+        self.view_position_fn:Callable = lambda obj : self.get_position()
+        self.sprite_id_fn:Callable = lambda obj,angle : self.image_id_default
+        self.image_id_default = None
+        self.image_id_current = None
+        self.rotate_sprites = False
+
+    def set_image_id(self,id):
+        self.image_id_default = id
     
     def set_update_position_callback(self,callback):
         self._update_position_callback = callback
+
+    def set_update_fn(self,fn):
+        self.update_fn = fn
+
+    def set_view_position_fn(self,fn):
+        self.view_position_fn = fn
+
+    def set_sprite_id_fn(self,fn):
+        self.sprite_id_fn = fn
 
     def get_data_value(self,k, default_value=None):
         return self.data.get(k,default_value)
@@ -93,6 +112,21 @@ class GObject(Base):
 
     def get_position(self):
         return self.body.position
+
+    def get_view_position(self):
+        return self.view_position_fn(self)
+        
+    def get_sprite_id(self, camera_angle=0):
+        return self.sprite_id_fn(self, camera_angle)
+
+    # def get_sprite_id(self):
+    #     return self.sprite_id_fn(self)
+
+    def update(self):
+        self.update_fn(self)
+
+    def __repr__(self) -> str:
+        return f"{super().__repr__()}, id:{self.id}, data:{self.data}"
 
     def add_shape(self,shape:Shape, collision_type=1,label=None):
         shape.set_object_id(self.get_id())

@@ -19,6 +19,7 @@ import time
 import pkg_resources
 import logging
 from .player import Camera
+from .spritesheet import Spritesheet
 
 
 def scale(vec,vec2):
@@ -61,6 +62,7 @@ class Renderer:
 
         self.images = {}
         self.sounds = {}
+        self.sprite_sheets = {}
 
         # FPS Counter
         self.fps_counter = TickPerSecCounter(2)
@@ -78,11 +80,16 @@ class Renderer:
 
     def load_images(self):
         self.images = {}
-        for k, path in self.asset_bundle.image_assets.items():
-            image = pygame.image.load(pkg_resources.resource_filename(__name__,path)).convert_alpha()
-            # image = pygame.transform.scale(image,(200,200))
+        for k, (path,frame_id) in self.asset_bundle.image_assets.items():
+            full_path = pkg_resources.resource_filename(__name__,path)
+            if frame_id is None:
+                image = pygame.image.load(full_path).convert_alpha()
+            else:
+                if path not in self.sprite_sheets:
+                    self.sprite_sheets[path] = Spritesheet(full_path)
+                image = self.sprite_sheets[path].parse_sprite(frame_id)
             self.images[k] = image
-
+                
     def play_sounds(self, sound_ids):
         if self.config.sound_enabled:
             for sid in sound_ids:
@@ -119,7 +126,7 @@ class Renderer:
                   screen_view_center,
                   angle,
                   center):
-        obj_pos = obj.get_body().position
+        obj_pos = obj.get_view_position()
         obj_location1 = (obj_pos + line.a.rotated(obj.get_body().angle) - center)
         obj_location1 = obj_location1.rotated(-angle)
         p1 = scale(screen_factor,(obj_location1 + screen_view_center))
@@ -144,7 +151,7 @@ class Renderer:
                     screen_view_center,
                     angle,
                     center):
-        obj_pos = obj.get_body().position + circle.offset # TODO: Doesn't work with offset
+        obj_pos = obj.get_view_position() + circle.offset # TODO: Doesn't work with offset
         obj_location = (obj_pos - center)
         obj_location = obj_location.rotated(-angle)
         p = scale(screen_factor,(obj_location + screen_view_center))
@@ -165,7 +172,7 @@ class Renderer:
                      angle,
                      center):
         body = obj.get_body()
-        obj_pos = body.position
+        obj_pos = obj.get_view_position()
 
         body_angle =body.angle
         verts = shape.get_vertices()
@@ -189,7 +196,7 @@ class Renderer:
                      screen_view_center,
                      angle,
                      center):
-        obj_pos = obj.get_body().position
+        obj_pos = obj.get_view_position()
 
         body_angle =obj.get_body().angle
         verts = shape.get_vertices()
@@ -205,15 +212,14 @@ class Renderer:
                 new_verts,
                 0)
 
-    def _draw_object(self, center, obj, angle, screen_factor, screen_view_center, color=None):
+    def _draw_object(self, center, obj:GObject, angle, screen_factor, screen_view_center, color=None):
 
-        
-
-        image_id = obj.get_data_value("image")
+        image_id= obj.get_sprite_id(camera_angle=angle)
+        rotate = obj.rotate_sprites
         image_used = image_id is not None and not self.config.disable_textures
         if image_used:
             body_angle = obj.get_body().angle
-            obj_pos = obj.get_body().position
+            obj_pos = obj.get_view_position()
             
             # TODO: fix, main_shape will not always have radius
             body_w, body_h = obj.get_image_dims()
@@ -225,13 +231,16 @@ class Renderer:
                     print("zoom out/ to close {}".format(image_size))
                 
 
-                image = pygame.transform.scale(image,image_size)  
-                image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
+                image = pygame.transform.scale(image,image_size)
+                if rotate:  
+                    image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
                 rect = image.get_rect()
 
                 image_loc = scale(screen_factor, ((obj_pos- center).rotated(-angle)  + screen_view_center))
                 image_loc = to_pygame(image_loc, self._display_surf)
                 rect.center = image_loc
+                
+                # self._display_surf.blit(image,rect)
                 self._display_surf.blit(image,rect)
             else:
                 image_used= False
@@ -261,6 +270,7 @@ class Renderer:
                                     angle = angle,
                                     center = center)
                 elif type(shape) == Polygon:
+                    
                     self._draw_polygon(obj,
                                     shape,
                                     color,
@@ -335,7 +345,8 @@ class Renderer:
             view_type = player.get_data_value('view_type',0)
             view_obj = object_manager.get_by_id(player.get_object_id(), render_time)
             if view_obj is not None:
-                center = view_obj.get_body().position
+                view_obj.update()
+                center = view_obj.get_view_position()
                 if view_type == 0:
                     angle = view_obj.get_body().angle
             else:
@@ -358,6 +369,7 @@ class Renderer:
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
             obj:GObject
             for k, obj in render_obj_dict.items():
+                obj.update()
                 if not obj.enabled:
                     continue
                 if view_obj is not None and k == view_obj.get_id():

@@ -26,6 +26,7 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
     events= []
     grid_size = gamectx.physics_engine.config.grid_size
     keys = set(input_event.input_data['inputs'])
+    cur_tick = gamectx.clock.get_tick_counter()
 
     obj = gamectx.object_manager.get_latest_by_id(player.get_object_id())
     if obj is None:
@@ -41,28 +42,36 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
     velocity_multiplier = obj.get_data_value('velocity_multiplier')
 
     # Queued action prevents movement until complete. Trigger at a certain time and releases action lock later but 
+    # cur_tick = gamectx.clock.get_tick_counter()
+    action_completion_time = obj.get_data_value("action_completion_time",0)
+    if cur_tick <= obj.get_data_value("action_completion_time",0):
+        return []
 
 
     # Object Movement
+    movement_event = False
     direction = Vector.zero()
     angle_update = None
     if 23 in keys:
         direction = Vector(0, 1)
         angle_update = 0
-        
+        movement_event = True
 
     if 19 in keys:
         direction = Vector(0, -1)
         angle_update = math.pi
+        movement_event = True
 
     if 4 in keys:
         direction = Vector(1, 0)
         angle_update = -math.pi/2
+        movement_event = True
         
 
     if 1 in keys:
         direction = Vector(-1, 0)
         angle_update = math.pi/2
+        movement_event = True
         
 
     if 31 in keys:
@@ -71,26 +80,38 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
     if 10 in keys:
         print("Adding admin_event ...TODO!!")
 
-
-
+    
 
     def move_event_fn(event: DelayedEvent, data: Dict[str, Any]):
         direction = data['direction']
         angle_update = data['angle_update']
-
-        print("Hi")
         direction = direction * velocity_multiplier
-        obj.set_last_change(gamectx.clock.get_time())
+        obj.set_last_change(cur_tick)
+        ticks_in_action = int(1 * gamectx.content.speed_factor())
+        action_complete_time = cur_tick + ticks_in_action
+        obj.set_data_value("action_completion_time",action_complete_time)
         body:Body = obj.get_body()
         new_pos = grid_size * direction + body.position
+        obj.set_data_value("action",
+            {
+                'type':'walk',
+                'start_tick':gamectx.clock.get_tick_counter(),
+                'ticks': ticks_in_action,
+                'step_size': grid_size/ticks_in_action,
+                'start_position': body.position,
+                'direction': direction
+            })
+
         obj.update_position(new_pos)
         if angle_update is not None:
             body.angle = angle_update
         return []
-    movement_event = True
+    
     if movement_event:
 
-        event = DelayedEvent(move_event_fn, execution_step=1, data={'direction':direction,'angle_update':angle_update})
+        event = DelayedEvent(move_event_fn, 
+            execution_step=0, 
+            data={'direction':direction,'angle_update':angle_update})
         events.append(event)
 
     return events
@@ -134,7 +155,6 @@ def input_event_callback_fpv(input_event: InputEvent, player) -> List[Event]:
 
     def move_event_fn(event: DelayedEvent, data: Dict[str, Any]):
         direction = data['direction']
-        print("Hi")
         orientation_diff = obj_orientation_diff * rotation_multiplier
         direction = direction * velocity_multiplier
         obj.set_last_change(gamectx.clock.get_time())
@@ -151,8 +171,5 @@ def input_event_callback_fpv(input_event: InputEvent, player) -> List[Event]:
 
         event = DelayedEvent(move_event_fn, execution_step=0, data={'direction':direction})
         events.append(event)
-  
-
-
 
     return events

@@ -77,11 +77,9 @@ class DelayedEvent(Event):
 
     def run(self):
         game_step = gamectx.clock.get_tick_counter()
-        print(f"cur_step: {game_step}, ex step:{self.execution_step}")
 
         new_events = []
         if  self.execution_step <= game_step:
-            print("HERE")
             new_events = self.func(self,self.data)
             return new_events, True
         return new_events, False

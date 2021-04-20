@@ -110,6 +110,8 @@ class StepClock:
     def __init__(self, start_time= 0):
         self.start_time = start_time
         self.tick_time = 0
+        self.pygame_clock = Clock()
+
         print("USING STEP CLOCK")
 
     def _current_time(self):
@@ -119,6 +121,8 @@ class StepClock:
         return self.start_time
     
     def tick(self,tick_rate=None):
+        if tick_rate: 
+            self.pygame_clock.tick(tick_rate)
         self.tick_time +=1
         return self.tick_time
 
