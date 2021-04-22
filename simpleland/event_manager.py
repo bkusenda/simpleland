@@ -2,7 +2,7 @@ from typing import Any, Dict, List
 from .utils import gen_id
 from .common import Base, Vector
 
-from .event import Event, build_event_from_dict
+from .event import Event, InputEvent, build_event_from_dict
 
 
 class EventManager:
@@ -43,11 +43,11 @@ class EventManager:
             results.append(e.get_snapshot())
         return results
 
-    def get_snapshot_for_client(self,timestamp):
+    def get_client_snapshot(self):
         events = list(self.get_events())
         results = []
         for e in events:
-            if e.is_client_event and e.creation_time >= timestamp: 
+            if type(e) == InputEvent:
                 results.append(e.get_snapshot())
         return results
 

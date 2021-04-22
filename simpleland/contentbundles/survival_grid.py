@@ -1,3 +1,4 @@
+import math
 from simpleland import physics_engine
 import random
 from typing import Dict, Any, Tuple
@@ -6,7 +7,7 @@ import pymunk
 from pymunk import contact_point_set
 from pymunk.vec2d import Vec2d
 
-from ..common import (SimClock, Body, Camera, Circle, Clock, Line,
+from ..common import (Body, Camera, Circle,  Line,
                       Polygon, Shape, Space, Vector,
                       TimeLoggingContainer)
 from ..event import (DelayedEvent, Event,
@@ -25,8 +26,7 @@ from .input_callbacks_survival_grid import input_event_callback
 from ..common import COLLISION_TYPE
 import numpy as np
 from ..config import GameDef, PhysicsConfig
-
-
+from ..clock import clock
 
 test_map_b1 = (
     f"xxxxxxxxxxxxxxxxxxxxxxxx\n"
@@ -97,7 +97,16 @@ test_map = (
 
 
 
+test_map = (
+    
+    f"ffffffff\n" 
+    f"        \n"
+    f"s   f  s\n"
 
+)
+
+
+TILE_SIZE = 128
 
 # test_map = (
 #     f"bbbbbbbbbbbbbbbbb\n"
@@ -112,281 +121,270 @@ test_map = (
 ############
 # Game Defs #
 #############
-def game_def(content_overrides = {}):
 
-    content_config={
-        'space_size':800,
-        'player_start_energy':20,
-        'food_energy':5,
-        'food_count':1,
-        "space_border" : 200,
-        "block_size":80,
-        "player_config":{
+
+def game_def(content_overrides={}):
+
+    content_config = {
+        'space_size': TILE_SIZE*10,
+        'player_start_energy': 20,
+        'food_energy': 5,
+        'food_count': 1,
+        "space_border": 20*TILE_SIZE,
+        "tile_size": TILE_SIZE,
+        "player_config": {
             "health_start": 100,
             "health_gen": 1,
             "health_max": 100,
-            "health_gen_period":5,
+            "health_gen_period": 10,
             "stamina_max": 100,
             "stamina_gen": 2,
             "stamina_gen_period": 1,
             "energy_start": 100,
             "energy_max": 100,
             "energy_decay_period": 5,
-            "energy_decay" : 5,
-            "low_energy_health_penalty":20,
+            "energy_decay": 20,
+            "low_energy_health_penalty": 40,
             "strength": 1,
-            "inventory_size":1 
-            },
-        "actions":{
-            "rest":{
-                "duration":1,
+            "inventory_size": 1
+        },
+        "actions": {
+            "rest": {
+                "duration": 1,
                 "energy_cost": 0,
                 "stamina_cost": 0
             },
-            "walk":{
-                "duration":4,
+            "walk": {
+                "duration": 4,
                 "energy_cost": 1,
                 "stamina_cost": 0
             },
-            "run":{
-                "duration":2,
+            "run": {
+                "duration": 2,
                 "energy_cost": 3,
                 "stamina_cost": 10
             },
-            "attack":{
-                "duration":4,
+            "attack": {
+                "duration": 4,
                 "energy_cost": 12,
                 "stamina_cost": 20
             },
-            "pickup":{
-                "duration":6,
+            "pickup": {
+                "duration": 6,
                 "energy_cost": 2,
                 "stamina_cost": 2
             },
         }
+    }
 
-
-
-        }
     content_config.update(content_overrides)
 
     game_def = GameDef(
-        content_id = "survival_grid",
-        content_config = content_config
+        content_id="survival_grid",
+        content_config=content_config
     )
-    game_def.physics_config.grid_size = 80
+    game_def.physics_config.tile_size = TILE_SIZE
     game_def.physics_config.engine = "grid"
-    game_def.game_config.wait_for_user_input=False
+    game_def.game_config.wait_for_user_input = False
     return game_def
+
+
+
+def get_view_position_fn(obj: GObject):
+    action_data = obj.get_data_value("action")
+    # print(f"Action Data {action_data}")
+    cur_tick = clock.get_tick_counter()
+    # print(f"cur_tick  {cur_tick}")
+    if action_data:        
+        if action_data['start_tick'] + action_data['ticks'] > cur_tick:
+            if action_data['type'] == 'walk':
+                idx = cur_tick - action_data['start_tick']
+                view_position = action_data['step_size'] * idx * action_data['direction'] + action_data['start_position']
+                return view_position
+
+    return obj.get_position()
+
+
+def get_image_id_fn(obj: GObject, angle):
+    if obj.get_data_value("type") == "player":
+        angle_num = obj.body.angle/math.pi
+        direction = "down"
+        if angle_num < 0.25 and angle_num >= -0.25:
+            direction = "up"
+        elif angle_num > 0.25 and angle_num <= 0.75:
+            direction = "left"
+        elif angle_num < -0.25 and angle_num >= -0.75:
+            direction = "right"
+        elif abs(angle_num) >= 0.75:
+            direction = "down"
+
+        action_data = obj.get_data_value("action")
+        cur_tick = clock.get_tick_counter()
+        sprites_list = gamectx.content.player_idle_sprites
+
+        if action_data is not None:
+            if action_data['start_tick'] + action_data['ticks'] > cur_tick:
+                if action_data['type'] == 'walk':
+                    action_idx = (cur_tick - action_data['start_tick'])
+                    sprites_list = gamectx.content.player_walk_sprites
+                    sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))
+                    return sprites_list[direction][sprite_idx]
+
+        sprite_idx = int(cur_tick//gamectx.content.speed_factor())
+        return sprites_list[direction][sprite_idx % len(sprites_list[direction])]
+    else:
+        return obj.image_id_default
+
 
 def load_asset_bundle():
     image_assets = {}
-    image_assets['1'] = ('assets/redfighter0006.png',None)
-    image_assets['1_thrust'] = ('assets/redfighter0006_thrust.png',None)
+    image_assets['1'] = ('assets/redfighter0006.png', None)
+    image_assets['1_thrust'] = ('assets/redfighter0006_thrust.png', None)
 
-    image_assets['2'] = ('assets/ship2.png',None)
-    image_assets['energy1'] = ('assets/energy1.png',None)
-    image_assets['lava'] = ('assets/lava1.png',None)
+    image_assets['2'] = ('assets/ship2.png', None)
+    image_assets['energy1'] = ('assets/energy1.png', None)
+    image_assets['lava'] = ('assets/lava1.png', None)
 
-    image_assets['player_idle_down_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"1")
-    image_assets['player_idle_down_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"2")
-    image_assets['player_idle_down_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"3")
-    image_assets['player_idle_down_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"4")
-    image_assets['player_idle_down_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"5")
-    image_assets['player_idle_down_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png',"6")
+    image_assets['player_idle_down_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "1")
+    image_assets['player_idle_down_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "2")
+    image_assets['player_idle_down_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "3")
+    image_assets['player_idle_down_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "4")
+    image_assets['player_idle_down_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "5")
+    image_assets['player_idle_down_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "6")
 
-    image_assets['player_idle_up_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"1")
-    image_assets['player_idle_up_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"2")
-    image_assets['player_idle_up_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"3")
-    image_assets['player_idle_up_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"4")
-    image_assets['player_idle_up_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"5")
-    image_assets['player_idle_up_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png',"6")
+    image_assets['player_idle_up_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "1")
+    image_assets['player_idle_up_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "2")
+    image_assets['player_idle_up_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "3")
+    image_assets['player_idle_up_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "4")
+    image_assets['player_idle_up_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "5")
+    image_assets['player_idle_up_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "6")
 
-    image_assets['player_idle_right_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"1")
-    image_assets['player_idle_right_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"2")
-    image_assets['player_idle_right_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"3")
-    image_assets['player_idle_right_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"4")
-    image_assets['player_idle_right_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"5")
-    image_assets['player_idle_right_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png',"6")
+    image_assets['player_idle_right_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "1")
+    image_assets['player_idle_right_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "2")
+    image_assets['player_idle_right_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "3")
+    image_assets['player_idle_right_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "4")
+    image_assets['player_idle_right_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "5")
+    image_assets['player_idle_right_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "6")
 
-    image_assets['player_idle_left_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"1")
-    image_assets['player_idle_left_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"2")
-    image_assets['player_idle_left_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"3")
-    image_assets['player_idle_left_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"4")
-    image_assets['player_idle_left_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"5")
-    image_assets['player_idle_left_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png',"6")
+    image_assets['player_idle_left_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "1")
+    image_assets['player_idle_left_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "2")
+    image_assets['player_idle_left_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "3")
+    image_assets['player_idle_left_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "4")
+    image_assets['player_idle_left_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "5")
+    image_assets['player_idle_left_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "6")
 
+    image_assets['player_walk_down_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "1")
+    image_assets['player_walk_down_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "2")
+    image_assets['player_walk_down_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "3")
+    image_assets['player_walk_down_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "4")
+    image_assets['player_walk_down_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "5")
+    image_assets['player_walk_down_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "6")
 
-    image_assets['player_walk_down_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"1")
-    image_assets['player_walk_down_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"2")
-    image_assets['player_walk_down_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"3")
-    image_assets['player_walk_down_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"4")
-    image_assets['player_walk_down_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"5")
-    image_assets['player_walk_down_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png',"6")
+    image_assets['player_walk_up_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "1")
+    image_assets['player_walk_up_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "2")
+    image_assets['player_walk_up_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "3")
+    image_assets['player_walk_up_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "4")
+    image_assets['player_walk_up_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "5")
+    image_assets['player_walk_up_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "6")
 
-    image_assets['player_walk_up_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"1")
-    image_assets['player_walk_up_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"2")
-    image_assets['player_walk_up_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"3")
-    image_assets['player_walk_up_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"4")
-    image_assets['player_walk_up_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"5")
-    image_assets['player_walk_up_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png',"6")
+    image_assets['player_walk_right_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "1")
+    image_assets['player_walk_right_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "2")
+    image_assets['player_walk_right_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "3")
+    image_assets['player_walk_right_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "4")
+    image_assets['player_walk_right_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "5")
+    image_assets['player_walk_right_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "6")
 
-    image_assets['player_walk_right_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"1")
-    image_assets['player_walk_right_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"2")
-    image_assets['player_walk_right_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"3")
-    image_assets['player_walk_right_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"4")
-    image_assets['player_walk_right_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"5")
-    image_assets['player_walk_right_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png',"6")
-
-    image_assets['player_walk_left_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"1")
-    image_assets['player_walk_left_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"2")
-    image_assets['player_walk_left_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"3")
-    image_assets['player_walk_left_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"4")
-    image_assets['player_walk_left_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"5")
-    image_assets['player_walk_left_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png',"6")
-
+    image_assets['player_walk_left_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "1")
+    image_assets['player_walk_left_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "2")
+    image_assets['player_walk_left_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "3")
+    image_assets['player_walk_left_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "4")
+    image_assets['player_walk_left_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "5")
+    image_assets['player_walk_left_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "6")
 
     sound_assets = {}
     sound_assets['bleep2'] = 'assets/sounds/bleep2.wav'
-    return AssetBundle(image_assets=image_assets, sound_assets=sound_assets)
+
+
+    return AssetBundle(
+        image_assets=image_assets, 
+        sound_assets=sound_assets,
+        get_image_id_fn=get_image_id_fn,
+        get_view_position_fn=get_view_position_fn)
 
 
 def vec_to_coord(v):
-    block_size = gamectx.content.config['block_size']
-    return (int(v.x / block_size),int(v.y / block_size))
+    tile_size = gamectx.content.config['tile_size']
+    return (int(v.x / tile_size), int(v.y / tile_size))
+
 
 def coord_to_vec(coord):
-    block_size = gamectx.content.config['block_size']
-    return Vector(float(coord[0] * block_size),float(coord[1] * block_size))
+    tile_size = gamectx.content.config['tile_size']
+    return Vector(float(coord[0] * tile_size), float(coord[1] * tile_size))
+
 
 def add_food(position):
     o = GObject(Body())
     o.set_data_value("energy", gamectx.content.config['food_energy'])
     o.set_data_value("type", "food")
     o.set_image_id("energy1")
-    
-    o.set_position(position=position)
-    o.set_last_change(gamectx.clock.get_time())
 
-    ShapeFactory.attach_circle(o, radius=50)
+    o.set_position(position=position)
+    o.set_last_change(clock.get_time())
+
+    ShapeFactory.attach_circle(o, radius=TILE_SIZE/2)
     gamectx.add_object(o)
     gamectx.data['food_counter'] = gamectx.data.get('food_counter', 0) + 1
+
 
 def add_block(position, type="block", shape_color=(100, 100, 100)):
     o = GObject(Body())
     o.set_data_value("type", type)
     o.set_image_id(type)
     o.set_position(position=position)
-    o.set_last_change(gamectx.clock.get_time())
-    o.shape_color = shape_color
-    ShapeFactory.attach_rectangle(o,width=80,height=80)
+    o.set_last_change(clock.get_time())
+    o.set_shape_color(shape_color)
+    ShapeFactory.attach_rectangle(o, width=TILE_SIZE, height=TILE_SIZE)
     gamectx.add_object(o)
 
-def add_player_ship(player:Player,position:Vector):
+
+def new_player_object(player: Player, position: Vector):
     player_object = GObject(Body(mass=2, moment=0))
     player_object.set_data_value("rotation_multiplier", 1)
     player_object.set_data_value("velocity_multiplier", 1)
 
     player_object.set_data_value("type", "player")
-    
-    player_object.set_image_id("player_down_1")
+
+    player_object.set_image_id("player_idle_down_1")
     player_object.set_data_value("player_id", player.get_id())
     player_object.set_position(position=position)
-    ShapeFactory.attach_circle(player_object, radius=40)
+    ShapeFactory.attach_circle(player_object, radius=TILE_SIZE/2)
 
     player.attach_object(player_object)
     gamectx.add_object(player_object)
     return player_object
 
-#########################
-### RENDER FUNCTIONS ####
-#########################
-
-def obj_update_fn(obj:GObject):
-    # render_poses = obj.get_data_value("render_poses",None)
-    # total_ticks = obj.get_data_value("total_ticks",0)
-    # cur_tick = gamectx.clock.get_tick_counter()
-    # if render_poses and cur_tick in render_poses:
-    #     obj.view_position = render_poses[cur_tick]
-    #     return
-    # elif render_poses and cur_tick > total_ticks:
-    #     obj.set_data_value("render_poses",None)
-    #     obj.set_data_value("total_ticks",0)
-    #     obj.view_position  = None
-
-
-
-    return None
-
-def view_position_fn(obj:GObject):
-    action_data = obj.get_data_value("action")
-    if action_data:
-        cur_tick = gamectx.clock.get_tick_counter()
-        if action_data['start_tick'] + action_data['ticks'] > cur_tick:
-            if action_data['type'] == 'walk':
-                idx = cur_tick - action_data['start_tick']
-                view_position = action_data['step_size'] * idx *  action_data['direction'] + action_data['start_position']
-                return view_position               
-        else:
-            obj.set_data_value("action",None)
-    return obj.get_position()
-
-import math
-def sprite_id_fn(obj:GObject, angle):
-    angle_num = obj.body.angle/math.pi
-    direction = "down"
-    if angle_num < 0.25 and angle_num >= -0.25:
-        direction = "up"
-    elif angle_num > 0.25 and angle_num <= 0.75:
-        direction = "left"
-    elif angle_num < -0.25 and angle_num >= -0.75:
-        direction = "right"
-    elif abs(angle_num) >= 0.75:
-        direction = "down"
-
-    action_data = obj.get_data_value("action")
-    cur_tick = gamectx.clock.get_tick_counter()
-    sprites_list = gamectx.content.player_idle_sprites
-
-    if action_data is not None:
-        if action_data['start_tick'] + action_data['ticks'] > cur_tick:            
-            if action_data['type'] == 'walk':
-                action_idx = (cur_tick - action_data['start_tick'])
-                sprites_list = gamectx.content.player_walk_sprites
-                sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))               
-                return sprites_list[direction][ sprite_idx]
-           
-    sprite_idx = int(cur_tick//gamectx.content.speed_factor())
-    return sprites_list[direction][ sprite_idx % len(sprites_list[direction])]
-
-
-def spawn_player(player:Player, reset = False):
-    player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+def spawn_player(player: Player, reset=False):
+    player_object = gamectx.object_manager.get_by_id(player.get_object_id())
     loc = random.choice(gamectx.content.spawn_locations)
     position = coord_to_vec(loc)
     if player_object is None:
-        add_player_ship(player,position=position)
-        player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
-        player_object.set_update_fn(obj_update_fn)
-        player_object.set_view_position_fn(view_position_fn)
-        player_object.set_sprite_id_fn(sprite_id_fn)
-
+        player_object = new_player_object(player, position=position)
     else:
         player_object.update_position(position=position)
-        
-    player_object.set_data_value("energy",  gamectx.content.config['player_config']['energy_start'])
-    player_object.set_data_value("health",gamectx.content.config['player_config']['health_start'])
-    player_object.set_data_value("stamina",gamectx.content.config['player_config']['stamina_max'])
-    player_object.set_data_value("next_energy_decay",0)
-    player_object.set_data_value("next_health_gen",0)
 
-    player.set_data_value("allow_input",False)
+    player_object.set_data_value("energy",  gamectx.content.config['player_config']['energy_start'])
+    player_object.set_data_value("health", gamectx.content.config['player_config']['health_start'])
+    player_object.set_data_value("stamina", gamectx.content.config['player_config']['stamina_max'])
+    player_object.set_data_value("next_energy_decay", 0)
+    player_object.set_data_value("next_health_gen", 0)
+
+    player.set_data_value("allow_input", False)
     if reset:
-        player.set_data_value("lives_used",0)
-        player.set_data_value("food_reward_count",0)
-        player.set_data_value("reset_required",False)
-        player.set_data_value("allow_obs",True)
-        
+        player.set_data_value("lives_used", 0)
+        player.set_data_value("food_reward_count", 0)
+        player.set_data_value("reset_required", False)
+        player.set_data_value("allow_obs", True)
+
         # player.set_data_value("allow_obs",True)
         player.events = []
         player_object.enable()
@@ -395,112 +393,114 @@ def spawn_player(player:Player, reset = False):
         #     execution_step_interval=gamectx.content.config['player_energy_decay_freq'],
         #     data={'obj_id': player_object.get_id()})
         # gamectx.event_manager.add_event(decay_event)
-            
+
     return player_object
 
 
-def process_food_collision(player_obj:GObject,food_obj):
-    
+def process_food_collision(player_obj: GObject, food_obj):
+
     food_energy = food_obj.get_data_value('energy')
     player_energy = player_obj.get_data_value('energy')
     player_obj.set_data_value("energy",
                               player_energy + food_energy)
-    print(f"YAYA FOOD! {player_energy} => {player_energy + food_energy}")
+    # print(f"YAYA FOOD! {player_energy} => {player_energy + food_energy}")
     food_reward_count = player_obj.get_data_value('food_reward_count', 0)
-    food_reward_count +=1
-    player_obj.set_data_value("food_reward_count",food_reward_count)
-    player_obj.set_last_change(gamectx.clock.get_time())
+    food_reward_count += 1
+    player_obj.set_data_value("food_reward_count", food_reward_count)
+    player_obj.set_last_change(clock.get_time())
     food_counter = gamectx.data.get('food_counter', 0)
     gamectx.data['food_counter'] = food_counter - 1
+
     gamectx.remove_object(food_obj)
 
     sound_event = SoundEvent(
-        creation_time=gamectx.clock.get_time(),
         sound_id="bleep2")
-    gamectx.event_manager.add_event(sound_event)
+    gamectx.add_event(sound_event)
     return False
 
 
-def process_lava_collision(player_obj,lava_obj):
-    player_obj.set_data_value("health",0)
+def process_lava_collision(player_obj, lava_obj):
+    player_obj.set_data_value("health", 0)
     return False
 
 
-def default_collision_callback(obj1:GObject,obj2:GObject):
+def default_collision_callback(obj1: GObject, obj2: GObject):
     if obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "food":
         return process_food_collision(obj1, obj2)
     elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "lava":
         return process_lava_collision(obj1, obj2)
     elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "block":
+        obj1.set_data_value("action", None)
         return True
+    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "player":
+        obj1.set_data_value("action", None)
+        return True
+        
     return False
 
 ##########################
-#pre_event_callback
+# pre_event_callback
 ##########################
+
 
 def post_physics_callback():
     new_events = []
-    cur_time = gamectx.clock.get_time()
+    cur_time = clock.get_time()
     for k, p in gamectx.player_manager.players_map.items():
         if p.get_object_id() is None:
             continue
 
-        o = gamectx.object_manager.get_latest_by_id(p.get_object_id())
+        o = gamectx.object_manager.get_by_id(p.get_object_id())
 
         if o is None or o.is_deleted or not o.enabled:
             continue
 
-        
         if o.enabled:
             # Energy Decay
-            if cur_time > o.get_data_value("next_energy_decay",0):
-                energy = max(0,o.get_data_value("energy") - gamectx.content.config['player_config']['energy_decay'])
+            if cur_time > o.get_data_value("next_energy_decay", 0):
+                energy = max(0, o.get_data_value("energy") - gamectx.content.config['player_config']['energy_decay'])
                 o.set_data_value('energy', energy)
-                if energy<=0:
+                if energy <= 0:
                     health = o.get_data_value("health") - gamectx.content.config['player_config']['low_energy_health_penalty']
                     o.set_data_value('health', health)
                 o.set_data_value("next_energy_decay", cur_time + (gamectx.content.config['player_config']['energy_decay_period'] * gamectx.content.speed_factor()))
 
             # Health regen
-            if cur_time > o.get_data_value("next_health_gen",0):
-                health = min(gamectx.content.config['player_config']['health_max'],o.get_data_value("health") + gamectx.content.config['player_config']['health_gen'])
+            if cur_time > o.get_data_value("next_health_gen", 0):
+                health = min(gamectx.content.config['player_config']['health_max'], o.get_data_value("health") + gamectx.content.config['player_config']['health_gen'])
                 o.set_data_value('health', health)
                 o.set_data_value("next_health_gen", cur_time + (gamectx.content.config['player_config']['health_gen_period'] * gamectx.content.speed_factor()))
 
             # Stamina regen
-            if cur_time > o.get_data_value("next_stamina_gen",0):
-                stamina = min(gamectx.content.config['player_config']['stamina_max'],o.get_data_value("stamina") + gamectx.content.config['player_config']['stamina_gen'])
+            if cur_time > o.get_data_value("next_stamina_gen", 0):
+                stamina = min(gamectx.content.config['player_config']['stamina_max'], o.get_data_value("stamina") + gamectx.content.config['player_config']['stamina_gen'])
                 o.set_data_value('stamina', stamina)
                 o.set_data_value("next_stamina_gen", cur_time + (gamectx.content.config['player_config']['stamina_gen_period'] * gamectx.content.speed_factor()))
 
             # Check for death
             if o.get_data_value("health") <= 0:
-                p.set_data_value("allow_input",False)
+                p.set_data_value("allow_input", False)
                 lives_used = p.get_data_value("lives_used", 0)
-                lives_used+=1
+                lives_used += 1
                 p.set_data_value("lives_used", lives_used)
                 o.disable()
-                p.set_data_value("reset_required",True)
+                p.set_data_value("reset_required", True)
             else:
-                p.set_data_value("allow_input",True)
-
-
-            
-    
+                p.set_data_value("allow_input", True)
 
     return new_events
 
 
 def pre_physics_callback():
-    
+
     return []
 
-item_types = ['lava','food','block','player']
+
+item_types = ['lava', 'food', 'block', 'player']
 item_map = {}
-for i,k in enumerate(item_types):
+for i, k in enumerate(item_types):
     v = np.zeros(len(item_types)+1)
-    v[i] =1
+    v[i] = 1
     item_map[k] = v
 default_v = np.zeros(len(item_types)+1)
 default_v[len(item_types)] = 1
@@ -508,9 +508,9 @@ default_v[len(item_types)] = 1
 item_type_count = len(item_types)
 vision_distance = 2
 
+
 class GameContent(Content):
 
-    
     def __init__(self, config):
         super().__init__(config)
         self.asset_bundle = load_asset_bundle()
@@ -518,76 +518,72 @@ class GameContent(Content):
         self.space_border = config['space_border']
         self.food_energy = config['food_energy']
         self.food_count = config['food_count']
-        
-        
-        self.player_count=0
-        self.keymap = [23,19,4,1]
 
+        self.player_count = 0
+        self.keymap = [23, 19, 4, 1]
 
         self.spawn_locations = []
         self.food_locations = []
         self.loaded = False
-        self.player_idle_sprites = { 
-            'down': ['player_idle_down_1','player_idle_down_2','player_idle_down_3','player_idle_down_4','player_idle_down_5','player_idle_down_6'],
-            'up': ['player_idle_up_1','player_idle_up_2','player_idle_up_3','player_idle_up_4','player_idle_up_5','player_idle_up_6'],
-            'left': ['player_idle_left_1','player_idle_left_2','player_idle_left_3','player_idle_left_4','player_idle_left_5','player_idle_left_6'],
-            'right': ['player_idle_right_1','player_idle_right_2','player_idle_right_3','player_idle_right_4','player_idle_right_5','player_idle_right_6']}
-        self.player_walk_sprites = { 
-            'down': ['player_walk_down_1','player_walk_down_2','player_walk_down_3','player_walk_down_4','player_walk_down_5','player_walk_down_6'],
-            'up': ['player_walk_up_1','player_walk_up_2','player_walk_up_3','player_walk_up_4','player_walk_up_5','player_walk_up_6'],
-            'left': ['player_walk_left_1','player_walk_left_2','player_walk_left_3','player_walk_left_4','player_walk_left_5','player_walk_left_6'],
-            'right': ['player_walk_right_1','player_walk_right_2','player_walk_right_3','player_walk_right_4','player_walk_right_5','player_walk_right_6']}
-
+        self.player_idle_sprites = {
+            'down': ['player_idle_down_1', 'player_idle_down_2', 'player_idle_down_3', 'player_idle_down_4', 'player_idle_down_5', 'player_idle_down_6'],
+            'up': ['player_idle_up_1', 'player_idle_up_2', 'player_idle_up_3', 'player_idle_up_4', 'player_idle_up_5', 'player_idle_up_6'],
+            'left': ['player_idle_left_1', 'player_idle_left_2', 'player_idle_left_3', 'player_idle_left_4', 'player_idle_left_5', 'player_idle_left_6'],
+            'right': ['player_idle_right_1', 'player_idle_right_2', 'player_idle_right_3', 'player_idle_right_4', 'player_idle_right_5', 'player_idle_right_6']}
+        self.player_walk_sprites = {
+            'down': ['player_walk_down_1', 'player_walk_down_2', 'player_walk_down_3', 'player_walk_down_4', 'player_walk_down_5', 'player_walk_down_6'],
+            'up': ['player_walk_up_1', 'player_walk_up_2', 'player_walk_up_3', 'player_walk_up_4', 'player_walk_up_5', 'player_walk_up_6'],
+            'left': ['player_walk_left_1', 'player_walk_left_2', 'player_walk_left_3', 'player_walk_left_4', 'player_walk_left_5', 'player_walk_left_6'],
+            'right': ['player_walk_right_1', 'player_walk_right_2', 'player_walk_right_3', 'player_walk_right_4', 'player_walk_right_5', 'player_walk_right_6']}
 
     def speed_factor(self):
-        return max(gamectx.speed_factor() * 1/4,1)
+        return max(gamectx.speed_factor() * 1/4, 1)
 
     def get_asset_bundle(self):
         return self.asset_bundle
-    
+
     def reset(self):
+        print("Resetting")
         if not self.loaded:
             self.load()
-        #gamectx.remove_all_objects()
+        # gamectx.remove_all_objects()
         gamectx.remove_all_events()
-        
+
         def food_event_callback(event: PeriodicEvent, data: Dict[str, Any]):
             self.spawn_food(limit=1)
-            return [],True
-        new_food_event = PeriodicEvent(food_event_callback, execution_step_interval=random.randint(10,16) * self.speed_factor())
-        gamectx.event_manager.add_event(new_food_event)
+            return [], True
+        new_food_event = PeriodicEvent(food_event_callback, execution_step_interval=random.randint(10, 16) * self.speed_factor())
+        gamectx.add_event(new_food_event)
 
         self.spawn_food()
         self.spawn_players()
 
     def reset_required(self):
         for player in gamectx.player_manager.players_map.values():
-            if not player.get_data_value("reset_required",True):
+            if not player.get_data_value("reset_required", True):
                 return False
         return True
 
-
     def spawn_players(self):
         for player in gamectx.player_manager.players_map.values():
-            spawn_player(player,reset=True)
+            spawn_player(player, reset=True)
 
-    def spawn_food(self,limit = None):
+    def spawn_food(self, limit=None):
         # Spawn food
         spawn_count = 0
         for i, coord in enumerate(self.food_locations):
-            if len(gamectx.physics_engine.space.get_objs_at(coord))==0:
+            if len(gamectx.physics_engine.space.get_objs_at(coord)) == 0:
                 add_food(coord_to_vec(coord))
-                spawn_count+=1
+                spawn_count += 1
                 if limit is not None and spawn_count >= limit:
                     return
 
-    
     def get_observation_space(self):
         from gym import spaces
         x_dim = (vision_distance * 2 + 1)
         y_dim = x_dim
-        chans = len(item_types) +1
-        return spaces.Box(low=0, high=1, shape=(x_dim,y_dim,chans))
+        chans = len(item_types) + 1
+        return spaces.Box(low=0, high=1, shape=(x_dim, y_dim, chans))
 
     def get_action_space(self):
         from gym import spaces
@@ -597,24 +593,23 @@ class GameContent(Content):
         obj_coord = gamectx.physics_engine.vec_to_coord(obj.get_position())
         xvis = vision_distance
         yvis = vision_distance
-        col_min =  obj_coord[0] - xvis
-        col_max =  obj_coord[0] + xvis
-        row_min =  obj_coord[1] - yvis
-        row_max =  obj_coord[1] + yvis
+        col_min = obj_coord[0] - xvis
+        col_max = obj_coord[0] + xvis
+        row_min = obj_coord[1] - yvis
+        row_max = obj_coord[1] + yvis
         results = []
-        for r in range(row_max, row_min-1,-1):
+        for r in range(row_max, row_min-1, -1):
             row_results = []
-            for c in range(col_min,col_max+1):
-                obj_ids = gamectx.physics_engine.space.get_objs_at((c,r))
-                if len(obj_ids)>0:
+            for c in range(col_min, col_max+1):
+                obj_ids = gamectx.physics_engine.space.get_objs_at((c, r))
+                if len(obj_ids) > 0:
                     obj_id = obj_ids[0]
-                    obj_seen = gamectx.object_manager.get_latest_by_id(obj_id)
+                    obj_seen = gamectx.object_manager.get_by_id(obj_id)
                     row_results.append(item_map.get(obj_seen.get_data_value('type')))
                 else:
                     row_results.append(default_v)
             results.append(row_results)
         return np.array(results)
-
 
     def get_step_info(self, player: Player) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         observation = None
@@ -622,53 +617,53 @@ class GameContent(Content):
         reward = 0
         info = {}
         if player is not None:
-            if not player.get_data_value("allow_obs",False):
-                return None,None,None,None
+            if not player.get_data_value("allow_obs", False):
+                return None, None, None, None
 
             obj_id = player.get_object_id()
-            obj = gamectx.object_manager.get_latest_by_id(obj_id)
+            obj = gamectx.object_manager.get_by_id(obj_id)
             observation = self.get_observation(obj)
-            done = player.get_data_value("reset_required",False)
+            done = player.get_data_value("reset_required", False)
             if done:
-                player.set_data_value("allow_obs",False)
+                player.set_data_value("allow_obs", False)
 
             info['lives_used'] = player.get_data_value("lives_used")
             energy = obj.get_data_value("energy")
             info['energy'] = energy
 
             # Claim food rewards
-            food_reward_count = obj.get_data_value("food_reward_count",0)
-            obj.set_data_value("food_reward_count",0)
+            food_reward_count = obj.get_data_value("food_reward_count", 0)
+            obj.set_data_value("food_reward_count", 0)
             reward = food_reward_count
             # if energy == 0:
             #     reward += -1
             if done:
-                reward = -5                
+                reward = -5
         else:
             info['msg'] = "no player found"
         return observation, reward, done, info
 
-
     # **********************************
     # GAME LOAD
     # **********************************
+
     def load(self):
         self.loaded = False
         lines = test_map.split("\n")
 
-        self.spawn_locations=[]
-        for ridx,line in enumerate(lines):
-            for cidx,ch in enumerate(line):
-                coord = (cidx,ridx)
+        self.spawn_locations = []
+        for ridx, line in enumerate(lines):
+            for cidx, ch in enumerate(line):
+                coord = (cidx, ridx)
                 if ch == 'b':
                     add_block(coord_to_vec(coord))
                 elif ch == 'x':
-                    add_block(coord_to_vec(coord),type="lava",shape_color=(200,100,100))
+                    add_block(coord_to_vec(coord), type="lava", shape_color=(200, 100, 100))
                 elif ch == 'f':
                     self.food_locations.append(coord)
                 elif ch == 's':
                     self.spawn_locations.append(coord)
-                
+
         gamectx.physics_engine.set_collision_callback(
             default_collision_callback,
             COLLISION_TYPE['default'],
@@ -678,7 +673,7 @@ class GameContent(Content):
         gamectx.set_input_event_callback(input_event_callback)
         gamectx.set_post_physics_callback(post_physics_callback)
 
-        self.loaded=True
+        self.loaded = True
 
     # **********************************
     # NEW PLAYER
@@ -691,33 +686,33 @@ class GameContent(Content):
             player_id = gen_id()
         player = gamectx.player_manager.get_player(player_id)
         if player is None:
-            cam_distance = self.space_size + self.space_border
+            cam_distance = self.space_size
             if player_type == 10:
-                cam_distance = self.space_size + self.space_border
+                cam_distance = TILE_SIZE*6
             player = Player(
-                client_id = client_id,
+                client_id=client_id,
                 uid=player_id,
                 camera=Camera(distance=cam_distance),
                 player_type=player_type)
-            
+
             gamectx.add_player(player)
-        player.set_data_value("view_type",1)
+        player.set_data_value("view_type", 1)
         if player_type == 10:
             return player
-        player_object = spawn_player(player,reset=True)
+        player_object = spawn_player(player, reset=True)
         return player
-
 
     # **********************************
     # Additional Rendering
     # **********************************
+
     def post_process_frame(self, render_time, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:
             lines = []
             lines.append("Lives Used: {}".format(player.get_data_value("lives_used", 0)))
 
-            obj = gamectx.object_manager.get_by_id(player.get_object_id(), render_time)
-            obj_energy = 0
+            obj = gamectx.object_manager.get_by_id(player.get_object_id())
+            obj_health = 0
             if obj is not None:
                 obj_energy = obj.get_data_value("energy", "NA")
                 obj_health = obj.get_data_value("health", "NA")
@@ -725,8 +720,8 @@ class GameContent(Content):
 
                 lines.append(f"H:{obj_health}, E:{obj_energy}, S:{obj_stamina}")
                 lines.append("Current Velocity: {}".format(obj.get_body()._get_velocity()))
-                lines.append("Current Angular Vel: {}".format(obj.get_body()._get_angular_velocity()))
-                lines.append("Observation: {}".format(self.get_observation(obj)[:8]))
+              #  lines.append("Current Angular Vel: {}".format(obj.get_body()._get_angular_velocity()))
+                # lines.append("Observation: {}".format(self.get_observation(obj)[:8]))
 
             if renderer.config.show_console:
                 renderer.render_to_console(lines, x=5, y=5)

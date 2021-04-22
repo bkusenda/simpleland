@@ -21,102 +21,13 @@ from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
 import traceback
 from simpleland import gamectx
-
-class UDPHandler(socketserver.BaseRequestHandler):
-
-    def handle(self):
-        config: ServerConfig = self.server.config
-
-        # Process Request data
-        request_st = lz4.frame.decompress(self.request[0]).decode('utf-8').strip()
-        try:
-            request_data = json.loads(request_st, cls=StateDecoder)
-        except Exception as e:
-            print(request_st)
-            raise e
-
-        request_info = request_data['info']
-
-        request_message = request_info['message']
-        client = gamectx.get_client(request_info['client_id'])
-        player = gamectx.get_player(client, player_type=request_info['player_type'])
-        snapshots_received = request_info['snapshots_received']
-
-        # simulate missing parts
-        skip_remove = False  # random.random() < 0.01
-
-        for t in snapshots_received:
-            if t in client.unconfirmed_messages:
-                if skip_remove:
-                    print("Skipping remove confirmation")
-                    continue
-                else:
-                    client.unconfirmed_messages.remove(t)
-
-        # Load events from client
-        all_events_data = []
-        for event_dict in request_data['items']:
-            all_events_data.extend(event_dict)
-
-        if len(all_events_data) > 0:
-            gamectx.event_manager.load_snapshot(all_events_data)
-
-        if len(client.unconfirmed_messages) < config.max_unconfirmed_messages_before_new_snapshot:
-            snapshot_timestamp, snapshot = gamectx.create_snapshot(client.last_snapshot_time_ms)
-        else:
-            
-            # TODO
-            # snapshot_timestamp, snapshot = gamectx.create_snapshot_for_client(0)
-            #client.unconfirmed_messages.clear()
-            raise Exception("Too many unconfirmed, packets full update required")
-            
-            
-        client.unconfirmed_messages.add(snapshot_timestamp)
-
-        # Build response data
-        response_data = {}
-        response_data['info'] = {
-            'server_time_ms': gamectx.clock.get_exact_time(),
-            'message': "UPDATE",
-            'client_id': client.get_id(),
-            'player_id': player.get_id(),
-            'snapshot_timestamp': snapshot_timestamp}
-        response_data['snapshot'] = snapshot
-
-        # Convert response to json then compress and send in chunks
-        response_data_st = json.dumps(response_data, cls=StateEncoder)
-        response_data_st = bytes(response_data_st, 'utf-8')
-        response_data_st = lz4.frame.compress(response_data_st)
-
-        chunk_size = config.outgoing_chunk_size
-        chunks = math.ceil(len(response_data_st)/chunk_size)
-        socket = self.request[1]
-        for i in range(chunks+1):  # TODO: +1 ??? why
-            header = struct.pack('ll', i+1, chunks)
-            data_chunk = header + response_data_st[i*chunk_size:(i+1)*chunk_size]
-            current_thread = threading.current_thread()
-            # Simulate packet loss
-            # if random.random() < 0.01:
-            #     print("random skip chunk")
-            #     continue
-            socket.sendto(data_chunk, self.client_address)
-
-        client.last_snapshot_time_ms = snapshot_timestamp
-
-
-class GameUDPServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
-
-    def __init__(self, conn, handler, config):
-        socketserver.UDPServer.__init__(self, conn, handler)
-        self.config = config
-
+from simpleland.server import GameUDPServer, UDPHandler 
 
 def get_game_def(
         game_id,
         enable_server,
         remote_client,
         port,
-        physics_tick_rate=None,
         game_tick_rate=None,
         sim_timestep=None,
         content_overrides={}
@@ -130,7 +41,6 @@ def get_game_def(
     # Game
     game_def.game_config.tick_rate = game_tick_rate
     game_def.physics_config.sim_timestep = sim_timestep
-    game_def.physics_config.tick_rate = physics_tick_rate
 
     game_def.game_config.client_only_mode = not enable_server and remote_client
     return game_def
@@ -148,7 +58,7 @@ def get_player_def(
         render_shapes=None,
         disable_textures=None,
         is_human=True,
-        grid_size=None,
+        tile_size=None,
         debug_render_bodies=False,
         view_type=0,
         sound_enabled = True) -> PlayerDefinition:
@@ -167,16 +77,14 @@ def get_player_def(
     player_def.renderer_config.resolution = resolution
     player_def.renderer_config.render_shapes = render_shapes
     player_def.renderer_config.disable_textures = disable_textures
-    player_def.renderer_config.draw_grid = grid_size is not None
-    player_def.renderer_config.grid_size = grid_size
+    player_def.renderer_config.draw_grid = tile_size is not None
+    player_def.renderer_config.tile_size = tile_size
     player_def.renderer_config.debug_render_bodies = debug_render_bodies
     player_def.renderer_config.view_type = view_type
     player_def.renderer_config.sound_enabled =sound_enabled
     return player_def
 
-
-if __name__ == "__main__":
-
+def get_arguments(override_args=None):
     parser = argparse.ArgumentParser()
 
     # Server
@@ -194,7 +102,7 @@ if __name__ == "__main__":
     parser.add_argument("--fps", default=60, type=int, help="fps")
     parser.add_argument("--player_type", default=0, type=int, help="Player type (0=default, 10=observer_only)")
     parser.add_argument("--view_type", default=0, type=int, help="NOT USED at moment: View type (0=perspective, 1=world)")
-    parser.add_argument("--grid_size", default=None, type=int, help="not = no grid")
+    parser.add_argument("--tile_size", default=None, type=int, help="not = no grid")
     parser.add_argument("--debug_render_bodies", action="store_true", help="pymunk render")
     parser.add_argument("--disable_sound", action="store_true", help="disable_sound")
 
@@ -203,15 +111,16 @@ if __name__ == "__main__":
 
     # Game Options
     parser.add_argument("--enable_profiler", action="store_true", help="Enable Performance profiler")
-    parser.add_argument("--physics_tick_rate", default=60, type=int, help="physics_tick_rate: approx physics updates per second (physics accuracy is controlled via sim_timestep)")
     parser.add_argument("--sim_timestep", default=0.01, type=float, help="sim_timestep, lower (eg 0.01) = more accurate, higher (eg 0.1) = less accurate but faster")
     parser.add_argument("--game_tick_rate", default=60, type=int, help="game_tick_rate")
 
     parser.add_argument("--game_id", default="space_grid1", help="id of game")
     parser.add_argument("--content_overrides", default="{}", type=str,help="JSON string containing content updates. eg --content_overrides='{\"player_start_energy\":35}'")
 
-    args = parser.parse_args()
+    return  parser.parse_args(override_args)
 
+
+def run(args):
     print(args.__dict__)
 
     if not args.enable_server and not args.enable_client and not args.remote_client:
@@ -233,7 +142,6 @@ if __name__ == "__main__":
         remote_client=args.remote_client,
         port=args.port,
         game_tick_rate=args.game_tick_rate,
-        physics_tick_rate=args.physics_tick_rate,
         sim_timestep=args.sim_timestep,
         content_overrides = json.loads(args.content_overrides)
     )
@@ -259,7 +167,7 @@ if __name__ == "__main__":
         resolution=resolution,
         fps=args.fps,
         player_type=args.player_type,
-        grid_size=args.grid_size,
+        tile_size=args.tile_size,
         debug_render_bodies = args.debug_render_bodies,
         view_type = args.view_type,
         sound_enabled= not args.disable_sound
@@ -283,11 +191,25 @@ if __name__ == "__main__":
         gamectx.add_local_client(client)
 
     server = None
+    import signal
+    import sys
+    def graceful_exit(signum=None, frame=None):
+        print("Shutting down")
+        if game_def.server_config.enabled:
+            # server.shutdown()
+            server.server_close()
+
+        if args.enable_profiler:
+            profiler.stop()
+            print(profiler.output_text(unicode=True, color=True))
+        exit()
+    signal.signal(signal.SIGINT, graceful_exit)
+
     try:
         if game_def.server_config.enabled:
+            
             server = GameUDPServer(
                 conn=(game_def.server_config.hostname, game_def.server_config.port),
-                handler=UDPHandler,
                 config=game_def.server_config)
 
             server_thread = threading.Thread(target=server.serve_forever)
@@ -296,16 +218,15 @@ if __name__ == "__main__":
             print("Server started at {} port {}".format(game_def.server_config.hostname, game_def.server_config.port))
 
         gamectx.run()
-    except Exception as e:
-
+    except (Exception,KeyboardInterrupt) as e:
         print(traceback.format_exc())
-        raise e
-    finally:
-        if game_def.server_config.enabled:
-            server.shutdown()
-            server.server_close()
+        print(e)
+    finally:        
+        graceful_exit()
 
-        if args.enable_profiler:
-            profiler.stop()
-            print(profiler.output_text(unicode=True, color=True))
-        exit()
+if __name__ == "__main__":
+    args = get_arguments()
+    run(args)
+
+    
+

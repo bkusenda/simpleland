@@ -31,7 +31,6 @@ class SimplelandEnv:
             port = 10001, 
             dry_run=False,
             agent_map={'1':{},'2':{}},
-            physics_tick_rate = 0,
             game_tick_rate = 0,
             sim_timestep = 0.01,
             enable_server = False,
@@ -45,7 +44,6 @@ class SimplelandEnv:
             enable_server=enable_server, 
             port=port,
             remote_client=False,
-            physics_tick_rate=physics_tick_rate,
             game_tick_rate = game_tick_rate,
             sim_timestep=sim_timestep)
 
@@ -282,7 +280,7 @@ if __name__ == "__main__":
                     print(rewards[id])
                     print(dones[id])
                     print(infos[id])
-                print(f"Episode {episode_count} Game Step:{gamectx.clock.get_time()}")
+                print(f"Episode {episode_count} Game Step:{clock.get_time()}")
                 print("----------")
                 action = env.action_spaces[id].sample() #input()
                 print(action)

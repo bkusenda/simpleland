@@ -1,1 +1,1 @@
-from .core import gamectx
+from .game import gamectx

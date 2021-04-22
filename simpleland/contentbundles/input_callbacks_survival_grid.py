@@ -3,6 +3,7 @@ from ..event import InputEvent, Event, AdminEvent,ViewEvent, DelayedEvent
 from .. import gamectx
 from ..common import Body, Vector
 import pygame
+from ..clock import clock
 
 import sys
 import math
@@ -24,11 +25,11 @@ def input_event_callback(input_event: InputEvent) -> List[Event]:
 def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
     
     events= []
-    grid_size = gamectx.physics_engine.config.grid_size
+    tile_size = gamectx.physics_engine.config.tile_size
     keys = set(input_event.input_data['inputs'])
-    cur_tick = gamectx.clock.get_tick_counter()
+    cur_tick = clock.get_tick_counter()
 
-    obj = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+    obj = gamectx.object_manager.get_by_id(player.get_object_id())
     if obj is None:
         return events
 
@@ -42,7 +43,7 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
     velocity_multiplier = obj.get_data_value('velocity_multiplier')
 
     # Queued action prevents movement until complete. Trigger at a certain time and releases action lock later but 
-    # cur_tick = gamectx.clock.get_tick_counter()
+    # cur_tick = clock.get_tick_counter()
     action_completion_time = obj.get_data_value("action_completion_time",0)
     if cur_tick <= obj.get_data_value("action_completion_time",0):
         return []
@@ -91,13 +92,13 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
         action_complete_time = cur_tick + ticks_in_action
         obj.set_data_value("action_completion_time",action_complete_time)
         body:Body = obj.get_body()
-        new_pos = grid_size * direction + body.position
+        new_pos = tile_size * direction + body.position
         obj.set_data_value("action",
             {
                 'type':'walk',
-                'start_tick':gamectx.clock.get_tick_counter(),
+                'start_tick':clock.get_tick_counter(),
                 'ticks': ticks_in_action,
-                'step_size': grid_size/ticks_in_action,
+                'step_size': tile_size/ticks_in_action,
                 'start_position': body.position,
                 'direction': direction
             })
@@ -120,10 +121,10 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
 def input_event_callback_fpv(input_event: InputEvent, player) -> List[Event]:
 
     events= []
-    grid_size = gamectx.physics_engine.config.grid_size
+    tile_size = gamectx.physics_engine.config.tile_size
     keys = set(input_event.input_data['inputs'])
 
-    obj = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+    obj = gamectx.object_manager.get_by_id(player.get_object_id())
     if obj is None:
         return events
     gamectx.content.get_observation(obj)
@@ -157,11 +158,11 @@ def input_event_callback_fpv(input_event: InputEvent, player) -> List[Event]:
         direction = data['direction']
         orientation_diff = obj_orientation_diff * rotation_multiplier
         direction = direction * velocity_multiplier
-        obj.set_last_change(gamectx.clock.get_time())
+        obj.set_last_change(clock.get_time())
         body:Body = obj.get_body()
         angle = body.angle
         direction = direction.rotated(angle)
-        new_pos = grid_size * direction + body.position
+        new_pos = tile_size * direction + body.position
         obj.update_position(new_pos)
         body.angle = angle + orientation_diff
         return []

@@ -3,16 +3,9 @@ from typing import List, Dict
 
 import numpy as np
 import pygame
-
-
-from .common import (get_dict_snapshot, load_dict_snapshot, Body, Circle, Clock, Line,
-                     Polygon, Space, Vector, SimClock, Base)
-
-from .object import GObject
 from .utils import gen_id
 from .event_manager import EventManager
-from .event import (AdminEvent, MechanicalEvent,
-                            PeriodicEvent, ViewEvent, Event, InputEvent)
+from .event import Event
 
 from .player import Player
 

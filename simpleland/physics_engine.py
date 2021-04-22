@@ -4,15 +4,16 @@ import numpy
 import pygame
 import pymunk
 from pymunk import Vec2d
-from .common import (Body, Circle, Clock, Line,
-                     Polygon, Space, Vector, SimClock, COLLISION_TYPE)
+from .common import (Body, Circle,  Line,
+                     Polygon, Space, Vector,  COLLISION_TYPE)
 from .object import GObject
 # from .player import Player
 from .utils import gen_id
 from .config import PhysicsConfig
 import math
+from .clock import clock
 
-def get_default_velocity_callback(clock, config):
+def get_default_velocity_callback(config):
     def limit_velocity(b, gravity, damping, dt):
         max_velocity = config.default_max_velocity
         if b.velocity.length < config.default_min_velocity:
@@ -27,7 +28,7 @@ def get_default_velocity_callback(clock, config):
         b.velocity = b.velocity * scale
     return limit_velocity
 
-def get_default_position_callback(clock, config):
+def get_default_position_callback(config):
     def position_callback(body:Body, dt):
         init_p = body.position
         pymunk.Body.update_position(body,dt)
@@ -85,20 +86,19 @@ class GridPhysicsEngine:
     Handles physics events and collision
     """
 
-    def __init__(self,clock:SimClock,config:PhysicsConfig):
+    def __init__(self,config:PhysicsConfig):
         self.config = config
-        self.grid_size = self.config.grid_size
-        self.clock = clock
+        self.tile_size = self.config.tile_size
         self.space = GridSpace()
         self.position_updates = {}
         self.collision_callbacks ={}
 
     def vec_to_coord(self,v):
         
-        return (int(v.x / self.grid_size),int(v.y / self.grid_size))
+        return (int(v.x / self.tile_size),int(v.y / self.tile_size))
 
     def coord_to_vec(self,coord):
-        return Vector(float(coord[0] * self.grid_size),float(coord[1] * self.grid_size))
+        return Vector(float(coord[0] * self.tile_size),float(coord[1] * self.tile_size))
 
     def set_collision_callback(self, 
             callback, 
@@ -115,7 +115,7 @@ class GridPhysicsEngine:
 
     def add_object(self, obj: GObject):
         body = obj.body
-        body.last_change = self.clock.get_time()
+        body.last_change = clock.get_time()
         obj.set_update_position_callback(self.update_obj_position)
         self.update_obj_position(obj,obj.get_position())
 
@@ -163,9 +163,8 @@ class PymunkPhysicsEngine:
     Handles physics events and collision
     """
 
-    def __init__(self,clock:SimClock,config:PhysicsConfig):
+    def __init__(self,config:PhysicsConfig):
         self.config = config
-        self.clock = clock
         self.space = Space(threaded=True)
         self.space.threads = 2
         self.space.idle_speed_threshold = 0.01
@@ -180,10 +179,10 @@ class PymunkPhysicsEngine:
         print("Actual Physics Tick Rate is {}, original {} (change due to enforcing sim_timestep size of {})".format(actual_tick_rate, self.config.tick_rate,self.config.sim_timestep))
 
         # Called at each step when velocity is updated
-        self.velocity_callback = get_default_velocity_callback(self.clock,self.config)
+        self.velocity_callback = get_default_velocity_callback(self.config)
         
         # Called at each step when position is updated
-        self.position_callback= get_default_position_callback(self.clock,self.config)
+        self.position_callback= get_default_position_callback(self.config)
 
     def set_collision_callback(self, callback, collision_type_a=COLLISION_TYPE['default'], collision_type_b=COLLISION_TYPE['default']):
         h = self.space.add_collision_handler(collision_type_a, collision_type_b)
@@ -194,7 +193,7 @@ class PymunkPhysicsEngine:
 
     def add_object(self, obj: GObject):
         body = obj.body
-        body.last_change = self.clock.get_time()
+        body.last_change = clock.get_time()
         # body.velocity_func = self.velocity_callback 
         body.position_func = self.position_callback
         self.space.add(obj.get_body(), obj.get_shapes())

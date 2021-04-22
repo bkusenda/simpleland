@@ -24,10 +24,10 @@ def input_event_callback(input_event: InputEvent) -> List[Event]:
 def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
     
     events= []
-    grid_size = gamectx.physics_engine.config.grid_size
+    tile_size = gamectx.physics_engine.config.tile_size
     keys = set(input_event.input_data['inputs'])
 
-    obj = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+    obj = gamectx.object_manager.get_by_id(player.get_object_id())
     if obj is None:
         return events
 
@@ -70,9 +70,9 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
         print("Adding admin_event ...TODO!!")
 
     direction = direction * velocity_multiplier
-    obj.set_last_change(gamectx.clock.get_time())
+    obj.set_last_change(clock.get_time())
     body:Body = obj.get_body()
-    new_pos = grid_size * direction + body.position
+    new_pos = tile_size * direction + body.position
     obj.update_position(new_pos)
     if angle_update is not None:
         body.angle = angle_update
@@ -83,10 +83,10 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
 def input_event_callback_fpv(input_event: InputEvent, player) -> List[Event]:
 
     events= []
-    grid_size = gamectx.physics_engine.config.grid_size
+    tile_size = gamectx.physics_engine.config.tile_size
     keys = set(input_event.input_data['inputs'])
 
-    obj = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+    obj = gamectx.object_manager.get_by_id(player.get_object_id())
     if obj is None:
         return events
     gamectx.content.get_observation(obj)
@@ -121,11 +121,11 @@ def input_event_callback_fpv(input_event: InputEvent, player) -> List[Event]:
     orientation_diff = obj_orientation_diff * rotation_multiplier
 
     direction = direction * velocity_multiplier
-    obj.set_last_change(gamectx.clock.get_time())
+    obj.set_last_change(clock.get_time())
     body:Body = obj.get_body()
     angle = body.angle
     direction = direction.rotated(angle)
-    new_pos = grid_size * direction + body.position
+    new_pos = tile_size * direction + body.position
     obj.update_position(new_pos)
     body.angle = angle + orientation_diff
 

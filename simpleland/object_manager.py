@@ -1,38 +1,37 @@
 from typing import Any, Dict, List, Tuple
 
-import numpy
-import pygame
-import pymunk
 from pymunk import Vec2d
 
-from .common import (Singleton, Body, Circle, Clock,
+from .common import (Singleton, Body, Circle,
                      Line, Polygon, Space, Vector)
-from .object import (GObject, ExtendedGObject)
+from .object import GObject
+from .object import ExtendedGObject
 from .utils import gen_id
+
 
 class GObjectManager:
 
-    def __init__(self, history_size):
+    def __init__(self):
         self.history_size = 10
-        self.objects:Dict[str,ExtendedGObject] = {}
+        self.objects: Dict[str, ExtendedGObject] = {}
 
-    def add(self,timestamp, obj: GObject):
+    def add(self, timestamp, obj: GObject):
         extObj = self.objects.get(obj.get_id(), ExtendedGObject(self.history_size))
-        extObj.add(timestamp,obj)
+        extObj.add(timestamp, obj)
         self.objects[obj.get_id()] = extObj
-    
-    def link_to_latest(self,timestamp, k):
-        # Only useful when not using physics. 
+
+    def link_to_latest(self, timestamp, k):
+        # Only useful when not using physics.
         # dumb client or if history isn't needed
         extObj = self.objects[k]
         extObj.link_to_latest(timestamp)
 
     def clear_objects(self):
-        self.objects:Dict[str,ExtendedGObject] = {}
+        self.objects: Dict[str, ExtendedGObject] = {}
 
-    def get_latest_by_id(self, obj_id, include_deleted = False)->GObject:
-        ext_obj = self.objects.get(obj_id,None)
-        
+    def get_by_id(self, obj_id, include_deleted=False) -> GObject:
+        ext_obj = self.objects.get(obj_id, None)
+
         if ext_obj is None:
             return None
         else:
@@ -42,32 +41,32 @@ class GObjectManager:
             else:
                 return o
 
-    def get_by_id(self, obj_id, timestamp)->GObject:
-        ext_obj = self.objects.get(obj_id,None)
+    def get_by_id_at(self, obj_id, timestamp) -> GObject:
+        ext_obj = self.objects.get(obj_id, None)
         if ext_obj is None:
             return None
         else:
-            return ext_obj.get_interpolated(timestamp)
+            return ext_obj.get_latest()#ext_obj.get_interpolated(timestamp)
 
     def remove_by_id(self, obj_id):
         del self.objects[obj_id]
 
-    def get_objects_for_timestamp_by_depth(self,timestamp):
-        object_list_depth_sorted = [{},{},{},{}]
-        for k,eo in self.objects.items():
-            o = eo.get_interpolated(timestamp)
+    def get_objects_for_timestamp_by_depth(self, timestamp):
+        object_list_depth_sorted = [{}, {}, {}, {}]
+        for k, eo in self.objects.items():
+            o = eo.get_latest()# eo.get_interpolated(timestamp)
             if o is not None and not o.is_deleted:
                 object_list_depth_sorted[o.depth][k] = o
         return object_list_depth_sorted
 
-    def get_objects_latest(self)->Dict[str,GObject]:
+    def get_objects(self) -> Dict[str, GObject]:
         objs = {}
-        for k,eo in self.objects.items():
+        for k, eo in self.objects.items():
             o = eo.get_latest()
             objs[k] = o
         return objs
 
-    def load_snapshot_from_data(self,timestamp, data):
+    def load_snapshot_from_data(self, timestamp, data):
         snapshot_keys = set()
         for odata in data:
             new_obj = GObject.build_from_dict(odata)
@@ -77,11 +76,18 @@ class GObjectManager:
 
         # link objs not in update
         for k in not_updated_keys:
-            self.link_to_latest(timestamp,k)
+            self.link_to_latest(timestamp, k)
 
-    def get_snapshot_update(self,changed_since):
+    def get_snapshot_update(self, changed_since):
         snapshot_list = []
-        for obj in list(self.get_objects_latest().values()):
+        for obj in list(self.get_objects().values()):
             if obj.get_last_change() >= changed_since:
                 snapshot_list.append(obj.get_snapshot())
+        return snapshot_list
+
+
+    def get_snapshot_full(self):
+        snapshot_list = []
+        for obj in list(self.get_objects().values()):
+            snapshot_list.append(obj.get_snapshot())
         return snapshot_list

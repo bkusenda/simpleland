@@ -2,8 +2,6 @@ from .common import Base
 import pprint
 from typing import Dict, Any
 
-
-
 class PhysicsConfig(Base):
     def __init__(self):
         self.engine = "pymunk"
@@ -17,7 +15,7 @@ class PhysicsConfig(Base):
         self.tick_rate = 60
         self.sim_timestep=0.02
         self.player_angular_vel_max = 3
-        self.grid_size = 80
+        self.tile_size = 32
 
 class RendererConfig(Base):
 
@@ -34,7 +32,7 @@ class RendererConfig(Base):
         self.sound_enabled = True
         self.render_to_screen = True 
         self.draw_grid = False
-        self.grid_size = 80
+        self.tile_size = 32
         self.view_type = 0
         self.debug_render_bodies = False
 

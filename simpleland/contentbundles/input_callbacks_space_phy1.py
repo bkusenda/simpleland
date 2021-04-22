@@ -14,7 +14,7 @@ def input_event_callback(input_event: InputEvent) -> List[Event]:
     keys = set(input_event.input_data['inputs'])
 
 
-    obj = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+    obj = gamectx.object_manager.get_by_id(player.get_object_id())
     if obj is None:
         return events
 
@@ -57,7 +57,7 @@ def input_event_callback(input_event: InputEvent) -> List[Event]:
     orientation_diff = obj_orientation_diff * rotation_multiplier
 
     direction = direction * velocity_multiplier
-    obj.set_last_change(gamectx.clock.get_time())
+    obj.set_last_change(clock.get_time())
     body:Body = obj.get_body()
 
     direction = direction.rotated(body.angle)

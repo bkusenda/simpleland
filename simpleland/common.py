@@ -8,8 +8,6 @@ OBJ_TYPES = ['default','sensor']
 COLLISION_TYPE = {v:i for i, v in enumerate(OBJ_TYPES)}
 from pymunk import Vec2d
 
-Clock = pygame.time.Clock
-
 Vector = pymunk.Vec2d
 
 class StateEncoder(json.JSONEncoder):
@@ -44,13 +42,15 @@ def get_dict_snapshot(obj, exclude_keys = {}):
             data[k] = v.get_snapshot()
         elif v is None or isinstance(v, (int, float, str, Vector, dict)):
             data[k] = v
+        elif isinstance(v, (tuple)):
+            data[k] = {'_type':"tuple", 'value':v}
         elif type(v) is list:
             data[k] = []
             for vv in v:
                 data[k].append(get_dict_snapshot(vv))
         else:
             pass
-            #print("Skipping snapshotting of:{} with value {}".format(k, v))
+            # print("Skipping snapshotting of:{} with value {}".format(k, v))
     return {"_type":_type,"data": data}
 
 
@@ -61,82 +61,17 @@ def load_dict_snapshot(obj, dict_data, exclude_keys={}):
             continue
         
         if issubclass(type(v), Base):
-            data = v.load_snapshot(obj.__dict__[k], v)
-        elif v is None or isinstance(v, (int, float, str, Vector)):
+            obj.__dict__[k] = v.load_snapshot(obj.__dict__[k], v)
+        elif v is None or isinstance(v, (int, float, str, Vector, tuple)):
             obj.__dict__[k] = v
+        elif (isinstance(v, dict) and v.get("_type") == "tuple"):
+            obj.__dict__[k] = tuple(v.get("value",None))
         elif v is None or (isinstance(v, dict) and ("_type" not in v)):
             obj.__dict__[k] = v
+        else:
+            pass
+            # obj.__dict__[k] = v
 
-
-class SimClock:
-    
-    def __init__(self, start_time= None):
-        self.resolution = 1000# milliseconds
-        self.start_time = self._current_time() if start_time is None else start_time
-        self.pygame_clock = Clock()
-        self.tick_time = self.get_exact_time()
-        self.tick_counter = 0
-
-    def _current_time(self):
-        return time.time() * self.resolution
-    
-    def get_start_time(self):
-        return self.start_time
-    
-    def tick(self,tick_rate):
-        if tick_rate !=0: 
-            self.pygame_clock.tick(tick_rate)
-        self.tick_time = self.get_exact_time()
-        self.tick_counter +=1
-        return self.tick_time
-
-    def get_time(self):
-        return self.tick_time
-
-    def get_tick_counter(self):
-        return self.tick_counter
-
-    def set_absolute_time(self,time):
-        self.start_time = time
-        self.tick_time = self.get_exact_time()
-
-    def get_exact_time(self):
-        return self._current_time() - self.start_time
-
-
-
-class StepClock:
-    
-    def __init__(self, start_time= 0):
-        self.start_time = start_time
-        self.tick_time = 0
-        self.pygame_clock = Clock()
-
-        print("USING STEP CLOCK")
-
-    def _current_time(self):
-        return self.tick_time
-
-    def get_start_time(self):
-        return self.start_time
-    
-    def tick(self,tick_rate=None):
-        if tick_rate: 
-            self.pygame_clock.tick(tick_rate)
-        self.tick_time +=1
-        return self.tick_time
-
-    def get_time(self):
-        return self.tick_time
-
-    def get_tick_counter(self):
-        return self.tick_time
-
-    def set_absolute_time(self,time):
-        self.tick_time = time
-
-    def get_exact_time(self):
-        return self.tick_time
 
 # source: https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
 class Singleton(type):

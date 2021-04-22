@@ -1,12 +1,10 @@
 from typing import Any, Dict, List
 
-import numpy
-import pygame
 import pymunk
 from pymunk import Vec2d
 
 from .common import (Body,
-                     Circle, Clock, Line,
+                     Circle, Line,
                      Polygon,
                      Space, Vector, COLLISION_TYPE)
 from .object import GObject
@@ -28,7 +26,7 @@ class ShapeFactory:
         obj.add_shape(circle, collision_type=collision_type)
 
     @classmethod
-    def attach_rectangle(cls, obj: GObject, width=80, height=80, collision_type=COLLISION_TYPE['default']):
+    def attach_rectangle(cls, obj: GObject, width=32, height=32, collision_type=COLLISION_TYPE['default']):
         body = obj.get_body()
         h = height/2
         w = width/2

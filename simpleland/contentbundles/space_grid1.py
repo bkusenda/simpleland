@@ -6,7 +6,7 @@ import pymunk
 from pymunk import contact_point_set
 from pymunk.vec2d import Vec2d
 
-from ..common import (SimClock, Body, Camera, Circle, Clock, Line,
+from ..common import ( Body, Camera, Circle,  Line,
                       Polygon, Shape, Space, Vector,
                       TimeLoggingContainer)
 from ..event import (DelayedEvent, Event,
@@ -130,7 +130,7 @@ def game_def(content_overrides = {}):
         content_id = "space_grid1",
         content_config = content_config
     )
-    game_def.physics_config.grid_size = 80
+    game_def.physics_config.tile_size = 80
     game_def.physics_config.engine = "grid"
     game_def.game_config.wait_for_user_input=True
     return game_def
@@ -164,7 +164,7 @@ def add_food(position):
     o.set_data_value("type", "food")
     o.set_data_value("image", "energy1")
     o.set_position(position=position)
-    o.set_last_change(gamectx.clock.get_time())
+    o.set_last_change(clock.get_time())
 
     ShapeFactory.attach_circle(o, radius=50)
     gamectx.add_object(o)
@@ -175,7 +175,7 @@ def add_block(position, type="block", shape_color=(100, 100, 100)):
     o.set_data_value("type", type)
     o.set_data_value("image",type)
     o.set_position(position=position)
-    o.set_last_change(gamectx.clock.get_time())
+    o.set_last_change(clock.get_time())
     o.shape_color = shape_color
     ShapeFactory.attach_rectangle(o,width=80,height=80)
     gamectx.add_object(o)
@@ -196,22 +196,22 @@ def add_player_ship(player:Player,position:Vector):
     return player_object
 
 def energy_decay_callback(event: PeriodicEvent, data: Dict[str, Any], om: GObjectManager):
-    obj = om.get_latest_by_id(data['obj_id'])
+    obj = om.get_by_id(data['obj_id'])
     if obj is None or obj.is_deleted:
         return [], True
 
     new_energy = max(obj.get_data_value("energy") - 1, 0)
     obj.set_data_value('energy', new_energy)
-    obj.set_last_change(gamectx.clock.get_time())
+    obj.set_last_change(clock.get_time())
     return [], False
 
 def spawn_player(player:Player, reset = False):
-    player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+    player_object = gamectx.object_manager.get_by_id(player.get_object_id())
     loc = random.choice(gamectx.content.spawn_locations)
     position = coord_to_vec(loc)
     if player_object is None:
         add_player_ship(player,position=position)
-        player_object = gamectx.object_manager.get_latest_by_id(player.get_object_id())
+        player_object = gamectx.object_manager.get_by_id(player.get_object_id())
     else:
         player_object.update_position(position=position)
 
@@ -241,7 +241,7 @@ def process_food_collision(player_obj:GObject,food_obj):
     food_reward_count = player_obj.get_data_value('food_reward_count', 0)
     food_reward_count +=1
     player_obj.set_data_value("food_reward_count",food_reward_count)
-    player_obj.set_last_change(gamectx.clock.get_time())
+    player_obj.set_last_change(clock.get_time())
     food_counter = gamectx.data.get('food_counter', 0)
     gamectx.data['food_counter'] = food_counter - 1
     gamectx.remove_object(food_obj)
@@ -265,7 +265,7 @@ def process_food_collision(player_obj:GObject,food_obj):
     # gamectx.event_manager.add_event(new_food_event)
 
     sound_event = SoundEvent(
-        creation_time=gamectx.clock.get_time(),
+        creation_time=clock.get_time(),
         sound_id="bleep2")
     gamectx.event_manager.add_event(sound_event)
     return False
@@ -294,7 +294,7 @@ def post_physics_callback():
         if p.get_object_id() is None:
             continue
 
-        o = gamectx.object_manager.get_latest_by_id(p.get_object_id())
+        o = gamectx.object_manager.get_by_id(p.get_object_id())
         
 
         if o is None or o.is_deleted or not o.enabled:
@@ -430,7 +430,7 @@ class GameContent(Content):
                 obj_ids = gamectx.physics_engine.space.get_objs_at((c,r))
                 if len(obj_ids)>0:
                     obj_id = obj_ids[0]
-                    obj_seen = gamectx.object_manager.get_latest_by_id(obj_id)
+                    obj_seen = gamectx.object_manager.get_by_id(obj_id)
                     row_results.append(item_map.get(obj_seen.get_data_value('type')))
                 else:
                     row_results.append(default_v)
@@ -448,7 +448,7 @@ class GameContent(Content):
                 return None,None,None,None
 
             obj_id = player.get_object_id()
-            obj = gamectx.object_manager.get_latest_by_id(obj_id)
+            obj = gamectx.object_manager.get_by_id(obj_id)
             observation = self.get_observation(obj)
             done = player.get_data_value("reset_required",False)
             if done:

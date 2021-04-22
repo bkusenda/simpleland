@@ -1,5 +1,4 @@
-import pymunk
-import pygame
+
 from .utils import gen_id
 from typing import Callable, List, Dict
 import time
@@ -7,20 +6,20 @@ import time
 from .common import Shape, Vector, load_dict_snapshot, Base, Body, dict_to_state, get_shape_from_dict, Camera
 from .common import get_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingContainer
 from .common import COLLISION_TYPE
-
+from .clock import clock
+import copy
 class GObject(Base):
 
     @classmethod
     def build_from_dict(cls,dict_data):
+        dict_data = copy.deepcopy(dict_data)
         data = dict_data['data']
-        
 
         body = Body()
-
         body.__setstate__(dict_to_state(dict_data['body']))
         # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
         obj = GObject(body=body, id=data['id'])
-        load_dict_snapshot(obj, dict_data, exclude_keys={"body"})
+        load_dict_snapshot(obj, dict_data, exclude_keys={"body"})       
 
         for k,v in data['shape_group']['data'].items():
             obj.add_shape(get_shape_from_dict(body,v))
@@ -48,31 +47,22 @@ class GObject(Base):
         self.is_deleted = False
         self.enabled=True
         self.depth=depth
-        self.image_width, self.image_height = (80,80)
+        self.image_width, self.image_height = 80,80
         self.shape_color = None
         self._update_position_callback = lambda obj,new_pos: None
 
-        self.update_fn:Callable = lambda obj : None
-        self.view_position_fn:Callable = lambda obj : self.get_position()
-        self.sprite_id_fn:Callable = lambda obj,angle : self.image_id_default
         self.image_id_default = None
         self.image_id_current = None
         self.rotate_sprites = False
 
     def set_image_id(self,id):
         self.image_id_default = id
+
+    def update_last_change(self):
+        self.set_last_change(clock.get_tick_counter())
     
     def set_update_position_callback(self,callback):
         self._update_position_callback = callback
-
-    def set_update_fn(self,fn):
-        self.update_fn = fn
-
-    def set_view_position_fn(self,fn):
-        self.view_position_fn = fn
-
-    def set_sprite_id_fn(self,fn):
-        self.sprite_id_fn = fn
 
     def get_data_value(self,k, default_value=None):
         return self.data.get(k,default_value)
@@ -91,6 +81,7 @@ class GObject(Base):
     
     def set_data_value(self,k,value):
         self.data[k] = value
+        self.update_last_change()
 
     def get_body(self) -> Body:
         return self.body
@@ -113,20 +104,8 @@ class GObject(Base):
     def get_position(self):
         return self.body.position
 
-    def get_view_position(self):
-        return self.view_position_fn(self)
-        
-    def get_sprite_id(self, camera_angle=0):
-        return self.sprite_id_fn(self, camera_angle)
-
-    # def get_sprite_id(self):
-    #     return self.sprite_id_fn(self)
-
-    def update(self):
-        self.update_fn(self)
-
     def __repr__(self) -> str:
-        return f"{super().__repr__()}, id:{self.id}, data:{self.data}"
+        return f"{super().__repr__()}, id:{self.id}, data:{self.data}, dict_data:{self.__dict__}"
 
     def add_shape(self,shape:Shape, collision_type=1,label=None):
         shape.set_object_id(self.get_id())
@@ -138,7 +117,6 @@ class GObject(Base):
 
     def get_shapes(self):
         return self.shape_group.get_shapes()
-
 
     def set_last_change(self,timestamp):
         self.last_change = timestamp
@@ -159,56 +137,35 @@ class GObject(Base):
         data['body'] = state_to_dict(self.body.__getstate__())
         data['data']['last_change']= self.get_last_change()
         data['data']['data'] = self.data
-        # print(data['body']['special'].keys())
         del data['body']['special']['_velocity_func']
         del data['body']['special']['_position_func']
         return data
 
-    def get_snapshot_struct(self):
-        data = get_dict_snapshot(self, exclude_keys={'body','on_change_func'})
-        data['body'] = state_to_dict(self.body.__getstate__())
-        data['data']['last_change']= self.get_last_change()
-        data['data']['data'] = self.data
-        # print(data['body']['special'].keys())
-        del data['body']['special']['_velocity_func']
-        del data['body']['special']['_position_func']
-        return data
 
     def load_snapshot(self, data):
         load_dict_snapshot(self, data, exclude_keys={"body"})
         body_data = data['body']
 
-        # This breaks things
-        #self.body.__setstate__(data['body'])
+        # This breaks things: self.body.__setstate__(data['body'])
+
         self.body.position = body_data['general']['position']
-        # self.body.force = body_data['general']['force']
         self.body.velocity = body_data['general']['velocity']
         self.body.angle = body_data['general']['angle']
-        #self.body.moment = body_data['general']['moment']
-        #self.body.rotation_vector = body_data['general']['rotation_vector']
-
-
-        # self.body.torque = body_data['general']['torque']
         self.body.angular_velocity = body_data['general']['angular_velocity']
 
 
 def build_interpolated_object(obj_1:GObject,obj_2:GObject,fraction=0.5):
+    print("INTERPOLAT")
     
     b1 = obj_1.get_body()
     b2 = obj_2.get_body()
-    # print("--")
-    # print(b1.position)
-    # print(b2.position)
-    # print(fraction)
+
     pos_x = (b2.position.x - b1.position.x) * fraction + b1.position.x
     pos_y = (b2.position.y - b1.position.y) * fraction + b1.position.y
     b_new = Body()
     b_new.last_change = b1.last_change
 
-    # b_new._set_position(SLVector(pos_x,pos_y))
     b_new.position = Vector(pos_x,pos_y)
-    # print(pos_x)
-    # print(pos_y)
 
     force_x = (b2.force.x - b1.force.x) * fraction + b1.force.x
     force_y = (b2.force.y - b1.force.y) * fraction + b1.force.y
@@ -220,23 +177,17 @@ def build_interpolated_object(obj_1:GObject,obj_2:GObject,fraction=0.5):
     b_new.velocity.y = (b2.velocity.y - b1.velocity.y) * fraction + b1.velocity.y
 
     b_new.angular_velocity = (b2.angular_velocity - b1.angular_velocity) * fraction + b1.angular_velocity
-    # b_new.angular_velocity.y = (b2.angular_velocity.y - b1.angular_velocity.y) * fraction + b1.angular_velocity.y
 
-    # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
     obj = GObject(body=b_new, id=obj_1.get_id(),data=obj_1.data)
     obj.is_deleted = obj_1.is_deleted
     obj.last_change = obj_1.last_change
-    #load_dict_snapshot(obj, obj_1.get_snapshot(), exclude_keys={"body"})
 
-    #TODO: COPY??
     for shape in obj_1.shape_group.get_shapes():
         obj.add_shape(get_shape_from_dict(b_new,shape.get_snapshot()))
 
-    # if obj_2.get_camera() is not None:
-    #     camera_dist = (obj_2.get_camera().distance - obj_1.get_camera().distance) * fraction + obj_1.get_camera().distance
-    #     obj.camera = Camera(distance=camera_dist)
     return obj
 
+#TODO: no longer used
 class ExtendedGObject(TimeLoggingContainer):
 
     def add(self,timestamp, obj:GObject):

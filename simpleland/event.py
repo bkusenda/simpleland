@@ -1,11 +1,8 @@
 
 from typing import Any, Dict, List
-
 from .utils import gen_id
-from .object import GObject
-from .object_manager import GObjectManager
 from .common import Base, Vector
-from simpleland import gamectx
+from .clock import clock
 
 def build_event_from_dict(data_dict):
     cls = globals()[data_dict['_type']]
@@ -16,15 +13,16 @@ class Event(Base):
 
     def __init__(self, 
                 id=None,
-                creation_time=None,
+                creation_time = None,
                 is_client_event=False,
-                is_realtime_event=True):
+                is_server_event=True):
         if id is None:
             self.id = gen_id()
         else:
             self.id = id
+        self.creation_time = creation_time or clock.get_tick_counter()
         self.is_client_event = is_client_event
-        self.is_realtime_event = is_realtime_event
+        self.is_server_event = is_server_event
 
     def get_id(self):
         return self.id
@@ -39,9 +37,9 @@ class PeriodicEvent(Event):
                 data={},
                 **kwargs):
 
-        super(PeriodicEvent,self).__init__(id,**kwargs)
+        super().__init__(id,**kwargs)
         self.execution_step_interval = execution_step_interval
-        self.last_run = None if run_immediately else gamectx.clock.get_tick_counter()
+        self.last_run = None if run_immediately else clock.get_tick_counter()
         self.data=data
         self.func = func
 
@@ -49,7 +47,7 @@ class PeriodicEvent(Event):
         return self.id
 
     def run(self):
-        game_step = gamectx.clock.get_tick_counter()
+        game_step = clock.get_tick_counter()
         new_events = []
         remove_event = None
         if self.last_run is None or self.last_run + self.execution_step_interval <= game_step:
@@ -65,10 +63,11 @@ class DelayedEvent(Event):
                 execution_step, 
                 id=None,
                 data={},
+                is_client_event=False,
                 **kwargs):
 
-        super(DelayedEvent,self).__init__(id,**kwargs)
-        self.execution_step = execution_step + gamectx.clock.get_tick_counter()
+        super().__init__(id,is_client_event=is_client_event,**kwargs)
+        self.execution_step = execution_step + clock.get_tick_counter()
         self.data=data
         self.func = func
 
@@ -76,7 +75,7 @@ class DelayedEvent(Event):
         return self.id
 
     def run(self):
-        game_step = gamectx.clock.get_tick_counter()
+        game_step = clock.get_tick_counter()
 
         new_events = []
         if  self.execution_step <= game_step:
@@ -85,20 +84,33 @@ class DelayedEvent(Event):
         return new_events, False
 
 
+class RemoveObjectEvent(Event):
+
+    def __init__(self,
+                object_id,
+                id=None,
+                data={},
+                is_client_event=True,
+                **kwargs):
+
+        super().__init__(id,is_client_event=is_client_event,**kwargs)
+        self.data=data
+        self.object_id = object_id
+
+    def get_id(self):
+        return self.id
+
+
 class SoundEvent(Event):
 
     def __init__(self,
                 id=None, 
-                creation_time=None, 
                 sound_id = None,
                 is_client_event=True,
-                is_realtime_event=False,
                 **kwargs):
-        super(SoundEvent,self).__init__(id,
+        super().__init__(id,
             is_client_event=is_client_event,
-            is_realtime_event=is_realtime_event,
             **kwargs)
-        self.creation_time = creation_time
         self.sound_id = sound_id
 
     def get_id(self):
@@ -119,7 +131,7 @@ class InputEvent(Event):
                 input_data: Dict[str,Any] ,
                 id=None,
                 **kwargs):
-        super(InputEvent,self).__init__(id,**kwargs)
+        super().__init__(id,**kwargs)
         self.player_id = player_id
         self.input_data = input_data
 
@@ -141,7 +153,7 @@ class MechanicalEvent(Event):
                  orientation_diff: float = 0.0,
                  id=None,
                  **kwargs):
-        super(MechanicalEvent,self).__init__(id,**kwargs)
+        super().__init__(id,**kwargs)
         self.obj_id = obj_id
         self.direction = direction
         self.orientation_diff = orientation_diff
@@ -161,7 +173,7 @@ class PositioningUpdateEvent(Event):
                  angle_update: float = 0.0,
                  id=None,
                  **kwargs):
-        super(PositioningUpdateEvent,self).__init__(id,**kwargs)
+        super().__init__(id,**kwargs)
         self.obj_id = obj_id
         self.position_update = position_update
         self.angle_update = angle_update
@@ -169,7 +181,7 @@ class PositioningUpdateEvent(Event):
 class AdminEvent(Event):
 
     def __init__(self, value, id=None, **kwargs):
-        super(AdminEvent, self).__init__(id,**kwargs)
+        super().__init__(id,**kwargs)
         self.value = value
 
 class ViewEvent(Event):
@@ -180,7 +192,7 @@ class ViewEvent(Event):
                  orientation_diff: float = 0.0, 
                  id=None,
                  **kwargs):
-        super(ViewEvent, self).__init__(id, **kwargs)
+        super().__init__(id, **kwargs)
         self.player_id = player_id
         self.distance_diff = distance_diff
         self.center_diff =  Vector.zero() if center_diff is None else center_diff

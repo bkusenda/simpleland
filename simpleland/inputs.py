@@ -1,14 +1,12 @@
 import pygame
 from typing import List, Dict
-from .object import (GObject, ExtendedGObject)
 from .event import (Event, AdminEvent, MechanicalEvent,
                             PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
 from .event_manager import EventManager
 
-from .common import (get_dict_snapshot, load_dict_snapshot, Body, Circle, Clock, Line,
-                     Polygon, Space, Vector, SimClock, Base, Camera)
+from .common import (get_dict_snapshot, load_dict_snapshot, Body, Circle,  Line,
+                     Polygon, Space, Vector,  Base, Camera)
 from simpleland.player import Player
-from simpleland import gamectx
 
 def get_default_key_map():
     key_map = {}

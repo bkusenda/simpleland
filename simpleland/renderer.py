@@ -53,13 +53,14 @@ class Renderer:
         self.initialized = False
         self.frame_cache = None
         self.debug=config.debug_render_bodies
-
         # These will be source object properties eventually
         self.view_height = 60000.0
         self.view_width = self.view_height * self.aspect_ratio
         logging.info(f"{self.view_width} by {self.view_width}")
         self.center = Vector.zero()
 
+        self.get_image_id = self.asset_bundle.get_image_id_fn
+        self.get_view_position = self.asset_bundle.get_view_position_fn
         self.images = {}
         self.sounds = {}
         self.sprite_sheets = {}
@@ -67,6 +68,8 @@ class Renderer:
         # FPS Counter
         self.fps_counter = TickPerSecCounter(2)
         self.log_info = None
+
+        
 
     def set_log_info(self,log_info):
         self.log_info = log_info
@@ -110,6 +113,8 @@ class Renderer:
         self._display_surf = pygame.display.set_mode(self.resolution)  # , pygame.HWSURFACE | pygame.DOUBLEBUF)
         self.load_sounds()
         self.load_images()
+        # pygame.key.set_repeat(500,100)
+
         self.initialized = True
 
     def render_to_console(self, lines, x, y, fsize=18, spacing=12, color=(180, 180, 180)):
@@ -126,7 +131,7 @@ class Renderer:
                   screen_view_center,
                   angle,
                   center):
-        obj_pos = obj.get_view_position()
+        obj_pos = self.get_view_position(obj)
         obj_location1 = (obj_pos + line.a.rotated(obj.get_body().angle) - center)
         obj_location1 = obj_location1.rotated(-angle)
         p1 = scale(screen_factor,(obj_location1 + screen_view_center))
@@ -151,7 +156,7 @@ class Renderer:
                     screen_view_center,
                     angle,
                     center):
-        obj_pos = obj.get_view_position() + circle.offset # TODO: Doesn't work with offset
+        obj_pos = self.get_view_position(obj) + circle.offset # TODO: Doesn't work with offset
         obj_location = (obj_pos - center)
         obj_location = obj_location.rotated(-angle)
         p = scale(screen_factor,(obj_location + screen_view_center))
@@ -172,7 +177,7 @@ class Renderer:
                      angle,
                      center):
         body = obj.get_body()
-        obj_pos = obj.get_view_position()
+        obj_pos = self.get_view_position(obj)
 
         body_angle =body.angle
         verts = shape.get_vertices()
@@ -196,7 +201,7 @@ class Renderer:
                      screen_view_center,
                      angle,
                      center):
-        obj_pos = obj.get_view_position()
+        obj_pos = self.get_view_position(obj)
 
         body_angle =obj.get_body().angle
         verts = shape.get_vertices()
@@ -214,15 +219,17 @@ class Renderer:
 
     def _draw_object(self, center, obj:GObject, angle, screen_factor, screen_view_center, color=None):
 
-        image_id= obj.get_sprite_id(camera_angle=angle)
+        image_id= self.get_image_id(obj,angle)
         rotate = obj.rotate_sprites
         image_used = image_id is not None and not self.config.disable_textures
         if image_used:
             body_angle = obj.get_body().angle
-            obj_pos = obj.get_view_position()
+            obj_pos = self.get_view_position(obj)
             
             # TODO: fix, main_shape will not always have radius
             body_w, body_h = obj.get_image_dims()
+            if body_w == 80:
+                print(f"IMAGE DIMS {obj.get_id()} {body_w}")
             image = self.get_image_by_id(image_id)
             if image is not None:
                 image_size = int(body_w*screen_factor[0]),int(body_h*screen_factor[1])
@@ -343,10 +350,9 @@ class Renderer:
         if player:
             camera = player.get_camera()
             view_type = player.get_data_value('view_type',0)
-            view_obj = object_manager.get_by_id(player.get_object_id(), render_time)
+            view_obj = object_manager.get_by_id(player.get_object_id())
             if view_obj is not None:
-                view_obj.update()
-                center = view_obj.get_view_position()
+                center = self.get_view_position(view_obj)
                 if view_type == 0:
                     angle = view_obj.get_body().angle
             else:
@@ -365,12 +371,11 @@ class Renderer:
 
         obj_list_sorted_by_depth= object_manager.get_objects_for_timestamp_by_depth(render_time)
         if self.config.draw_grid:
-            self._draw_grid(center, angle, screen_factor, screen_view_center, size=self.config.grid_size, view_type= self.config.view_type)
+            self._draw_grid(center, angle, screen_factor, screen_view_center, size=self.config.tile_size, view_type= self.config.view_type)
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
             obj:GObject
             for k, obj in render_obj_dict.items():
-                obj.update()
-                if not obj.enabled:
+                if not obj.enabled or obj.is_deleted:
                     continue
                 if view_obj is not None and k == view_obj.get_id():
                     continue

@@ -5,8 +5,8 @@ import numpy as np
 import pygame
 
 
-from .common import (get_dict_snapshot, load_dict_snapshot, Body, Circle, Clock, Line,
-                     Polygon, Space, Vector, SimClock, Base, Camera)
+from .common import (get_dict_snapshot, load_dict_snapshot, Body, Circle,  Line,
+                     Polygon, Space, Vector, Base, Camera)
 from .utils import gen_id
 
 from .object import GObject
@@ -19,7 +19,7 @@ class Player(Base):
         data = data_dict['data']
         player = cls()
         player.uid = data['uid']
-        player.control_obj_id = data['obj_id']
+        player.obj_id = data['obj_id']
         player.client_id = data['client_id']
         player.player_type = data['player_type']
         player.data = data.get('data',{})
@@ -37,7 +37,6 @@ class Player(Base):
         self.client_id = client_id
         self.player_type = player_type
         self.camera = camera
-        self.control_obj_id = None
         self.obj_id = None
         self.events=[]
         self.data = {} if data is None else data
