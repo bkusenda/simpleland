@@ -40,13 +40,15 @@ def receive_data(sock):
     done = False
     all_data = b''
     while not done:
-        sock.settimeout(1.0)
-        data, server = sock.recvfrom(4096)
+        sock.settimeout(5.0)
+        data, server = sock.recvfrom(1500)
         chunk_num, chunks = struct.unpack('ll', data[:HEADER_SIZE])
         all_data += data[HEADER_SIZE:]
         if chunk_num == chunks:
             done = True
-    return lz4.frame.decompress(all_data).decode('utf-8')
+    # all_data = lz4.frame.decompress(all_data)
+    all_data = all_data.decode("utf-8")
+    return all_data
 
 
 def send_request(request_data, server_address):
@@ -55,7 +57,10 @@ def send_request(request_data, server_address):
     try:
         data_st = json.dumps(request_data, cls=StateEncoder)
         # Send data
-        sent = sock.sendto(lz4.frame.compress(bytes(data_st, 'utf-8')),
+        data_bytes = bytes(data_st, 'utf-8')
+        # print(f"bytes:{len(data_bytes)}")
+        # data_bytes = lz4.frame.compress(data_bytes)
+        sent = sock.sendto(data_bytes,
                            server_address)
         data = receive_data(sock)
     except Exception as e:
@@ -127,6 +132,8 @@ class ClientConnector:
 
         self.ticks_per_second = 60
         self.last_received_snapshots = []
+        self.sync_freq = 0
+        self.last_sync = 0
 
     def add_network_info(self, latency: int, success: bool):
         self.latency_log[self.request_counter % LATENCY_LOG_SIZE] = {'latency': latency, 'success': success}
@@ -146,6 +153,7 @@ class ClientConnector:
             'last_latency_ticks': self.last_latency_ticks,
             'snapshots_received': self.last_received_snapshots,
             'player_type': self.config.player_type,
+            'is_human':self.config.is_human,
             'message': "UPDATE"
         }
 
@@ -180,12 +188,19 @@ class ClientConnector:
             self.last_received_snapshots = [response_info['snapshot_timestamp']]
 
             # set clock
-            self.server_tick = response_info['server_tick'] - (self.last_latency_ticks//2)
-            time_delta = clock.get_exact_time() - self.server_tick
-            if abs(time_delta)>100:
-                clock.set_absolute_time(self.server_tick)
-            elif abs(time_delta)>0:
-                clock.set_absolute_time(clock.get_exact_time()-time_delta//2)
+            if time.time() - self.last_sync > self.sync_freq:
+                self.server_tick = response_info['server_tick'] - (self.last_latency_ticks//2)
+                tick_delta = self.server_tick - clock.get_time()
+                if abs(tick_delta)>100:
+                    clock.set_absolute_time(self.server_tick)
+                elif tick_delta>0:
+                    #
+                    clock.set_absolute_time(clock.get_exact_time()+1)
+                elif tick_delta<0:
+                    clock.set_absolute_time(clock.get_exact_time()-1)
+
+                    # clock.set_absolute_time(clock.get_exact_time()-time_delta//time_delta)
+                self.last_sync = time.time()
 
             self.client_id = response_info['client_id']
             if response_info['message'] == 'UPDATE':
@@ -232,7 +247,10 @@ class GameClient:
             self.connector_thread.daemon = True
             self.connector_thread.start()
         else:
-            self.player = self.content.new_player(client_id = config.client_id, player_type=config.player_type)
+            self.player = self.content.new_player(
+                client_id = config.client_id, 
+                player_type=config.player_type, 
+                is_human=self.config.is_human)
 
     # def sync_time(self):
     #     if self.connector is None:
@@ -318,7 +336,7 @@ class GameClient:
         self.render_last_update = self.render_time
 
         if self.config.is_human:
-            self.renderer.play_sounds(gamectx.get_sound_events(self.render_time))
+            self.renderer.play_sounds(gamectx.get_sound_events())
 
     def get_rgb_array(self):
         return self.renderer.get_last_frame()

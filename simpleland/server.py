@@ -29,7 +29,9 @@ class UDPHandler(socketserver.BaseRequestHandler):
         config: ServerConfig = self.server.config
 
         # Process Request data
-        request_st = lz4.frame.decompress(self.request[0]).decode('utf-8').strip()
+        request_st = self.request[0]
+        # request_st = lz4.frame.decompress(request_st)
+        request_st = request_st.decode('utf-8').strip()
         try:
             request_data = json.loads(request_st, cls=StateDecoder)
         except Exception as e:
@@ -40,7 +42,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
 
         request_message = request_info['message']
         client = gamectx.get_remote_client(request_info['client_id'])
-        player = gamectx.get_player(client, player_type=request_info['player_type'])
+        player = gamectx.get_player(client, player_type=request_info['player_type'],is_human=request_info['is_human'])
         snapshots_received = request_info['snapshots_received']
 
         # simulate missing parts
@@ -87,7 +89,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
         # Convert response to json then compress and send in chunks
         response_data_st = json.dumps(response_data, cls=StateEncoder)
         response_data_st = bytes(response_data_st, 'utf-8')
-        response_data_st = lz4.frame.compress(response_data_st)
+        # response_data_st = lz4.frame.compress(response_data_st)
 
         chunk_size = config.outgoing_chunk_size
         chunks = math.ceil(len(response_data_st)/chunk_size)

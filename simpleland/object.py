@@ -12,8 +12,9 @@ class GObject(Base):
 
     @classmethod
     def build_from_dict(cls,dict_data):
-        dict_data = copy.deepcopy(dict_data)
+        
         data = dict_data['data']
+        print("BUID")
 
         body = Body()
         body.__setstate__(dict_to_state(dict_data['body']))

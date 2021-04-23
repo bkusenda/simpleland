@@ -10,7 +10,7 @@ import threading
 from simpleland.player import  Player
 from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
-from simpleland.core import gamectx
+from simpleland import gamectx
 from simpleland.client import GameClient
 from simpleland.registry import load_game_def, load_game_content
 import time
@@ -26,7 +26,7 @@ class SimplelandEnv:
 
     def __init__(self, 
             resolution=(1280,720), 
-            game_id="space_grid1", 
+            game_id="survival_grid", 
             hostname = 'localhost', 
             port = 10001, 
             dry_run=False,

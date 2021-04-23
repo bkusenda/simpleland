@@ -57,7 +57,7 @@ class ClientConfig(Base):
 class ServerConfig(Base):
     def __init__(self):
         self.enabled=False
-        self.outgoing_chunk_size = 4000
+        self.outgoing_chunk_size = 1400
         self.max_unconfirmed_messages_before_new_snapshot = 10
         self.hostname="localhost"
         self.port = 10001

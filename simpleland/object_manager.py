@@ -69,9 +69,11 @@ class GObjectManager:
     def load_snapshot_from_data(self, timestamp, data):
         snapshot_keys = set()
         for odata in data:
-            new_obj = GObject.build_from_dict(odata)
-            self.add(timestamp, new_obj)
-            snapshot_keys.add(new_obj.get_id())
+            obj = self.objects.get(odata['data']['id'])
+            if obj is None:
+                obj = GObject.build_from_dict(odata)
+            self.add(timestamp, obj)
+            snapshot_keys.add(obj.get_id())
 
         #TODO: Check on code below.        
         # not_updated_keys = snapshot_keys - self.objects.keys()

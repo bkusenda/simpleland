@@ -96,12 +96,12 @@ class GameContext:
             self.remote_clients[client.id] = client
         return client
 
-    def get_player(self, client, player_type):
+    def get_player(self, client, player_type,is_human):
         """
         Get existing player or create new one
         """
         if client.player_id is None:
-            player = self.content.new_player(client.id, player_id=None, player_type=player_type)
+            player = self.content.new_player(client.id, player_id=None, player_type=player_type, is_human=is_human)
             client.player_id = player.get_id()
         else:
             player = self.player_manager.get_player(client.player_id)
@@ -258,8 +258,7 @@ class GameContext:
             if o.is_deleted:
                 self.object_manager.remove_by_id(o.get_id())
 
-    def get_sound_events(self,render_time):
-
+    def get_sound_events(self):
         events_to_remove = []
         sound_ids = []
         for e in self.event_manager.get_events():
@@ -280,7 +279,6 @@ class GameContext:
         return []
 
     def _process_remove_object_event(self,e:RemoveObjectEvent):
-        print(f"REmoving {e.object_id}")
         obj = self.object_manager.get_by_id(e.object_id)
         if obj is not None:
             obj.delete()
