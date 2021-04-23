@@ -50,30 +50,38 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
 
 
     # Object Movement
-    movement_event = False
+    actions_set = set()
     direction = Vector.zero()
     angle_update = None
     if 23 in keys:
         direction = Vector(0, 1)
         angle_update = 0
-        movement_event = True
+        actions_set.add("MOVE")
 
     if 19 in keys:
         direction = Vector(0, -1)
         angle_update = math.pi
-        movement_event = True
+        actions_set.add("MOVE")
 
     if 4 in keys:
         direction = Vector(1, 0)
         angle_update = -math.pi/2
-        movement_event = True
+        actions_set.add("MOVE")
         
 
     if 1 in keys:
         direction = Vector(-1, 0)
         angle_update = math.pi/2
-        movement_event = True
-        
+        actions_set.add("MOVE")
+
+    if 5 in keys:
+        actions_set.add("GRAB")
+
+    if 6 in keys:
+        actions_set.add("PLACE")
+
+    if 18 in keys:
+        actions_set.add("ATTACK")
 
     if 31 in keys:
         events.append(ViewEvent(player.get_id(), 100))
@@ -83,32 +91,120 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
 
     
 
-    def move_event_fn(event: DelayedEvent, data: Dict[str, Any]):
-        direction = data['direction']
-        angle_update = data['angle_update']
-        direction = direction * velocity_multiplier
-        obj.set_last_change(cur_tick)
-        ticks_in_action = int(1 * gamectx.content.speed_factor())
-        action_complete_time = cur_tick + ticks_in_action
-        obj.set_data_value("action_completion_time",action_complete_time)
-        body:Body = obj.get_body()
-        new_pos = tile_size * direction + body.position
-        obj.set_data_value("action",
-            {
-                'type':'walk',
-                'start_tick':clock.get_tick_counter(),
-                'ticks': ticks_in_action,
-                'step_size': tile_size/ticks_in_action,
-                'start_position': body.position,
-                'direction': direction
-            })
 
-        obj.update_position(new_pos)
-        if angle_update is not None:
-            body.angle = angle_update
-        return []
-    
-    if movement_event:
+    if "GRAB" in actions_set:
+        def grab_event_fn(event: DelayedEvent, data: Dict[str, Any]):
+
+            obj.set_last_change(cur_tick)
+            # new_pos = tile_size * direction + obj.get_position()
+            ticks_in_action = int(1 * gamectx.content.speed_factor())
+            action_complete_time = cur_tick + ticks_in_action
+            obj.set_data_value("action_completion_time",action_complete_time)
+            direction= Vector(0,1).rotated(obj.body.angle)
+            print(direction)
+
+            target_pos= obj.get_position() + (direction * tile_size)
+            target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
+            for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
+                print(gamectx.object_manager.get_by_id(oid).get_data_value("type"))
+            
+            obj.set_data_value("action",
+                {
+                    'type':'grab',
+                    'start_tick':clock.get_tick_counter(),
+                    'ticks': ticks_in_action,
+                    'step_size': tile_size/ticks_in_action,
+                })
+            return []
+
+        event = DelayedEvent(grab_event_fn, 
+            execution_step=0, 
+            data={})
+        events.append(event)
+
+    elif "DROP" in actions_set:
+        def grab_event_fn(event: DelayedEvent, data: Dict[str, Any]):
+
+            obj.set_last_change(cur_tick)
+            # new_pos = tile_size * direction + obj.get_position()
+            ticks_in_action = int(1 * gamectx.content.speed_factor())
+            action_complete_time = cur_tick + ticks_in_action
+            obj.set_data_value("action_completion_time",action_complete_time)
+            direction= Vector(0,1).rotated(obj.body.angle)
+            print(direction)
+
+            target_pos= obj.get_position() + (direction * tile_size)
+            target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
+            if len(gamectx.physics_engine.space.get_objs_at(target_coord))==0:
+                # gamectx.content.
+                pass
+            
+            obj.set_data_value("action",
+                {
+                    'type':'drop',
+                    'start_tick':clock.get_tick_counter(),
+                    'ticks': ticks_in_action,
+                    'step_size': tile_size/ticks_in_action,
+                })
+            return []
+
+        event = DelayedEvent(grab_event_fn, 
+            execution_step=0, 
+            data={})
+        events.append(event)
+
+    elif "ATTACK" in actions_set:
+        def event_fn(event: DelayedEvent, data: Dict[str, Any]):
+            obj.set_last_change(cur_tick)
+            ticks_in_action = int(1 * gamectx.content.speed_factor())
+            action_complete_time = cur_tick + ticks_in_action
+            obj.set_data_value("action_completion_time",action_complete_time)
+            direction= Vector(0,1).rotated(obj.body.angle)
+            print(direction)
+
+            target_pos= obj.get_position() + (direction * tile_size)
+            target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
+            for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
+                print(gamectx.object_manager.get_by_id(oid).get_data_value("type"))
+            
+            obj.set_data_value("action",
+                {
+                    'type':'attack',
+                    'start_tick':clock.get_tick_counter(),
+                    'ticks': ticks_in_action,
+                    'step_size': tile_size/ticks_in_action,
+                })
+            return []
+        event = DelayedEvent(event_fn, 
+            execution_step=0, 
+            data={})
+
+        events.append(event)
+    elif "MOVE" in actions_set:
+        def move_event_fn(event: DelayedEvent, data: Dict[str, Any]):
+            direction = data['direction']
+            angle_update = data['angle_update']
+            direction = direction * velocity_multiplier
+            obj.set_last_change(cur_tick)
+            ticks_in_action = int(1 * gamectx.content.speed_factor())
+            action_complete_time = cur_tick + ticks_in_action
+            obj.set_data_value("action_completion_time",action_complete_time)
+            body:Body = obj.get_body()
+            new_pos = tile_size * direction + body.position
+            obj.set_data_value("action",
+                {
+                    'type':'walk',
+                    'start_tick':clock.get_tick_counter(),
+                    'ticks': ticks_in_action,
+                    'step_size': tile_size/ticks_in_action,
+                    'start_position': body.position,
+                    'direction': direction
+                })
+
+            obj.update_position(new_pos)
+            if angle_update is not None:
+                body.angle = angle_update
+            return []
 
         event = DelayedEvent(move_event_fn, 
             execution_step=0, 

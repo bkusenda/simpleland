@@ -46,7 +46,7 @@ class GObjectManager:
         if ext_obj is None:
             return None
         else:
-            return ext_obj.get_latest()#ext_obj.get_interpolated(timestamp)
+            return ext_obj.get_interpolated(timestamp)
 
     def remove_by_id(self, obj_id):
         del self.objects[obj_id]
@@ -54,7 +54,7 @@ class GObjectManager:
     def get_objects_for_timestamp_by_depth(self, timestamp):
         object_list_depth_sorted = [{}, {}, {}, {}]
         for k, eo in self.objects.items():
-            o = eo.get_latest()# eo.get_interpolated(timestamp)
+            o = eo.get_interpolated(timestamp)
             if o is not None and not o.is_deleted:
                 object_list_depth_sorted[o.depth][k] = o
         return object_list_depth_sorted
@@ -72,11 +72,13 @@ class GObjectManager:
             new_obj = GObject.build_from_dict(odata)
             self.add(timestamp, new_obj)
             snapshot_keys.add(new_obj.get_id())
-        not_updated_keys = snapshot_keys - self.objects.keys()
 
-        # link objs not in update
-        for k in not_updated_keys:
-            self.link_to_latest(timestamp, k)
+        #TODO: Check on code below.        
+        # not_updated_keys = snapshot_keys - self.objects.keys()
+
+        # # link objs not in update
+        # for k in not_updated_keys:
+        #     self.link_to_latest(timestamp, k)
 
     def get_snapshot_update(self, changed_since):
         snapshot_list = []

@@ -24,6 +24,7 @@ from .event import (Event, AdminEvent, MechanicalEvent,
 from .event import RemoveObjectEvent
 import pygame
 import sys
+from .content import Content
 
 
 class GameContext:
@@ -38,15 +39,14 @@ class GameContext:
         self.physics_engine:GridPhysicsEngine = None
         self.player_manager:PlayerManager = None
         self.event_manager:EventManager = None
+        self.content:Content=None
         self.state = None
         self.step_counter = 0
         self.last_position_lookup = {}
 
         self.tick_rate = None
         self.pre_event_callback = lambda : []
-        self.pre_physics_callback = lambda : []
         self.input_event_callback = lambda event: []
-        self.post_physics_callback  = lambda : []
         self.remote_clients:Dict[str,Any] = {}
         self.local_clients = []
         self.data = {}
@@ -62,12 +62,6 @@ class GameContext:
         self.config = game_def.game_config
         self.physics_config = game_def.physics_config
         self.object_manager = GObjectManager()
-        # print(self.physics_config.engine)
-        # if self.physics_config.engine == 'pymunk':
-        #     self.clock = SimClock()
-        #     self.physics_engine = PymunkPhysicsEngine(self.clock, self.physics_config)
-        # else:
-        #     self.clock = StepClock()
         self.physics_engine = GridPhysicsEngine(self.physics_config)
         self.player_manager = PlayerManager()
         self.event_manager = EventManager()
@@ -115,18 +109,6 @@ class GameContext:
 
     def change_game_state(self, new_state):
         self.state = new_state
-
-    def set_input_event_callback(self, callback):
-        self.input_event_callback = callback
-
-    def set_pre_event_callback(self, callback):
-        self.pre_event_callback = callback
-
-    def set_pre_physics_callback(self, callback):
-        self.pre_physics_callback = callback
-
-    def set_post_physics_callback(self, callback):
-        self.post_physics_callback = callback
 
     def create_snapshot_for_client(self,client):
         from .client import RemoteClient
@@ -177,7 +159,7 @@ class GameContext:
                     self.change_game_state("QUITING")
                     events_to_remove.append(e)
             elif type(e) == InputEvent:
-                new_events = self.input_event_callback(e)
+                new_events = self.content.process_input_event(e)
                 events_to_remove.append(e)
             elif type(e) == ViewEvent:
                 new_events = self._process_view_event(e)
@@ -210,17 +192,10 @@ class GameContext:
        
 
     def run_pre_physics_processing(self):
-        if self.pre_physics_callback is not None:
-            events = self.pre_physics_callback()
-            self.event_manager.add_events(events)
+        events = self.content.pre_physics_processing()
+        self.event_manager.add_events(events)
 
     def run_post_physics_processing(self):
-        if self.post_physics_callback is not None:
-            events = self.post_physics_callback()
-            self.event_manager.add_events(events)
-
-    def run_physics_processing(self): 
-        self.physics_engine.update()
         if self.config.track_updates:
             # TODO: Not efficient
             # Check for changes in position or angle and log change time
@@ -238,9 +213,15 @@ class GameContext:
                         o.set_last_change(clock.get_time())
                 new_position_lookup[k] = current_position
             self.last_position_lookup = new_position_lookup
-    
+        events = self.content.post_physics_processing()
+        self.event_manager.add_events(events)
+
+    def run_physics_processing(self): 
+        self.physics_engine.update()
+
     def tick(self):
         clock.tick(self.tick_rate)     
+        
 
     def add_player(self, player):
         self.player_manager.add_player(player) 
@@ -344,13 +325,7 @@ class GameContext:
 
         self.tick()
         self.step_counter +=1
-
-        # TODO: Slow, do we need to run every step?
-        # only needed for net play
-        # self.cleanup()
-
-    
-
+  
 
     def run(self):
         done = True

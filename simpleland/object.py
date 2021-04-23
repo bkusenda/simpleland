@@ -54,6 +54,11 @@ class GObject(Base):
         self.image_id_default = None
         self.image_id_current = None
         self.rotate_sprites = False
+        self.image_offset = Vector(0,0)
+        self.child_object_ids =[]
+
+    def set_image_offset(self,v):
+        self.image_offset = v
 
     def set_image_id(self,id):
         self.image_id_default = id
@@ -181,6 +186,7 @@ def build_interpolated_object(obj_1:GObject,obj_2:GObject,fraction=0.5):
     obj = GObject(body=b_new, id=obj_1.get_id(),data=obj_1.data)
     obj.is_deleted = obj_1.is_deleted
     obj.last_change = obj_1.last_change
+    obj.set_image_dims(obj_1.image_width, obj_1.image_height)
 
     for shape in obj_1.shape_group.get_shapes():
         obj.add_shape(get_shape_from_dict(b_new,shape.get_snapshot()))
@@ -202,6 +208,7 @@ class ExtendedGObject(TimeLoggingContainer):
 
         if next_timestamp-prev_timestamp  ==0:
             return prev_obj
+        return next_obj
 
-        fraction = (timestamp - prev_timestamp)/(next_timestamp-prev_timestamp)
-        return build_interpolated_object(prev_obj, next_obj, fraction)
+        # fraction = (timestamp - prev_timestamp)/(next_timestamp-prev_timestamp)
+        # return build_interpolated_object(prev_obj, next_obj, fraction)

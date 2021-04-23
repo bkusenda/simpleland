@@ -30,7 +30,7 @@ from .utils import gen_id
 from .event import InputEvent, Event
 from .utils import TickPerSecCounter
 from . import gamectx
-from .clock import clock
+from .clock import clock,StepClock
 import gym
 
 HEADER_SIZE = 16
@@ -123,6 +123,7 @@ class ClientConnector:
         self.last_latency_ticks = None
         self.request_counter = 0
         self.server_tick = None
+        self.connection_clock = StepClock()
 
         self.ticks_per_second = 60
         self.last_received_snapshots = []
@@ -179,14 +180,18 @@ class ClientConnector:
             self.last_received_snapshots = [response_info['snapshot_timestamp']]
 
             # set clock
-            self.server_tick = response_info['server_tick'] - self.last_latency_ticks
-            clock.set_absolute_time(self.server_tick)
+            self.server_tick = response_info['server_tick'] - (self.last_latency_ticks//2)
+            time_delta = clock.get_exact_time() - self.server_tick
+            if abs(time_delta)>100:
+                clock.set_absolute_time(self.server_tick)
+            elif abs(time_delta)>0:
+                clock.set_absolute_time(clock.get_exact_time()-time_delta//2)
 
             self.client_id = response_info['client_id']
             if response_info['message'] == 'UPDATE':
                 self.incomming_buffer.put(response)
             self.request_counter += 1
-        clock.tick(self.ticks_per_second)
+        self.connection_clock.tick(self.ticks_per_second)
 
     def start_connection(self, callback=None):
         print("Starting connection to server")
@@ -209,7 +214,7 @@ class GameClient:
         self.render_update_freq = 0 if self.frames_per_second == 0 else (1.0/self.frames_per_second)  * 1000
         self.frame_limit = False# self.frames_per_second != gamectx.config.tick_rate
 
-        self.server_info_history = TimeLoggingContainer(10)
+        self.server_info_history = TimeLoggingContainer(100)
         self.player: Player = None  # TODO: move to history data managed for rendering consistency
         self.step_counter = 0
         self.renderer:Renderer = renderer
@@ -261,6 +266,7 @@ class GameClient:
                 break
             else:
                 gamectx.load_snapshot(incomming_data['snapshot'])
+                # self.sync_time()
 
                 self.server_info_history.add(
                     incomming_data['info']['snapshot_timestamp'],
@@ -298,18 +304,18 @@ class GameClient:
         self.step_counter += 1
     
     def render(self,force=False):
-        if (force or not self.frame_limit or ((self.render_time - self.render_last_update)*2 >= self.render_update_freq)):
-            self.renderer.set_log_info("TPS: {} ".format(self.tick_counter.avg()))
-            self.renderer.process_frame(
-                render_time=self.render_time,
-                player=self.player)
+        # if (force or not self.frame_limit or ((self.render_time - self.render_last_update)*2 >= self.render_update_freq)):
+        self.renderer.set_log_info("TPS: {} ".format(self.tick_counter.avg()))
+        self.renderer.process_frame(
+            render_time=self.render_time,
+            player=self.player)
 
-            self.content.post_process_frame(
-                render_time=self.render_time,
-                player=self.player,
-                renderer=self.renderer)
-            self.renderer.render_frame()
-            self.render_last_update = self.render_time
+        self.content.post_process_frame(
+            render_time=self.render_time,
+            player=self.player,
+            renderer=self.renderer)
+        self.renderer.render_frame()
+        self.render_last_update = self.render_time
 
         if self.config.is_human:
             self.renderer.play_sounds(gamectx.get_sound_events(self.render_time))
@@ -317,6 +323,3 @@ class GameClient:
     def get_rgb_array(self):
         return self.renderer.get_last_frame()
             
-
-    
-        

@@ -20,7 +20,7 @@ import pkg_resources
 import logging
 from .player import Camera
 from .spritesheet import Spritesheet
-
+from .content import Content
 
 def scale(vec,vec2):
     return Vector(vec.x * vec2.x, vec.y* vec2.y)
@@ -109,8 +109,8 @@ class Renderer:
         if self.config.sound_enabled:
             pygame.mixer.pre_init(  44100, -16, 2, 1024)
         pygame.init()
-
-        self._display_surf = pygame.display.set_mode(self.resolution)  # , pygame.HWSURFACE | pygame.DOUBLEBUF)
+        flags =  pygame.HWSURFACE | pygame.DOUBLEBUF
+        self._display_surf = pygame.display.set_mode(self.resolution,flags)  # ,)
         self.load_sounds()
         self.load_images()
         # pygame.key.set_repeat(500,100)
@@ -223,18 +223,25 @@ class Renderer:
         rotate = obj.rotate_sprites
         image_used = image_id is not None and not self.config.disable_textures
         if image_used:
+            obj_pos:Vector = self.get_view_position(obj)
+            
+            if obj_pos.get_distance(center) > self.view_width:
+                return
             body_angle = obj.get_body().angle
-            obj_pos = self.get_view_position(obj)
+
             
             # TODO: fix, main_shape will not always have radius
-            body_w, body_h = obj.get_image_dims()
-            if body_w == 80:
-                print(f"IMAGE DIMS {obj.get_id()} {body_w}")
+            # 
+
             image = self.get_image_by_id(image_id)
+            
             if image is not None:
-                image_size = int(body_w*screen_factor[0]),int(body_h*screen_factor[1])
+                scale_w, scale_h = 1,1 #obj.get_image_dims()
+                body_w, body_h = image.get_size()
+                image_size = int(body_w*screen_factor[0] *scale_w)+1,int(body_h*screen_factor[1] *scale_h)+1
                 
                 if image_size[0]> 5000:
+                    image_size = 200,200
                     print("zoom out/ to close {}".format(image_size))
                 
 
@@ -243,7 +250,7 @@ class Renderer:
                     image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
                 rect = image.get_rect()
 
-                image_loc = scale(screen_factor, ((obj_pos- center).rotated(-angle)  + screen_view_center))
+                image_loc = scale(screen_factor, ((obj_pos- center - obj.image_offset).rotated(-angle)  + screen_view_center))
                 image_loc = to_pygame(image_loc, self._display_surf)
                 rect.center = image_loc
                 
@@ -336,12 +343,7 @@ class Renderer:
 
         object_manager = gamectx.object_manager
         # import pdb;pdb.set_trace()
-        self._display_surf.fill((0, 0, 0))
-
-        if self.debug:
-            import pymunk.pygame_util
-            draw_options = pymunk.pygame_util.DrawOptions(self._display_surf)
-            gamectx.physics_engine.space.debug_draw(draw_options)
+        self._display_surf.fill((20, 100, 20))
 
         angle = 0
         camera:Camera = None
