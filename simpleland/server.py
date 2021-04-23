@@ -68,7 +68,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
 
         if len(client.unconfirmed_messages) >= config.max_unconfirmed_messages_before_new_snapshot:
             client.last_snapshot_time_ms = 0
-            client.unconfirmed_messages = []
+            client.unconfirmed_messages = set()
         
         snapshot_timestamp, snapshot = gamectx.create_snapshot_for_client(client)
         

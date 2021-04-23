@@ -26,27 +26,36 @@ from ..common import COLLISION_TYPE
 import numpy as np
 from ..config import GameDef, PhysicsConfig
 from ..clock import clock
+from typing import List,Dict,Any
+from ..event import InputEvent, Event, AdminEvent,ViewEvent, DelayedEvent
+from .. import gamectx
+from ..common import Body, Vector
+import pygame
+from ..clock import clock
 
-
+import sys
+import math
 
 
 map_layer_1 = (
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n" 
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n" 
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n" 
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n"
-    f"gggggggggggggggggggggggggggggg\n" 
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n" 
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n" 
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n" 
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n"
+    # f"gggggggggggggggggggggggggggggg\n" 
+    # f"gggggggggggggggggggggggggggggg\n" 
+    f"\n" 
 
 )
 # s
@@ -58,10 +67,9 @@ map_layer_2 = (
     f"b                         b\n"
     f"b          ffffffff       b\n" 
     f"b            t            b\n"
-    f"b           s   f  s      b\n"
+    f"b         s     f  s      b\n"
     f"b                         b\n"
     f"bbbbbbbbbbbbbbbbbbbbbbbbbb\n"
-    
 
 )
 
@@ -146,7 +154,7 @@ def get_view_position_fn(obj: GObject):
     action_data = obj.get_data_value("action")
     cur_tick = clock.get_tick_counter()
     if action_data:        
-        if action_data['start_tick'] + action_data['ticks'] > cur_tick:
+        if action_data['start_tick'] + action_data['ticks'] >= cur_tick:
             if action_data['type'] == 'walk':
                 idx = cur_tick - action_data['start_tick']
                 view_position = action_data['step_size'] * idx * action_data['direction'] + action_data['start_position']
@@ -362,17 +370,46 @@ class Character(GObject):
         player.set_data_value("allow_input", False)
         self.enable()
 
-# def add_food(position):
-#     o = GObject(Body())
-#     o.set_data_value("energy", gamectx.content.config['food_energy'])
-#     o.set_data_value("type", "food")
-#     o.set_image_id("food")
-#     o.set_position(position=position)
-#     o.set_last_change(clock.get_time())
 
-#     ShapeFactory.attach_circle(o, radius=TILE_SIZE/6)
-#     gamectx.add_object(o)
-#     gamectx.data['food_counter'] = gamectx.data.get('food_counter', 0) + 1
+class Tree(GObject):
+
+    def __init__(self,position, shape_color=(100, 130, 100)):
+        super().__init__(Body())
+        self.set_data_value("type", "tree")
+        self.set_data_value("health", 100)
+        self.set_position(position)
+        self.set_visiblity(False)
+        self.set_last_change(clock.get_time())
+        ShapeFactory.attach_rectangle(self, width=TILE_SIZE, height=TILE_SIZE)
+        gamectx.add_object(self)
+
+        trunk =self.add_tree_trunk()
+        self.set_data_value("trunk_id", trunk.get_id())
+        top =self.add_tree_top()
+        self.set_data_value("top_id", top.get_id())        
+
+    def add_tree_trunk(self):
+        o = GObject(Body(),depth=1)
+        o.set_data_value("type", "part")
+        o.set_image_id(f"tree_trunk")
+        o.set_position(position=self.get_position())
+        o.set_last_change(clock.get_time())
+        ShapeFactory.attach_rectangle(o, width=TILE_SIZE, height=TILE_SIZE)
+        gamectx.add_object(o)
+        return o
+
+    def add_tree_top(self):
+        o = GObject(Body(),depth=3)
+        o.set_data_value("type", "part")
+        o.set_image_id(f"tree_top")
+        o.set_image_offset(Vector(0,-TILE_SIZE*1.5))
+        o.set_last_change(clock.get_time())
+        o.set_position(position=self.get_position())
+        
+        ShapeFactory.attach_rectangle(o, width=TILE_SIZE*2, height=TILE_SIZE*2)
+        gamectx.add_object(o)
+        return o
+
 
 
 def add_rock(position, type="rock", shape_color=(100, 100, 100)):
@@ -385,7 +422,6 @@ def add_rock(position, type="rock", shape_color=(100, 100, 100)):
     ShapeFactory.attach_rectangle(o, width=TILE_SIZE, height=TILE_SIZE)
     gamectx.add_object(o)
 
-
 def add_grass(position, shape_color=(100, 130, 100)):
     o = GObject(Body(),depth=0)
     o.set_data_value("type", "grass")
@@ -393,37 +429,10 @@ def add_grass(position, shape_color=(100, 130, 100)):
     o.set_position(position=position)
     o.set_last_change(clock.get_time())
     o.set_shape_color(shape_color)
-    
     ShapeFactory.attach_rectangle(o, width=TILE_SIZE*2, height=TILE_SIZE*2)
     gamectx.add_object(o)
 
 
-def add_tree_trunk(position, shape_color=(100, 130, 100)):
-    o = GObject(Body(),depth=1)
-    o.set_data_value("type", "tree")
-    o.set_image_id(f"tree_trunk")
-    o.set_position(position=position)
-    o.set_last_change(clock.get_time())
-    o.set_shape_color(shape_color)
-    
-    ShapeFactory.attach_rectangle(o, width=TILE_SIZE, height=TILE_SIZE)
-    gamectx.add_object(o)
-
-def add_tree_top(position, shape_color=(100, 130, 100)):
-    o = GObject(Body(),depth=3)
-    o.set_data_value("type", "tree")
-    o.set_image_id(f"tree_top")
-    o.set_position(position=position)
-    o.set_image_offset(Vector(0,-TILE_SIZE*1.5))
-    o.set_last_change(clock.get_time())
-    o.set_shape_color(shape_color)
-    
-    ShapeFactory.attach_rectangle(o, width=TILE_SIZE*2, height=TILE_SIZE*2)
-    gamectx.add_object(o)
-
-def add_tree(position, shape_color=(100, 130, 100)):
-    add_tree_trunk(position)
-    add_tree_top(position)
     # o = GObject(Body(),depth=1)
     # o.set_data_value("type", "tree")
     # o.set_image_id(f"tree")
@@ -478,9 +487,6 @@ def default_collision_callback(obj1: GObject, obj2: GObject):
         
     return False
 
-
-
-
 item_types = ['lava', 'food', 'rock', 'player']
 item_map = {}
 for i, k in enumerate(item_types):
@@ -529,7 +535,7 @@ class GameContent(Content):
 
 
     def speed_factor(self):
-        return max(gamectx.speed_factor() * 1/4, 1)
+        return max(gamectx.speed_factor() * 1/6, 1)
 
     def get_asset_bundle(self):
         return self.asset_bundle
@@ -658,7 +664,7 @@ class GameContent(Content):
             lines = layer.split("\n")
 
             self.spawn_locations = []
-            for ridx, line in enumerate(lines):
+            for ridx, line in enumerate(reversed(lines)):
                 for cidx, ch in enumerate(line):
                     coord = (cidx, ridx)
                     if ch == 'b':
@@ -672,12 +678,11 @@ class GameContent(Content):
                     elif ch == 'g':
                         add_grass(coord_to_vec(coord))
                     elif ch == 't':
-                        add_tree(coord_to_vec(coord))
+                        Tree(coord_to_vec(coord))
 
     # **********************************
     # GAME LOAD
     # **********************************
-
     def load(self):
         self.loaded = False
         self.load_map()
@@ -798,18 +803,6 @@ class GameContent(Content):
                     renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)
 
 
-
-from typing import List,Dict,Any
-from ..event import InputEvent, Event, AdminEvent,ViewEvent, DelayedEvent
-from .. import gamectx
-from ..common import Body, Vector
-import pygame
-from ..clock import clock
-
-import sys
-import math
-
-
 def input_event_callback(input_event: InputEvent) -> List[Event]:
 
     player = gamectx.player_manager.get_player(input_event.player_id)
@@ -833,7 +826,6 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
     obj = gamectx.object_manager.get_by_id(player.get_object_id())
     if obj is None:
         return events
-
     
     if not obj.enabled:
         return []
@@ -845,10 +837,8 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
 
     # Queued action prevents movement until complete. Trigger at a certain time and releases action lock later but 
     # cur_tick = clock.get_tick_counter()
-    action_completion_time = obj.get_data_value("action_completion_time",0)
-    if cur_tick <= obj.get_data_value("action_completion_time",0):
+    if cur_tick < obj.get_data_value("action_completion_time",0):
         return []
-
 
     # Object Movement
     actions_set = set()
@@ -893,6 +883,8 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
 
     if "GRAB" in actions_set:
         def grab_event_fn(event: DelayedEvent, data: Dict[str, Any]):
+            print("HNI")
+            print(obj)
 
             obj.set_last_change(cur_tick)
             # new_pos = tile_size * direction + obj.get_position()
@@ -937,7 +929,8 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
             target_pos= obj.get_position() + (direction * tile_size)
             target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
             oids = gamectx.physics_engine.space.get_objs_at(target_coord)
-            if len(oids)==1 and gamectx.object_manager.get_by_id(oids[0]).get_data_value("type") == 'grass':
+
+            if len(oids)==0 or (len(oids)==1 and gamectx.object_manager.get_by_id(oids[0]).get_data_value("type") == 'grass'):
                 add_rock(target_pos)
                 
             obj.set_data_value("action",
@@ -956,6 +949,9 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
 
     elif "ATTACK" in actions_set:
         def event_fn(event: DelayedEvent, data: Dict[str, Any]):
+            obj = gamectx.object_manager.get_by_id(data.get("obj_id"))
+
+
             obj.set_last_change(cur_tick)
             ticks_in_action = int(1 * gamectx.content.speed_factor())
             action_complete_time = cur_tick + ticks_in_action
@@ -966,7 +962,13 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
             target_pos= obj.get_position() + (direction * tile_size)
             target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
             for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
-                print(gamectx.object_manager.get_by_id(oid).get_data_value("type"))
+                obj2 = gamectx.object_manager.get_by_id(oid)
+                if obj2.get_data_value("type") == "tree":
+                    new_health = obj2.get_data_value("health") -10
+                    print(new_health)
+                    obj2.set_data_value("health", new_health)
+                    if new_health < 30:
+                        gamectx.remove_object_by_id(obj2.get_data_value("top_id"))
             
             obj.set_data_value("action",
                 {
@@ -978,20 +980,29 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
             return []
         event = DelayedEvent(event_fn, 
             execution_step=0, 
-            data={})
-
+            data={'obj_id':obj.get_id()})
         events.append(event)
     elif "MOVE" in actions_set:
         def move_event_fn(event: DelayedEvent, data: Dict[str, Any]):
             direction = data['direction']
             angle_update = data['angle_update']
+            body:Body = obj.get_body()
+
             direction = direction * velocity_multiplier
             obj.set_last_change(cur_tick)
-            ticks_in_action = int(1 * gamectx.content.speed_factor())
+
+
+            if angle_update is not None and body.angle != angle_update:
+                ticks_in_action = 1 * gamectx.content.speed_factor()
+                action_complete_time = cur_tick + ticks_in_action
+                obj.set_data_value("action_completion_time",action_complete_time/2)
+                body.angle = angle_update
+                return []
+
+            ticks_in_action = 1 * gamectx.content.speed_factor()
             action_complete_time = cur_tick + ticks_in_action
             obj.set_data_value("action_completion_time",action_complete_time)
-            body:Body = obj.get_body()
-            new_pos = tile_size * direction + body.position
+            new_pos = tile_size * direction + obj.get_position()
             obj.set_data_value("action",
                 {
                     'type':'walk',
@@ -1003,8 +1014,7 @@ def input_event_callback_3rd(input_event:InputEvent, player) -> List[Event]:
                 })
 
             obj.update_position(new_pos)
-            if angle_update is not None:
-                body.angle = angle_update
+
             return []
 
         event = DelayedEvent(move_event_fn, 

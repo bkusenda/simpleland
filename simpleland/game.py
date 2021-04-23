@@ -239,7 +239,10 @@ class GameContext:
                 client.add_event(e)
                 
     def remove_object(self,obj:GObject):
-        event = RemoveObjectEvent(object_id = obj.get_id())
+        self.remove_object_by_id(obj.get_id())
+        
+    def remove_object_by_id(self,obj_id):
+        event = RemoveObjectEvent(object_id =obj_id)
         self.add_event(event)
 
     def remove_all_objects(self):

@@ -47,6 +47,7 @@ class GObject(Base):
         self.is_deleted = False
         self.enabled=True
         self.depth=depth
+        self.visible=True
         self.image_width, self.image_height = 80,80
         self.shape_color = None
         self._update_position_callback = lambda obj,new_pos: None
@@ -59,6 +60,12 @@ class GObject(Base):
 
     def set_image_offset(self,v):
         self.image_offset = v
+
+    def set_visiblity(self,visible):
+        self.visible=visible
+    
+    def is_visible(self):
+        return self.visible
 
     def set_image_id(self,id):
         self.image_id_default = id

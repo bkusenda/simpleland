@@ -111,9 +111,10 @@ class Renderer:
         pygame.init()
         flags =  pygame.HWSURFACE | pygame.DOUBLEBUF
         self._display_surf = pygame.display.set_mode(self.resolution,flags)  # ,)
+        # self._display_surf = pygame.display.set_mode(self.resolution)  # ,)
         self.load_sounds()
         self.load_images()
-        # pygame.key.set_repeat(500,100)
+        pygame.key.set_repeat(500,100)
 
         self.initialized = True
 
@@ -377,7 +378,7 @@ class Renderer:
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
             obj:GObject
             for k, obj in render_obj_dict.items():
-                if not obj.enabled or obj.is_deleted:
+                if not obj.enabled or obj.is_deleted or not obj.is_visible():
                     continue
                 if view_obj is not None and k == view_obj.get_id():
                     continue
