@@ -18,7 +18,8 @@ import lz4.frame
 import numpy as np
 from pyinstrument import Profiler
 
-from .common import (  Camera,  Shape,  TimeLoggingContainer)
+from .common import ( TimeLoggingContainer)
+from .camera import Camera
 from .object import GObject
 from .config import ClientConfig, GameConfig
 from .content import Content
@@ -33,7 +34,7 @@ from . import gamectx
 from .clock import clock,StepClock
 import gym
 
-HEADER_SIZE = 8
+HEADER_SIZE = 16
 LATENCY_LOG_SIZE = 10000
 
 def receive_data(sock):
@@ -129,7 +130,7 @@ class ClientConnector:
         self.server_tick = None
         self.connection_clock = StepClock()
 
-        self.ticks_per_second = 60
+        self.ticks_per_second = 30
         self.last_received_snapshots = []
         self.sync_freq = 0
         self.last_sync = 0
@@ -258,7 +259,7 @@ class GameClient:
 
         # Clear Events after sending to Server
         # TODO: add support for selective removal of events. eg keep local events  like quite request
-        gamectx.event_manager.clear()
+        # gamectx.event_manager.clear()
 
     def get_remote_state(self):
         if self.connector is None:

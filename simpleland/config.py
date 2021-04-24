@@ -23,7 +23,7 @@ class RendererConfig(Base):
         self.render_delay_in_ms = 0
         self.resolution = (640,480)
         self.format='RGB'
-        self.save_observation=True
+        self.save_observation=False
         self.render_shapes = False
         self.show_console = True
         self.disable_textures = False
@@ -73,9 +73,6 @@ class GameConfig(Base):
         self.tick_rate = 60
         self.client_only_mode=False
         self.wait_for_user_input=False
-
-        # Required for tracking position updates
-        self.track_updates = False
 
     def __repr__(self) -> str:
         return pprint.pformat(self.__dict__)

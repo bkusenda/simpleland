@@ -108,10 +108,6 @@ class GridPhysicsEngine:
         self.collision_callbacks[(collision_type_a,collision_type_b)] = callback
         self.collision_callbacks[(collision_type_b,collision_type_a)] = callback
 
-    # def get_objects_at(self,coord):
-    #     obj_ids = self.space.get_objs_at(coord)
-    #     return obj_ids
-
 
     def add_object(self, obj: GObject):
         obj.last_change = clock.get_time()
@@ -119,7 +115,6 @@ class GridPhysicsEngine:
         self.update_obj_position(obj,obj.get_position())
 
     def update_obj_position(self,obj:GObject,new_pos):
-        # print(f"UPDATE POS OF {obj.get_data_value('type')} {obj.get_id()} {new_pos}")
         self.position_updates[obj.get_id()] = (obj,new_pos)
 
     def remove_object(self,obj):

@@ -12,17 +12,17 @@ TILE_SIZE = 16
 def game_def(content_overrides={}):
 
     content_config = {
-        'space_size': TILE_SIZE*10,
-        "space_border": 20*TILE_SIZE,
+        'default_camera_zoom': TILE_SIZE*10,
         "tile_size": TILE_SIZE,
         "food_energy":10,
+        "food_count": 1,
         "player_config": {
             "health_start": 100,
             "health_gen": 5,
             "health_max": 100,
             "health_gen_period": 10,
             "stamina_max": 100,
-            "stamina_gen": 2,
+            "stamina_gen": 20,
             "stamina_gen_period": 1,
             "energy_start": 100,
             "energy_max": 100,

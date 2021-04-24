@@ -3,7 +3,8 @@ from .utils import gen_id
 from typing import Callable, List, Dict
 import time
 
-from .common import Shape, Vector, load_dict_snapshot, Base, dict_to_state, get_shape_from_dict, Camera
+from .common import Shape, Vector, load_dict_snapshot, Base, dict_to_state, get_shape_from_dict
+from .camera import Camera
 from .common import get_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingContainer
 from .common import COLLISION_TYPE
 from .clock import clock
@@ -39,12 +40,25 @@ class GObject(Base):
         self.image_offset = Vector(0,0)
         self.child_object_ids =[]
 
-    def set_image_offset(self,v):
-        self.image_offset = v
+    # This function should be overridden
+    def create(self,*args,**kwargs):
+        pass        
+
+    def update(self):
+        pass
+
+    def get_view_position(self):
+        return self.position
+
+    def get_image_id(self, angle):
+        return self.image_id_default
 
     def set_visiblity(self,visible):
         self.visible=visible
-    
+
+    def set_image_offset(self,v):
+        self.image_offset = v    
+
     def is_visible(self):
         return self.visible
 
@@ -76,10 +90,8 @@ class GObject(Base):
         self.data[k] = value
         self.update_last_change()
 
-
     def get_id(self):
         return self.id
-    
 
     def get_image_dims(self):
         return self.image_width, self.image_height
@@ -114,14 +126,6 @@ class GObject(Base):
         self.last_change = timestamp
 
     def get_last_change(self):
-        if self.last_change is None and self.last_change is None:
-            return None
-        if self.last_change is None:
-            return self.last_change
-        if self.last_change is None:
-            return None
-        if self.last_change > self.last_change:
-            return self.last_change
         return self.last_change
 
     def get_snapshot(self):

@@ -20,10 +20,10 @@ class PlayerManager:
         :param player:
         :return:
         """
-        self.players_map[player.uid] = player
+        self.players_map[str(player.uid)] = player
 
     def get_player(self, uid) -> Player:
-        return self.players_map.get(uid, None)
+        return self.players_map.get(str(uid), None)
 
     def pull_events(self) -> List[Event]:
         all_player_events: List[Event] = []
@@ -45,6 +45,6 @@ class PlayerManager:
                 self.players_map[k].load_snapshot(p_data)
             else:
                 new_p = Player.build_from_dict(p_data)
-                self.players_map[k] = new_p
+                self.players_map[str(k)] = new_p
                 new_players.append(new_p)
         return new_players

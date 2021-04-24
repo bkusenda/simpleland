@@ -3,11 +3,10 @@ from simpleland import physics_engine
 import random
 from typing import Dict, Any, Tuple
 
-
-
-from ..common import ( Camera, Circle,  Line,
-                      Polygon, Shape,  Vector,
-                      TimeLoggingContainer)
+import pymunk
+from pymunk import contact_point_set
+from pymunk.vec2d import Vec2d
+from ..camera import Camera
 from ..event import (DelayedEvent, Event, InputEvent,
                      PeriodicEvent, SoundEvent, ViewEvent)
 from .. import gamectx
@@ -25,7 +24,7 @@ from ..clock import clock
 from typing import List,Dict,Any
 from ..event import InputEvent, Event, ViewEvent, DelayedEvent
 from .. import gamectx
-from ..common import Vector
+from ..common import  Vector
 import pygame
 from ..clock import clock
 from gym import spaces
@@ -35,6 +34,9 @@ from .survival_assets import *
 from .survival_utils import *
 from .survival_config import TILE_SIZE
 
+############################
+# COLLISION HANDLING
+############################
 
 def process_food_collision(player_obj: GObject, food_obj):
 
@@ -88,10 +90,10 @@ class GameContent(Content):
     def __init__(self, config):
         super().__init__(config)
         self.asset_bundle = load_asset_bundle()
-        self.space_size = config['space_size']
-        self.space_border = config['space_border']
-        # self.food_energy = config['food_energy']
-        # self.food_count = config['food_count']
+        self.default_camera_zoom = config['default_camera_zoom']
+        self.food_energy = config['food_energy']
+        self.food_count = config['food_count']
+        
         self.characters = {}
 
         self.item_types = ['tree', 'food', 'rock', 'player']
@@ -125,7 +127,6 @@ class GameContent(Content):
             'left': ['player_atk_left_1', 'player_atk_left_2', 'player_atk_left_3', 'player_atk_left_4', 'player_atk_left_5', 'player_atk_left_6'],
             'right': ['player_atk_right_1', 'player_atk_right_2', 'player_atk_right_3', 'player_atk_right_4', 'player_atk_right_5', 'player_atk_right_6']}
 
-
     def speed_factor(self):
         return max(gamectx.speed_factor() * 1/6, 1)
 
@@ -140,57 +141,29 @@ class GameContent(Content):
         def food_event_callback(event: PeriodicEvent, data: Dict[str, Any]):
             self.spawn_food(limit=1)
             return [], True
-        new_food_event = PeriodicEvent(food_event_callback, execution_step_interval=random.randint(10, 16) * self.speed_factor())
+
+        new_food_event = PeriodicEvent(
+            food_event_callback, 
+            execution_step_interval=random.randint(10, 16) * self.speed_factor())
         gamectx.add_event(new_food_event)
 
         self.spawn_food()
         self.spawn_players()
+
+    def get_class_by_type_name(self,name):
+        if name == "Character":
+            print("Creating Char")
+            return Character
+        elif name == "Tree":
+            return Tree
+        else:
+            return GObject
 
     def reset_required(self):
         for player in gamectx.player_manager.players_map.values():
             if not player.get_data_value("reset_required", True):
                 return False
         return True
-
-    def get_new_character_location(self):
-        loc = random.choice(gamectx.content.spawn_locations)
-        return coord_to_vec(loc)
-
-
-    def spawn_player(self,player, reset=False):
-        if player.get_object_id() is not None:
-            character = gamectx.object_manager.get_by_id(player.get_object_id())
-            if reset:
-                character.reset()
-        else:
-            character= Character(player)
-            self.characters[player.get_id()] = character
-        
-        character.spawn(self.get_new_character_location())
-        return character
-
-
-    def get_object_type_by_id(self,name):
-        if name == "Character":
-            return Character
-        elif name == "Tree":
-            return Tree
-        else:
-            return None
-
-    def spawn_players(self,reset=True):
-        for player in gamectx.player_manager.players_map.values():
-            self.spawn_player(player,reset)
-
-    def spawn_food(self, limit=None):
-        # Spawn food
-        spawn_count = 0
-        for i, coord in enumerate(self.food_locations):
-            if len(gamectx.physics_engine.space.get_objs_at(coord)) == 0:
-                Food(coord_to_vec(coord))
-                spawn_count += 1
-                if limit is not None and spawn_count >= limit:
-                    return
 
     def get_observation_space(self):
         x_dim = (self.vision_distance * 2 + 1)
@@ -254,7 +227,60 @@ class GameContent(Content):
         else:
             info['msg'] = "no player found"
         return observation, reward, done, info
+    
 
+    # **********************************
+    # NEW PLAYER
+    # **********************************
+    def new_player(self, client_id, player_id=None, player_type=0, is_human=False) -> Player:
+        if self.player_count > len(self.spawn_locations):
+            raise Exception("Number of players cannot exceed spawn locations")
+        # Create Player
+        if player_id is None:
+            player_id = gen_id()
+        player = gamectx.player_manager.get_player(player_id)
+        if player is None:
+            cam_distance = self.default_camera_zoom
+            player = Player(
+                client_id=client_id,
+                uid=player_id,
+                camera=Camera(distance=cam_distance,view_type=1),
+                player_type=player_type,
+                is_human = is_human)
+            gamectx.add_player(player)
+        self.spawn_player(player,reset=True)        
+        return player
+
+
+    #########################
+    # Loading/Spawning
+    #########################
+    def spawn_player(self,player:Player, reset=False,loc_idx=0):
+        if player.get_object_id() is not None:
+            character = gamectx.object_manager.get_by_id(player.get_object_id())
+        else:
+            character= Character().create(player)
+            self.characters[player.get_id()] = character
+        if reset:
+            character.reset()
+
+        character.spawn(coord_to_vec(self.spawn_locations[loc_idx]))
+        return character
+
+
+    def spawn_players(self,reset=True):
+        for loc_idx,player in enumerate(gamectx.player_manager.players_map.values()):
+            self.spawn_player(player,reset,loc_idx)
+
+    def spawn_food(self, limit=None):
+        # Spawn food
+        spawn_count = 0
+        for i, coord in enumerate(self.food_locations):
+            if len(gamectx.physics_engine.space.get_objs_at(coord)) == 0:
+                Food().create(coord_to_vec(coord))
+                spawn_count += 1
+                if limit is not None and spawn_count >= limit:
+                    return
 
     def load_map(self):
         for i, layer in enumerate(map_layers):
@@ -265,15 +291,15 @@ class GameContent(Content):
                 for cidx, ch in enumerate(line):
                     coord = (cidx, ridx)
                     if ch == 'b':
-                        Rock(coord_to_vec(coord))
+                        Rock().create(coord_to_vec(coord))
                     elif ch == 'f':
                         self.food_locations.append(coord)
                     elif ch == 's':
                         self.spawn_locations.append(coord)
                     elif ch == 'g':
-                        Grass(coord_to_vec(coord))
+                        Grass().create(coord_to_vec(coord))
                     elif ch == 't':
-                        Tree(coord_to_vec(coord))
+                        Tree().create(coord_to_vec(coord))
 
     # **********************************
     # GAME LOAD
@@ -289,30 +315,32 @@ class GameContent(Content):
 
         self.loaded = True
 
+    ########################
+    # GET INPUT
+    ########################
     def process_input_event(self, input_event:InputEvent):
         events= []
+
         player = gamectx.player_manager.get_player(input_event.player_id)
+        if player is None:
+            print("PLAYER IS NON")
+            return []
         if not player.get_data_value("allow_input",False):
             return []
-        if player is None:
-            return []
-
         keys = set(input_event.input_data['inputs'])
 
         obj:Character = gamectx.object_manager.get_by_id(player.get_object_id())
-        if obj is None:
-            return events
-        
-        if not obj.enabled:
-            return []
-        elif player.get_data_value("reset_required",False):
-            print("Episode is over. Reset required")
-            return events
-
 
         if 27 in keys:
             print("QUITTING")
             gamectx.change_game_state("STOPPED")
+            return events
+
+        if obj is None or not obj.enabled:
+            return events
+        
+        elif player.get_data_value("reset_required",False):
+            print("Episode is over. Reset required")
             return events
 
         # Queued action prevents movement until complete. Trigger at a certain time and releases action lock later but 
@@ -369,58 +397,18 @@ class GameContent(Content):
 
         return events
 
-    # **********************************
-    # NEW PLAYER
-    # **********************************
-    def new_player(self, client_id, player_id=None, player_type=0, is_human=False) -> Player:
-        if self.player_count > len(self.spawn_locations):
-            raise Exception("Number of players cannot exceed spawn locations")
-        # Create Player
-        if player_id is None:
-            player_id = gen_id()
-        player = gamectx.player_manager.get_player(player_id)
-        if player is None:
-            cam_distance = self.space_size
-            if player_type == 10:
-                cam_distance = TILE_SIZE*6
-            player = Player(
-                client_id=client_id,
-                uid=player_id,
-                camera=Camera(distance=cam_distance),
-                player_type=player_type,
-                is_human = is_human)
-
-            gamectx.add_player(player)
-        player.set_data_value("view_type", 1)
-        if player_type == 10:
-            return player
-        self.spawn_player(player,reset=True)
-        
-        return player
-
-    def pre_event_processing(self):
-        return []
-
-    def pre_physics_processing(self):
-        return []
-
-    def post_physics_processing(self):
+    def update(self):
         new_events = []
         cur_time = clock.get_time()
         for k, p in gamectx.player_manager.players_map.items():
             if p.get_object_id() is None:
                 continue
-
             o = gamectx.object_manager.get_by_id(p.get_object_id())
-
             if o is None or o.is_deleted or not o.enabled:
                 continue
-
             if o.enabled:
                 o.update()
-
         return new_events
-
 
     def post_process_frame(self, render_time, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:
@@ -433,16 +421,15 @@ class GameContent(Content):
                 obj_energy = obj.get_data_value("energy", "NA")
                 obj_health = obj.get_data_value("health", "NA")
                 obj_stamina = obj.get_data_value("stamina", "NA")
-
+                inv = obj.get_data_value('inventory',{})
+                inventory_st = " ".join([f"{k}:{v}" for k,v in inv.items()])
                 lines.append(f"H:{obj_health}, E:{obj_energy}, S:{obj_stamina}")
-
+                lines.append(f"Inventory: {inventory_st}")
 
             if renderer.config.show_console:
-                renderer.render_to_console(lines, x=5, y=5)
+                renderer.render_to_console(lines, x=5, y=5, background_color=(0, 0, 0))
                 if obj_health <= 0:
                     renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)
-
-
 
 # def input_event_callback_fpv(input_event: InputEvent, player) -> List[Event]:
 

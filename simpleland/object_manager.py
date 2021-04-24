@@ -13,11 +13,8 @@ class GObjectManager:
 
     def add(self,obj: GObject):
         # self.objects[obj.get_id()] = obj
-        current_obj = self.objects.get(obj.get_id())
-        if current_obj is None:
-            self.objects[obj.get_id()] = obj
-        else:
-            raise Exception("Object already added")
+        self.objects[obj.get_id()] = obj
+
 
     def clear_objects(self):
         self.objects: Dict[str, GObject] = {}

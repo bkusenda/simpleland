@@ -42,9 +42,6 @@ class Content:
 
     @abstractmethod
     def get_step_reward(self,player:Player):
-        """
-        get reward for agent
-        """
         raise NotImplementedError()
 
     @abstractmethod
@@ -56,10 +53,14 @@ class Content:
         raise NotImplementedError()
 
     @abstractmethod
-    def new_player(self,  player_id=None, player_type = None, is_human=None) -> Player:
+    def new_player(self, client_id, player_id=None, player_type = None, is_human=None) -> Player:
         """
         creates a new player, called when client connects to server
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def update(self):
         raise NotImplementedError()
 
     @abstractmethod
@@ -69,16 +70,11 @@ class Content:
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def pre_event_processing(self):
-        raise NotImplementedError()
 
-    @abstractmethod
-    def pre_physics_processing(self):
-        raise NotImplementedError()
+    def get_class_by_type_name(self,name):
+        return GObject
 
-    @abstractmethod
-    def post_physics_processing(self):
-        raise NotImplementedError()
+
+
 
     

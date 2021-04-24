@@ -59,8 +59,6 @@ class Renderer:
         logging.info(f"{self.view_width} by {self.view_width}")
         self.center = Vector.zero()
 
-        self.get_image_id = self.asset_bundle.get_image_id_fn
-        self.get_view_position = self.asset_bundle.get_view_position_fn
         self.images = {}
         self.sounds = {}
         self.sprite_sheets = {}
@@ -132,11 +130,15 @@ class Renderer:
 
         self.initialized = True
 
-    def render_to_console(self, lines, x, y, fsize=18, spacing=12, color=(180, 180, 180)):
+    def render_to_console(self, lines, x, y, fsize=18, spacing=12, color=(180, 180, 180), background_color=None):
         font = pygame.font.SysFont(None, fsize)
+        num_lines = len(lines)
+        if background_color is not None:
+            pygame.draw.rect(self._display_surf, background_color, pygame.Rect(x-3, y-3, self.view_width, y+num_lines*spacing+3))
         for i, l in enumerate(lines):
             font.render(l, False, (0, 0, 0))
             self._display_surf.blit(font.render(l, True, color), (x, y + spacing * i))
+        
 
     def _draw_line(self,
                   obj: GObject,
@@ -146,7 +148,7 @@ class Renderer:
                   screen_view_center,
                   angle,
                   center):
-        obj_pos = self.get_view_position(obj)
+        obj_pos = obj.get_view_position()
         obj_location1 = (obj_pos + line.a.rotated(obj.angle) - center)
         obj_location1 = obj_location1.rotated(-angle)
         p1 = scale(screen_factor,(obj_location1 + screen_view_center))
@@ -171,7 +173,7 @@ class Renderer:
                     screen_view_center,
                     angle,
                     center):
-        obj_pos = self.get_view_position(obj) + circle.offset # TODO: Doesn't work with offset
+        obj_pos = obj.get_view_position() + circle.offset # TODO: Doesn't work with offset
         obj_location = (obj_pos - center)
         obj_location = obj_location.rotated(-angle)
         p = scale(screen_factor,(obj_location + screen_view_center))
@@ -191,7 +193,7 @@ class Renderer:
                      screen_view_center,
                      angle,
                      center):
-        obj_pos = self.get_view_position(obj)
+        obj_pos = obj.get_view_position()
 
         verts = shape.get_vertices()
         new_verts = []
@@ -214,7 +216,7 @@ class Renderer:
                      screen_view_center,
                      angle,
                      center):
-        obj_pos = self.get_view_position(obj)
+        obj_pos = obj.get_view_position()
 
         body_angle =obj.angle
         verts = shape.get_vertices()
@@ -232,11 +234,11 @@ class Renderer:
 
     def _draw_object(self, center, obj:GObject, angle, screen_factor, screen_view_center, color=None):
 
-        image_id= self.get_image_id(obj,angle)
+        image_id= obj.get_image_id(angle)
         rotate = obj.rotate_sprites
         image_used = image_id is not None and not self.config.disable_textures
         if image_used:
-            obj_pos:Vector = self.get_view_position(obj)
+            obj_pos:Vector = obj.get_view_position()
             
             body_angle = obj.angle
 
@@ -346,7 +348,7 @@ class Renderer:
         for k, o in objs.items():
             o:GObject = o
             if o is not None and not o.is_deleted and o.is_visible():
-                within_range = self.get_view_position(o).get_distance(center) < self.view_width
+                within_range = o.get_view_position().get_distance(center) < self.view_width
                 if within_range:
                     object_list_depth_sorted[o.depth][k] = o
         return object_list_depth_sorted
@@ -354,15 +356,11 @@ class Renderer:
     # TODO: Clean this up
     def process_frame(self,
                     render_time,
-                    player:Player,
-                    additional_data: Dict[str, Any]={}):
-
-
-        
+                    player:Player):
+       
         if not self.initialized:
             self.initialize()
 
-        object_manager = gamectx.object_manager
         # import pdb;pdb.set_trace()
         self._display_surf.fill((20, 100, 20))
 
@@ -372,17 +370,11 @@ class Renderer:
         view_obj:GObject = None
         if player:
             camera = player.get_camera()
-            view_type = player.get_data_value('view_type',0)
-            view_obj = object_manager.get_by_id(player.get_object_id())
-            if view_obj is not None:
-                center = self.get_view_position(view_obj)
-                if view_type == 0:
-                    angle = view_obj.angle
-            else:
-                center = Vector(self.view_width/2,self.view_height/2)
         else:
-            camera = Camera()
-            center = Vector(self.view_width/2,self.view_height/2)
+            camera = Camera(center=Vector(self.view_width/2,self.view_height/2))
+
+        center = camera.get_center()
+        angle = camera.get_angle()
                
 
         # TODO: make max customizeable 
@@ -392,7 +384,7 @@ class Renderer:
         screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
         screen_view_center = Vector(self.view_width, self.view_height) / 2.0
 
-        obj_list_sorted_by_depth= self.filter_objects_for_rendering(object_manager.get_objects(),center)
+        obj_list_sorted_by_depth= self.filter_objects_for_rendering(gamectx.object_manager.get_objects(),center)
         if self.config.draw_grid:
             self._draw_grid(center, angle, screen_factor, screen_view_center, size=self.config.tile_size, view_type= self.config.view_type)
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):

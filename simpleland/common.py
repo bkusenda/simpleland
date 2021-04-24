@@ -13,7 +13,6 @@ Vector = Vec2d
 class StateEncoder(json.JSONEncoder):
     def default(self, obj): # pylint: disable=E0202
         if isinstance(obj,(Vec2d,Vector)):
-            print("FOUND")
             return {
                 "_type": "Vec2d",
                 "x":obj.x,
@@ -30,7 +29,6 @@ class StateDecoder(json.JSONDecoder):
             return obj
         type = obj['_type']
         if type == 'Vec2d' or type == 'Vector':
-            print("DECODING VEC")
             return Vector(obj['x'],obj['y'])
         return obj
 
@@ -52,9 +50,9 @@ def get_dict_snapshot(obj, exclude_keys = {}):
             data[k] = {}
             for kk,vv in v.items():
                 if hasattr(vv,"__dict__"):
-                    data[k][kk](get_dict_snapshot(vv))
+                    data[k][kk] = get_dict_snapshot(vv)
                 else:
-                    data[k][kk](vv)
+                    data[k][kk]= vv
         
         elif isinstance(v,list):
             data[k] = []
@@ -311,12 +309,3 @@ class ShapeGroup(Base):
         data = dict_data['data']
         for k,shape_dict in data:
             self._shapes[k].load_snapshot(shape_dict)
-
-class Camera(Base):
-
-    def __init__(self, distance: float = 30, position_offset = Vector(0,0)):
-        self.distance = distance  # zoom
-        self.position_offset = position_offset
-
-    def get_distance(self):
-        return self.distance

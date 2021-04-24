@@ -16,23 +16,23 @@ from ..event import (DelayedEvent)
 from .survival_config import TILE_SIZE
 
 map_layer_1 = (
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n" 
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n" 
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n" 
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n"
-    # f"gggggggggggggggggggggggggggggg\n" 
-    # f"gggggggggggggggggggggggggggggg\n" 
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n" 
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n" 
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n" 
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n"
+    f"gggggggggggggggggggggggggggggg\n" 
+    f"gggggggggggggggggggggggggggggg\n" 
     f"\n" 
 
 )
@@ -52,55 +52,6 @@ map_layer_2 = (
 )
 
 map_layers = [map_layer_1,map_layer_2]
-
-def get_view_position_fn(obj: GObject):
-    action_data = obj.get_data_value("action")
-    cur_tick = clock.get_tick_counter()
-    if action_data:        
-        if action_data['start_tick'] + action_data['ticks'] >= cur_tick:
-            if action_data['type'] == 'walk':
-                print(f"WALK {action_data}")
-                idx = cur_tick - action_data['start_tick']
-                view_position = action_data['step_size'] * idx * action_data['direction'] + action_data['start_position']
-                return view_position
-
-    return obj.get_position()
-
-
-def get_image_id_fn(obj: GObject, angle):
-    if obj.get_data_value("type") == "player":
-        angle_num = obj.angle/math.pi
-        direction = "down"
-        if angle_num < 0.25 and angle_num >= -0.25:
-            direction = "up"
-        elif angle_num > 0.25 and angle_num <= 0.75:
-            direction = "left"
-        elif angle_num < -0.25 and angle_num >= -0.75:
-            direction = "right"
-        elif abs(angle_num) >= 0.75:
-            direction = "down"
-
-        action_data = obj.get_data_value("action")
-        cur_tick = clock.get_tick_counter()
-        sprites_list = gamectx.content.player_idle_sprites
-        sprite_idx= None
-        if action_data is not None:
-            if action_data['start_tick'] + action_data['ticks'] > cur_tick:
-                if action_data['type'] == 'walk':
-                    sprites_list = gamectx.content.player_walk_sprites
-                    action_idx = (cur_tick - action_data['start_tick'])
-                    sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))
-                    return sprites_list[direction][sprite_idx]
-                elif action_data['type'] == 'attack':
-                    sprites_list = gamectx.content.player_attack_sprites
-                    action_idx = (cur_tick - action_data['start_tick'])
-                    sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))
-                    return sprites_list[direction][sprite_idx]
-        if sprite_idx is None:
-            sprite_idx = int(cur_tick//gamectx.content.speed_factor()) % len(sprites_list[direction])
-        return sprites_list[direction][sprite_idx]
-    else:
-        return obj.image_id_default
 
 
 def load_asset_bundle():
@@ -213,14 +164,11 @@ def load_asset_bundle():
     return AssetBundle(
         image_assets=image_assets, 
         sound_assets=sound_assets,
-        music_assets=music_assets,
-        get_image_id_fn=get_image_id_fn,
-        get_view_position_fn=get_view_position_fn)
+        music_assets=music_assets)
 
 class Food(GObject):
 
-    def __init__(self,position):
-        super().__init__()  
+    def create(self,position):
         self.set_data_value("energy", gamectx.content.config['food_energy'])
         self.set_data_value("type", "food")
         self.set_image_id("food")
@@ -229,27 +177,79 @@ class Food(GObject):
         ShapeFactory.attach_circle(self, radius=TILE_SIZE/6)
         gamectx.add_object(self)
         gamectx.data['food_counter'] = gamectx.data.get('food_counter', 0) + 1
+        return self
 
 
 class Character(GObject):
 
-
-
-    def __init__(self,player: Player):
-        super().__init__()  
+    def create(self,player: Player):
         self.set_data_value("rotation_multiplier", 1)
         self.set_data_value("velocity_multiplier", 1)
         self.set_data_value("type", "player")
         self.set_image_id("player_idle_down_1")
         self.set_data_value("player_id", player.get_id())
+        self.set_data_value('inventory',{
+            'wood':0,
+            'rock':0,
+        })
+        self.set_data_value('selected_item',None)
         self.disable()
         ShapeFactory.attach_rectangle(self, width=TILE_SIZE, height=TILE_SIZE)
         player.attach_object(self)
         gamectx.add_object(self)
         self.reset()
+        return self
 
     def get_player(self):
         return gamectx.player_manager.get_player(self.get_data_value("player_id"))
+
+    def get_view_position(self):
+        action_data = self.get_data_value("action")
+        cur_tick = clock.get_tick_counter()
+        if action_data:        
+            if action_data['start_tick'] + action_data['ticks'] >= cur_tick:
+                if action_data['type'] == 'walk':
+                    idx = cur_tick - action_data['start_tick']
+                    view_position = action_data['step_size'] * idx * action_data['direction'] + action_data['start_position']
+                    return view_position
+
+        return self.get_position()
+
+
+    def get_image_id(self, angle):
+        if self.get_data_value("type") == "player":
+            angle_num = self.angle/math.pi
+            direction = "down"
+            if angle_num < 0.25 and angle_num >= -0.25:
+                direction = "up"
+            elif angle_num > 0.25 and angle_num <= 0.75:
+                direction = "left"
+            elif angle_num < -0.25 and angle_num >= -0.75:
+                direction = "right"
+            elif abs(angle_num) >= 0.75:
+                direction = "down"
+
+            action_data = self.get_data_value("action")
+            cur_tick = clock.get_tick_counter()
+            sprites_list = gamectx.content.player_idle_sprites
+            sprite_idx= None
+            if action_data is not None:
+                if action_data['start_tick'] + action_data['ticks'] > cur_tick:
+                    if action_data['type'] == 'walk':
+                        sprites_list = gamectx.content.player_walk_sprites
+                        action_idx = (cur_tick - action_data['start_tick'])
+                        sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))
+                        return sprites_list[direction][sprite_idx]
+                    elif action_data['type'] == 'attack':
+                        sprites_list = gamectx.content.player_attack_sprites
+                        action_idx = (cur_tick - action_data['start_tick'])
+                        sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))
+                        return sprites_list[direction][sprite_idx]
+            if sprite_idx is None:
+                sprite_idx = int(cur_tick//gamectx.content.speed_factor()) % len(sprites_list[direction])
+            return sprites_list[direction][sprite_idx]
+        else:
+            return self.image_id_default
 
     def reset(self):
         player = self.get_player()
@@ -270,16 +270,24 @@ class Character(GObject):
         player.set_data_value("allow_input", False)
         self.enable()
 
+
+
     def move(self,direction,new_angle):
+        move_speed = 1
+        stamina = self.get_data_value("stamina",0)
+        if stamina <=0:
+            move_speed = 2
+        else:
+            self.set_data_value("stamina",stamina-5)
 
         direction = direction * self.get_data_value("velocity_multiplier")
         if new_angle is not None and self.angle != new_angle:
-            ticks_in_action = 1 * gamectx.content.speed_factor()
+            ticks_in_action = move_speed * gamectx.content.speed_factor()
             action_complete_time = clock.get_time() + ticks_in_action
             self.set_data_value("action_completion_time",action_complete_time/2)
             self.angle = new_angle
             return []
-        ticks_in_action = 1 * gamectx.content.speed_factor()
+        ticks_in_action = move_speed * gamectx.content.speed_factor()
         action_complete_time = clock.get_time() + ticks_in_action
         self.set_data_value("action_completion_time",action_complete_time)
         new_pos = TILE_SIZE * direction + self.get_position()
@@ -328,7 +336,7 @@ class Character(GObject):
         oids = gamectx.physics_engine.space.get_objs_at(target_coord)
 
         if len(oids)==0 or (len(oids)==1 and gamectx.object_manager.get_by_id(oids[0]).get_data_value("type") == 'grass'):
-            Rock(target_pos)
+            Rock().create(target_pos)
             
         self.set_data_value("action",
             {
@@ -339,6 +347,46 @@ class Character(GObject):
             })
         return []
 
+    def modify_inventory(self,name,count):
+        inventory = self.get_data_value("inventory")
+        inventory[name] += count
+
+
+    def attack(self):
+        speed = 2
+        stamina = self.get_data_value("stamina",0)
+        if stamina <=0:
+            speed = 4
+        else:
+            self.set_data_value("stamina",stamina-15)
+
+        ticks_in_action = int(speed * gamectx.content.speed_factor())
+        action_complete_time = clock.get_time() + ticks_in_action
+        self.set_data_value("action_completion_time",action_complete_time)
+        direction= Vector(0,1).rotated(self.angle)
+        target_pos= self.get_position() + (direction * TILE_SIZE)
+        target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
+        for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
+            obj2 = gamectx.object_manager.get_by_id(oid)
+            if obj2.get_data_value("type") == "tree":
+                new_health = obj2.get_data_value("health") -10
+                print(new_health)
+                obj2.set_data_value("health", new_health)
+                if new_health <= 0:
+                    gamectx.remove_object_by_id(obj2.get_data_value("trunk_id"))
+                    gamectx.remove_object_by_id(oid)
+                    self.modify_inventory("wood",10)
+                elif new_health < 30:
+                    gamectx.remove_object_by_id(obj2.get_data_value("top_id"))
+        
+        self.set_data_value("action",
+            {
+                'type':'attack',
+                'start_tick':clock.get_tick_counter(),
+                'ticks': ticks_in_action,
+                'step_size': TILE_SIZE/ticks_in_action,
+            })
+        return []
 
     def update(self):
         p = self.get_player()
@@ -359,9 +407,12 @@ class Character(GObject):
 
         # Stamina regen
         if cur_time > self.get_data_value("next_stamina_gen", 0):
-            stamina = min(gamectx.content.config['player_config']['stamina_max'], self.get_data_value("stamina") + gamectx.content.config['player_config']['stamina_gen'])
-            self.set_data_value('stamina', stamina)
-            self.set_data_value("next_stamina_gen", cur_time + (gamectx.content.config['player_config']['stamina_gen_period'] * gamectx.content.speed_factor()))
+            action_in_progress = self.get_data_value("action_completion_time",0) > cur_time
+            if not action_in_progress:
+                stamina = min(gamectx.content.config['player_config']['stamina_max'], self.get_data_value("stamina") + gamectx.content.config['player_config']['stamina_gen'])
+                self.set_data_value('stamina', stamina)
+                gen_delay = (gamectx.content.config['player_config']['stamina_gen_period'] * gamectx.content.speed_factor())
+                self.set_data_value("next_stamina_gen", cur_time + gen_delay)
 
         # Check for death
         if self.get_data_value("health") <= 0:
@@ -382,37 +433,11 @@ class Character(GObject):
             p.set_data_value("allow_input", True)
 
 
-    def attack(self):
-        ticks_in_action = int(3 * gamectx.content.speed_factor())
-        action_complete_time = clock.get_time() + ticks_in_action
-        self.set_data_value("action_completion_time",action_complete_time)
-        direction= Vector(0,1).rotated(self.angle)
-        print(direction)
 
-        target_pos= self.get_position() + (direction * TILE_SIZE)
-        target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
-        for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
-            obj2 = gamectx.object_manager.get_by_id(oid)
-            if obj2.get_data_value("type") == "tree":
-                new_health = obj2.get_data_value("health") -10
-                print(new_health)
-                obj2.set_data_value("health", new_health)
-                if new_health < 30:
-                    gamectx.remove_object_by_id(obj2.get_data_value("top_id"))
-        
-        self.set_data_value("action",
-            {
-                'type':'attack',
-                'start_tick':clock.get_tick_counter(),
-                'ticks': ticks_in_action,
-                'step_size': TILE_SIZE/ticks_in_action,
-            })
-        return []
 
 class Tree(GObject):
 
-    def __init__(self,position, shape_color=(100, 130, 100)):
-        super().__init__()
+    def create(self,position, shape_color=(100, 130, 100)):
         self.set_data_value("type", "tree")
         self.set_data_value("health", 100)
         self.set_position(position)
@@ -423,7 +448,8 @@ class Tree(GObject):
         trunk =self.add_tree_trunk()
         self.set_data_value("trunk_id", trunk.get_id())
         top =self.add_tree_top()
-        self.set_data_value("top_id", top.get_id())        
+        self.set_data_value("top_id", top.get_id())
+        return self      
 
     def add_tree_trunk(self):
         o = GObject(depth=1)
@@ -447,22 +473,24 @@ class Tree(GObject):
 
 class Rock(GObject):
 
-    def __init__(self,position, shape_color=(100, 130, 100)):
-        super().__init__()
+    def create(self,position, shape_color=(100, 130, 100)):
+        self.depth =1
         self.set_data_value("type", 'rock')
         self.set_image_id('rock')
         self.set_position(position=position)
         self.set_shape_color(shape_color)
         ShapeFactory.attach_rectangle(self, width=TILE_SIZE, height=TILE_SIZE)
         gamectx.add_object(self)
+        return self
 
 class Grass(GObject):
 
-    def __init__(self,position, shape_color=(100, 130, 100)):
-        super().__init__()
+    def create(self,position, shape_color=(100, 130, 100)):
+        self.depth=0
         self.set_data_value("type", "grass")
         self.set_image_id(f"grass{random.randint(1,3)}")
         self.set_position(position=position)
         self.set_shape_color(shape_color)
         ShapeFactory.attach_rectangle(self, width=TILE_SIZE*2, height=TILE_SIZE*2)
         gamectx.add_object(self)
+        return self

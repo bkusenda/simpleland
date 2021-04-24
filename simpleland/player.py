@@ -5,7 +5,8 @@ import numpy as np
 import pygame
 
 
-from .common import (get_dict_snapshot, load_dict_snapshot, Base, Camera)
+from .common import (get_dict_snapshot, load_dict_snapshot, Base)
+from .camera import Camera
 from .utils import gen_id
 
 from .object import GObject
@@ -30,13 +31,12 @@ class Player(Base):
 
     def __init__(self, client_id=None, uid=None, data=None, player_type =0, camera=None, is_human=False):
         """
-
         :return:
         """
         self.uid = uid
         self.client_id = client_id
         self.player_type = player_type
-        self.camera = camera
+        self.camera:Camera = camera
         self.obj_id = None
         self.is_human = is_human
         self.events=[]
@@ -53,6 +53,7 @@ class Player(Base):
 
     def attach_object(self, obj: GObject):
         self.obj_id = obj.get_id()
+        self.camera.set_follow_object(obj)
 
     def get_object_id(self) -> str:
         return self.obj_id

@@ -17,7 +17,7 @@ from .object_manager import GObjectManager
 from .player_manager import PlayerManager
 from .physics_engine import GridPhysicsEngine, PymunkPhysicsEngine
 
-from .event import (Event, AdminEvent, MechanicalEvent,
+from .event import (Event, MechanicalEvent,
             PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
 from .event import RemoveObjectEvent
 import pygame
@@ -49,9 +49,6 @@ class GameContext:
         self.local_clients = []
         self.data = {}
 
-    def reset_data(self):
-        self.data = {}
-
     def initialize(self, 
             game_def:GameDef = None,
             content = None):
@@ -80,7 +77,7 @@ class GameContext:
         else:
             return 1
 
-    def get_content(self):
+    def get_content(self)->Content:
         return self.content
 
     def add_local_client(self,client):
@@ -126,15 +123,14 @@ class GameContext:
     def build_object_from_dict(self,dict_data)->GObject:
         
         data = dict_data['data']
-        print(f"TYPE: {dict_data}")
-        # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
-        obj = GObject(id=data['id'])
+    
+        obj_type = self.content.get_class_by_type_name(dict_data['_type'])
+        obj = obj_type(id=data['id'])
         load_dict_snapshot(obj, dict_data, exclude_keys={""})       
 
         for k,v in data['shape_group']['data'].items():
             obj.add_shape(get_shape_from_dict(v))
         
-        # print(data)
         if "data" in data:
             obj.data = data['data']
 
@@ -178,12 +174,7 @@ class GameContext:
             e = events_set.pop()
         
             new_events = []
-            if type(e) == AdminEvent:
-                e: AdminEvent = e
-                if e.value == 'QUIT':
-                    self.change_game_state("QUITING")
-                    events_to_remove.append(e)
-            elif type(e) == InputEvent:
+            if type(e) == InputEvent:
                 new_events = self.content.process_input_event(e)
                 events_to_remove.append(e)
             elif type(e) == ViewEvent:
@@ -216,36 +207,14 @@ class GameContext:
             self.event_manager.remove_event_by_id(e.get_id())
        
 
-    def run_pre_physics_processing(self):
-        events = self.content.pre_physics_processing()
-        self.event_manager.add_events(events)
-
-    def run_post_physics_processing(self):
-        if self.config.track_updates:
-            # TODO: Not efficient
-            # Check for changes in position or angle and log change time
-            new_position_lookup = {}
-            for k,o in self.object_manager.get_objects().items():
-                angle = o.angle
-                position = o.position
-                current_position = {'angle':angle,'position':position}
-
-                last_position = self.last_position_lookup.get(k,None)
-                if last_position is not None:
-                    if ((last_position['angle'] != current_position['angle'] ) or
-                    (last_position['position'] != current_position['position'])):
-                        o.set_last_change(clock.get_time())
-                new_position_lookup[k] = current_position
-            self.last_position_lookup = new_position_lookup
-        events = self.content.post_physics_processing()
-        self.event_manager.add_events(events)
-
     def run_physics_processing(self): 
         self.physics_engine.update()
 
+    def run_update(self):
+        self.content.update()
+
     def tick(self):
         clock.tick(self.tick_rate)     
-        
 
     def add_player(self, player):
         self.player_manager.add_player(player) 
@@ -339,14 +308,10 @@ class GameContext:
                 wait = False
 
     def run_step(self):
-        if self.config.client_only_mode:
-            self.run_event_processing()
-        else:
-            self.run_pre_event_processing()
-            self.run_event_processing()
-            self.run_pre_physics_processing()
+        self.run_event_processing()
+        if not self.config.client_only_mode:
             self.run_physics_processing()
-            self.run_post_physics_processing()
+            self.run_update()
 
         self.tick()
         self.step_counter +=1

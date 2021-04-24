@@ -88,8 +88,6 @@ class UDPHandler(socketserver.BaseRequestHandler):
 
         # Convert response to json then compress and send in chunks
         response_data_st = json.dumps(response_data, cls=StateEncoder)
-        print("SNAPSHOT ((((((((((((((((((")
-        print(response_data_st)
         response_data_st = bytes(response_data_st, 'utf-8')
         response_data_st = lz4.frame.compress(response_data_st)
 
