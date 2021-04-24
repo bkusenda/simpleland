@@ -45,10 +45,10 @@ map_layer_2 = (
     f"bbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
     f"b                         b\n"
     f"b                         b\n"
-    f"b          ffffffff       b\n" 
-    f"b            t            b\n"
+    f"b    t      ffffffff       b\n" 
+    f"b     f       t            b\n"
     f"b         s     f  s      b\n"
-    f"b                         b\n"
+    f"b     t    t        t        b\n"
     f"bbbbbbbbbbbbbbbbbbbbbbbbbb\n"
 
 )

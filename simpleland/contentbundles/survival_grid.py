@@ -172,6 +172,14 @@ class GameContent(Content):
         return character
 
 
+    def get_object_type_by_id(self,name):
+        if name == "Character":
+            return Character
+        elif name == "Tree":
+            return Tree
+        else:
+            return None
+
     def spawn_players(self,reset=True):
         for player in gamectx.player_manager.players_map.values():
             self.spawn_player(player,reset)

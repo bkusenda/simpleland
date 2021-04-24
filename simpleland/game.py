@@ -25,7 +25,8 @@ from .event import RemoveObjectEvent
 import pygame
 import sys
 from .content import Content
-
+from .common import Shape, Vector, load_dict_snapshot, Base, Body, dict_to_state, get_shape_from_dict, Camera
+from .common import get_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingContainer
 
 class GameContext:
 
@@ -124,11 +125,41 @@ class GameContext:
             'em': eventsnapshot,
             'timestamp':snapshot_timestamp,
             }
+
+    def build_object_from_dict(self,dict_data)->GObject:
+        
+        data = dict_data['data']
+        print(f"TYPE: {data['_type']}")
+
+        body = Body()
+        body.__setstate__(dict_to_state(dict_data['body']))
+        # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
+        obj = GObject(body=body, id=data['id'])
+        load_dict_snapshot(obj, dict_data, exclude_keys={"body"})       
+
+        for k,v in data['shape_group']['data'].items():
+            obj.add_shape(get_shape_from_dict(body,v))
+        
+        # print(data)
+        if "data" in data:
+            obj.data = data['data']
+
+        return obj
     
+    def load_object_snapshot(self, timestamp,data):
+        for odata in data:
+            current_obj = self.object_manager.get_by_id(odata['data']['id'])
+            if current_obj is None:
+                obj = self.build_object_from_dict(odata)
+                self.add_object(obj)
+            else:
+                current_obj.load_snapshot(timestamp,odata)
+
+
     def load_snapshot(self,snapshot):
         snapshot_timestamp = snapshot['timestamp']
         if 'om' in snapshot:
-            self.object_manager.load_snapshot_from_data(
+            self.load_object_snapshot(
                 snapshot_timestamp,
                 snapshot['om'])
         if 'pm' in snapshot:
@@ -227,9 +258,9 @@ class GameContext:
         self.player_manager.add_player(player) 
 
     def add_object(self,obj:GObject):
-        
+        # print(f"ADDING OBJECT {obj.get_id()}")       
         obj.set_last_change(clock.get_time())
-        self.object_manager.add(clock.get_time(), obj)
+        self.object_manager.add(obj)
         self.physics_engine.add_object(obj)
 
     def add_event(self,e:Event):

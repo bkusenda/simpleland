@@ -5,75 +5,34 @@ from pymunk import Vec2d
 from .common import (Singleton, Body, Circle,
                      Line, Polygon, Space, Vector)
 from .object import GObject
-from .object import ExtendedGObject
 from .utils import gen_id
 
 
 class GObjectManager:
 
     def __init__(self):
-        self.history_size = 10
-        self.objects: Dict[str, ExtendedGObject] = {}
+        self.objects: Dict[str, GObject] = {}
 
-    def add(self, timestamp, obj: GObject):
-        extObj = self.objects.get(obj.get_id(), ExtendedGObject(self.history_size))
-        extObj.add(timestamp, obj)
-        self.objects[obj.get_id()] = extObj
+    def add(self,obj: GObject):
+        current_obj = self.objects.get(obj.get_id())
+        if current_obj is None:
+            self.objects[obj.get_id()] = obj
+        else:
+            raise Exception("Object already added")
 
-    def link_to_latest(self, timestamp, k):
-        # Only useful when not using physics.
-        # dumb client or if history isn't needed
-        extObj = self.objects[k]
-        extObj.link_to_latest(timestamp)
 
     def clear_objects(self):
-        self.objects: Dict[str, ExtendedGObject] = {}
+        self.objects: Dict[str, GObject] = {}
 
-    def get_by_id(self, obj_id, include_deleted=False) -> GObject:
-        ext_obj = self.objects.get(obj_id, None)
-
-        if ext_obj is None:
-            return None
-        else:
-            o = ext_obj.get_latest()
-            if o.is_deleted and not include_deleted:
-                return None
-            else:
-                return o
-
-    def get_by_id_at(self, obj_id, timestamp) -> GObject:
-        ext_obj = self.objects.get(obj_id, None)
-        if ext_obj is None:
-            return None
-        else:
-            return ext_obj.get_interpolated(timestamp)
+    def get_by_id(self, obj_id) -> GObject:
+        return self.objects.get(obj_id, None)
 
     def remove_by_id(self, obj_id):
         del self.objects[obj_id]
 
-    def get_objects_for_timestamp_by_depth(self, timestamp):
-        object_list_depth_sorted = [{}, {}, {}, {}]
-        for k, eo in self.objects.items():
-            o = eo.get_interpolated(timestamp)
-            if o is not None and not o.is_deleted:
-                object_list_depth_sorted[o.depth][k] = o
-        return object_list_depth_sorted
-
     def get_objects(self) -> Dict[str, GObject]:
-        objs = {}
-        for k, eo in self.objects.items():
-            o = eo.get_latest()
-            objs[k] = o
-        return objs
-
-    def load_snapshot_from_data(self, timestamp, data):
-        snapshot_keys = set()
-        for odata in data:
-            obj = self.objects.get(odata['data']['id'])
-            if obj is None:
-                obj = GObject.build_from_dict(odata)
-            self.add(timestamp, obj)
-            snapshot_keys.add(obj.get_id())
+        return self.objects
+   
 
         #TODO: Check on code below.        
         # not_updated_keys = snapshot_keys - self.objects.keys()

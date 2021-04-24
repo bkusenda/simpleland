@@ -239,8 +239,6 @@ class Renderer:
         if image_used:
             obj_pos:Vector = self.get_view_position(obj)
             
-            if obj_pos.get_distance(center) > self.view_width:
-                return
             body_angle = obj.get_body().angle
 
             
@@ -344,6 +342,17 @@ class Renderer:
             p2 = Vector(x_pos,y+self.view_height)
             self.draw_grid_line(p1,p2,angle,center,screen_view_center,color,screen_factor)
 
+
+    def filter_objects_for_rendering(self,objs,center):
+        object_list_depth_sorted = [{}, {}, {}, {}]
+        for k, o in objs.items():
+            o:GObject = o
+            if o is not None and not o.is_deleted and o.is_visible():
+                within_range = self.get_view_position(o).get_distance(center) < self.view_width
+                if within_range:
+                    object_list_depth_sorted[o.depth][k] = o
+        return object_list_depth_sorted
+
     # TODO: Clean this up
     def process_frame(self,
                     render_time,
@@ -385,7 +394,7 @@ class Renderer:
         screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
         screen_view_center = Vector(self.view_width, self.view_height) / 2.0
 
-        obj_list_sorted_by_depth= object_manager.get_objects_for_timestamp_by_depth(render_time)
+        obj_list_sorted_by_depth= self.filter_objects_for_rendering(object_manager.get_objects(),center)
         if self.config.draw_grid:
             self._draw_grid(center, angle, screen_factor, screen_view_center, size=self.config.tile_size, view_type= self.config.view_type)
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
