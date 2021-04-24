@@ -5,16 +5,14 @@ import random
 
 from .. import gamectx
 from ..clock import clock
-from ..common import (COLLISION_TYPE, Body, Camera, Circle, Line, Polygon,
-                      Shape, Space, TimeLoggingContainer, Vector)
+from ..common import ( Vector)
 
 
 from ..itemfactory import  ShapeFactory
 from ..object import GObject
 
 from ..player import Player
-from ..event import (DelayedEvent, Event, InputEvent,
-                     PeriodicEvent, SoundEvent, ViewEvent)
+from ..event import (DelayedEvent)
 from .survival_config import TILE_SIZE
 
 map_layer_1 = (
@@ -61,6 +59,7 @@ def get_view_position_fn(obj: GObject):
     if action_data:        
         if action_data['start_tick'] + action_data['ticks'] >= cur_tick:
             if action_data['type'] == 'walk':
+                print(f"WALK {action_data}")
                 idx = cur_tick - action_data['start_tick']
                 view_position = action_data['step_size'] * idx * action_data['direction'] + action_data['start_position']
                 return view_position
@@ -70,7 +69,7 @@ def get_view_position_fn(obj: GObject):
 
 def get_image_id_fn(obj: GObject, angle):
     if obj.get_data_value("type") == "player":
-        angle_num = obj.body.angle/math.pi
+        angle_num = obj.angle/math.pi
         direction = "down"
         if angle_num < 0.25 and angle_num >= -0.25:
             direction = "up"
@@ -218,13 +217,10 @@ def load_asset_bundle():
         get_image_id_fn=get_image_id_fn,
         get_view_position_fn=get_view_position_fn)
 
-
-
-
 class Food(GObject):
 
     def __init__(self,position):
-        super().__init__(Body())  
+        super().__init__()  
         self.set_data_value("energy", gamectx.content.config['food_energy'])
         self.set_data_value("type", "food")
         self.set_image_id("food")
@@ -237,8 +233,10 @@ class Food(GObject):
 
 class Character(GObject):
 
+
+
     def __init__(self,player: Player):
-        super().__init__(Body(mass=2, moment=0))  
+        super().__init__()  
         self.set_data_value("rotation_multiplier", 1)
         self.set_data_value("velocity_multiplier", 1)
         self.set_data_value("type", "player")
@@ -274,13 +272,12 @@ class Character(GObject):
 
     def move(self,direction,new_angle):
 
-        body:Body = self.get_body()
         direction = direction * self.get_data_value("velocity_multiplier")
-        if new_angle is not None and body.angle != new_angle:
+        if new_angle is not None and self.angle != new_angle:
             ticks_in_action = 1 * gamectx.content.speed_factor()
             action_complete_time = clock.get_time() + ticks_in_action
             self.set_data_value("action_completion_time",action_complete_time/2)
-            body.angle = new_angle
+            self.angle = new_angle
             return []
         ticks_in_action = 1 * gamectx.content.speed_factor()
         action_complete_time = clock.get_time() + ticks_in_action
@@ -292,7 +289,7 @@ class Character(GObject):
                 'start_tick':clock.get_tick_counter(),
                 'ticks': ticks_in_action,
                 'step_size': TILE_SIZE/ticks_in_action,
-                'start_position': body.position,
+                'start_position': self.position,
                 'direction': direction
             })
 
@@ -303,7 +300,7 @@ class Character(GObject):
         ticks_in_action = int(1 * gamectx.content.speed_factor())
         action_complete_time = clock.get_time() + ticks_in_action
         self.set_data_value("action_completion_time",action_complete_time)
-        direction= Vector(0,1).rotated(self.body.angle)
+        direction= Vector(0,1).rotated(self.angle)
 
         target_pos= self.get_position() + (direction * TILE_SIZE)
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
@@ -317,14 +314,14 @@ class Character(GObject):
                 'type':'grab',
                 'start_tick':clock.get_tick_counter(),
                 'ticks': ticks_in_action,
-                'step_size': TILE_SIZE/ticks_in_action,
+                'step_size': TILE_SIZE/ticks_in_action
             })
 
     def drop(self):
         ticks_in_action = int(1 * gamectx.content.speed_factor())
         action_complete_time = clock.get_time() + ticks_in_action
         self.set_data_value("action_completion_time",action_complete_time)
-        direction= Vector(0,1).rotated(self.body.angle)
+        direction= Vector(0,1).rotated(self.angle)
 
         target_pos= self.get_position() + (direction * TILE_SIZE)
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
@@ -389,7 +386,7 @@ class Character(GObject):
         ticks_in_action = int(3 * gamectx.content.speed_factor())
         action_complete_time = clock.get_time() + ticks_in_action
         self.set_data_value("action_completion_time",action_complete_time)
-        direction= Vector(0,1).rotated(self.body.angle)
+        direction= Vector(0,1).rotated(self.angle)
         print(direction)
 
         target_pos= self.get_position() + (direction * TILE_SIZE)
@@ -415,7 +412,7 @@ class Character(GObject):
 class Tree(GObject):
 
     def __init__(self,position, shape_color=(100, 130, 100)):
-        super().__init__(Body())
+        super().__init__()
         self.set_data_value("type", "tree")
         self.set_data_value("health", 100)
         self.set_position(position)
@@ -429,7 +426,7 @@ class Tree(GObject):
         self.set_data_value("top_id", top.get_id())        
 
     def add_tree_trunk(self):
-        o = GObject(Body(),depth=1)
+        o = GObject(depth=1)
         o.set_data_value("type", "part")
         o.set_image_id(f"tree_trunk")
         o.set_position(position=self.get_position())
@@ -438,10 +435,10 @@ class Tree(GObject):
         return o
 
     def add_tree_top(self):
-        o = GObject(Body(),depth=3)
+        o = GObject(depth=3)
         o.set_data_value("type", "part")
         o.set_image_id(f"tree_top")
-        o.set_image_offset(Vector(0,-TILE_SIZE*1.5))
+        o.set_image_offset(Vector(0,-TILE_SIZE*1.4))
         o.set_position(position=self.get_position())
         
         ShapeFactory.attach_rectangle(o, width=TILE_SIZE*2, height=TILE_SIZE*2)
@@ -451,7 +448,7 @@ class Tree(GObject):
 class Rock(GObject):
 
     def __init__(self,position, shape_color=(100, 130, 100)):
-        super().__init__(Body())
+        super().__init__()
         self.set_data_value("type", 'rock')
         self.set_image_id('rock')
         self.set_position(position=position)
@@ -462,7 +459,7 @@ class Rock(GObject):
 class Grass(GObject):
 
     def __init__(self,position, shape_color=(100, 130, 100)):
-        super().__init__(Body())
+        super().__init__()
         self.set_data_value("type", "grass")
         self.set_image_id(f"grass{random.randint(1,3)}")
         self.set_position(position=position)

@@ -7,12 +7,13 @@ import json
 OBJ_TYPES = ['default','sensor']
 COLLISION_TYPE = {v:i for i, v in enumerate(OBJ_TYPES)}
 from pymunk import Vec2d
-
-Vector = pymunk.Vec2d
+# from pygame import Vector2
+Vector = Vec2d
 
 class StateEncoder(json.JSONEncoder):
     def default(self, obj): # pylint: disable=E0202
-        if type(obj) == Vec2d:
+        if isinstance(obj,(Vec2d,Vector)):
+            print("FOUND")
             return {
                 "_type": "Vec2d",
                 "x":obj.x,
@@ -28,10 +29,13 @@ class StateDecoder(json.JSONDecoder):
         if '_type' not in obj:
             return obj
         type = obj['_type']
-        if type == 'Vec2d':
-            return Vec2d(obj['x'],obj['y'])
+        if type == 'Vec2d' or type == 'Vector':
+            print("DECODING VEC")
+            return Vector(obj['x'],obj['y'])
         return obj
 
+
+#BJK HERE
 def get_dict_snapshot(obj, exclude_keys = {}):
     _type = type(obj).__name__
     data = {}
@@ -40,14 +44,25 @@ def get_dict_snapshot(obj, exclude_keys = {}):
             continue
         if issubclass(type(v), Base):
             data[k] = v.get_snapshot()
-        elif v is None or isinstance(v, (int, float, str, Vector, dict)):
+        elif v is None or isinstance(v, (int, float, str, Vector, Vec2d)):
             data[k] = v
-        elif isinstance(v, (tuple)):
+        elif isinstance(v, tuple):
             data[k] = {'_type':"tuple", 'value':v}
-        elif type(v) is list:
+        elif isinstance(v,dict):
+            data[k] = {}
+            for kk,vv in v.items():
+                if hasattr(vv,"__dict__"):
+                    data[k][kk](get_dict_snapshot(vv))
+                else:
+                    data[k][kk](vv)
+        
+        elif isinstance(v,list):
             data[k] = []
             for vv in v:
-                data[k].append(get_dict_snapshot(vv))
+                if hasattr(vv,"__dict__"):
+                    data[k].append(get_dict_snapshot(vv))
+                else:
+                    data[k].append(vv)
         else:
             pass
             # print("Skipping snapshotting of:{} with value {}".format(k, v))
@@ -59,10 +74,9 @@ def load_dict_snapshot(obj, dict_data, exclude_keys={}):
     for k, v in dict_data['data'].items():
         if k in exclude_keys:
             continue
-        
         if issubclass(type(v), Base):
             obj.__dict__[k] = v.load_snapshot(obj.__dict__[k], v)
-        elif v is None or isinstance(v, (int, float, str, Vector, tuple)):
+        elif v is None or isinstance(v, (int, float, str, Vector, tuple, Vec2d)):
             obj.__dict__[k] = v
         elif (isinstance(v, dict) and v.get("_type") == "tuple"):
             obj.__dict__[k] = tuple(v.get("value",None))
@@ -72,6 +86,15 @@ def load_dict_snapshot(obj, dict_data, exclude_keys={}):
             pass
             # obj.__dict__[k] = v
 
+def get_shape_from_dict(dict_data):
+    if dict_data['_type'] == 'SLLine':
+        shape = Line(**dict_data['params'])
+    else:
+        cls = globals()[dict_data['_type']]
+        shape = cls( **dict_data['params'])
+    
+    shape.load_snapshot(dict_data)
+    return shape
 
 # source: https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
 class Singleton(type):
@@ -96,9 +119,6 @@ class PlayerConfig(Base):
         """
         """
 
-Space = pymunk.Space
-Body = pymunk.Body
-
 def state_to_dict(state):
     new_state={}
     for k,tuplist in state.items():
@@ -115,7 +135,7 @@ def dict_to_state(data):
             state[k].append((kk,vv))
     return state
 
-class Shape(pymunk.Shape, Base):
+class Shape(Base):
 
     def __init__(self):
         self.object_id= None
@@ -135,17 +155,14 @@ class Shape(pymunk.Shape, Base):
         return self.object_id
 
     def get_common_info(self):
-        dict_data = get_dict_snapshot(self, exclude_keys={"_body"})
-        dict_data['state'] = state_to_dict(self.__getstate__())
-        del dict_data['state']['init']['body'] 
-        return dict_data
+        return get_dict_snapshot(self, exclude_keys={"_body"})
 
+class Line(Shape):
 
-class Line(Shape, pymunk.Segment):
-
-    def __init__(self,body:Body,a,b,radius,**kwargs):
-        pymunk.Segment.__init__(self,body,a,b,radius, **kwargs)
-        Shape.__init__(self)
+    def __init__(self,a,b,radius):
+        self.a = a
+        self.b = b
+        self.radius =radius
     
     def get_snapshot(self):
         data = self.get_common_info()
@@ -155,31 +172,35 @@ class Line(Shape, pymunk.Segment):
                     "radius": self.radius}
         return data
         
-class Polygon(Shape, pymunk.Poly):
+class Polygon(Shape):
 
-    def __init__(self, body, vertices,**kwargs):
-        pymunk.Poly.__init__(self,body, vertices,**kwargs)
-        Shape.__init__(self)
+    def __init__(self, vertices):
+        super().__init__()
+        self.vertices =vertices
+
+    def get_vertices(self):
+        return self.vertices
+        
     
     def get_snapshot(self):
         data = self.get_common_info()
         data['params'] = {
-                "vertices":[v for v in self.get_vertices()],
+                "vertices":[v for v in self.get_vertices()]
             }
         return data
 
-class Rectangle(Shape,pymunk.Poly):
+class Rectangle(Polygon):
 
-    def __init__(self, body, center,width,height,**kwargs):
+    def __init__(self, center,width,height):
+        super().__init__()
         w =width/2
         h = height/2
-
         v1 = Vector(center.x - w,center.y + h)
         v2 = Vector(center.x + w,center.y + h)
         v3 = Vector(center.x + w,center.y - h)
         v4 = Vector(center.x - w,center.y - h)
-        pymunk.Poly.__init__(self,body, vertices=[v1,v2,v3,v4],**kwargs)
-        Shape.__init__(self)
+        vertices=[v1,v2,v3,v4]
+        super(vertices)
     
     def get_snapshot(self):
         data = self.get_common_info()
@@ -188,32 +209,16 @@ class Rectangle(Shape,pymunk.Poly):
             }
         return data
 
-class Circle(Shape, pymunk.Circle):
+class Circle(Shape):
 
-    def __init__(self, body,radius,**kwargs):
-        pymunk.Circle.__init__(self,body,radius,**kwargs)
-        Shape.__init__(self)
+    def __init__(self,radius):
+        super().__init__()
+        self.radius = radius
 
     def get_snapshot(self):
         data = self.get_common_info()
-        data['params'] = {"radius": self.radius}
+        data['params']= {'radius': self.radius}
         return data
-
-def get_shape_from_dict(body,dict_data):
-    if dict_data['_type'] == 'SLLine':
-        shape = Line(body, **dict_data['params'])
-    else:
-        cls = globals()[dict_data['_type']]
-        shape = cls(body, **dict_data['params'])
-    
-    shape.load_snapshot(dict_data)
-    gen_data = dict_data['state']['general']
-    shape.collision_type = gen_data['collision_type']  
-    shape.filter = gen_data['filter']
-    shape.elasticity = gen_data['elasticity']
-    shape.friction = gen_data['friction']
-    shape.surface_velocity = gen_data['surface_velocity']
-    return shape
 
 class TimeLoggingContainer:
 

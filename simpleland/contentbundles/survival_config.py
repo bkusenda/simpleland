@@ -13,11 +13,9 @@ def game_def(content_overrides={}):
 
     content_config = {
         'space_size': TILE_SIZE*10,
-        'player_start_energy': 20,
-        'food_energy': 5,
-        'food_count': 1,
         "space_border": 20*TILE_SIZE,
         "tile_size": TILE_SIZE,
+        "food_energy":10,
         "player_config": {
             "health_start": 100,
             "health_gen": 5,

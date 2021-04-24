@@ -18,7 +18,7 @@ import lz4.frame
 import numpy as np
 from pyinstrument import Profiler
 
-from .common import ( Body, Camera,  Shape,  TimeLoggingContainer)
+from .common import (  Camera,  Shape,  TimeLoggingContainer)
 from .object import GObject
 from .config import ClientConfig, GameConfig
 from .content import Content
@@ -33,22 +33,21 @@ from . import gamectx
 from .clock import clock,StepClock
 import gym
 
-HEADER_SIZE = 16
+HEADER_SIZE = 8
 LATENCY_LOG_SIZE = 10000
 
 def receive_data(sock):
     done = False
     all_data = b''
     while not done:
-        sock.settimeout(5.0)
-        data, server = sock.recvfrom(1500)
+        sock.settimeout(1.0)
+        data, server = sock.recvfrom(4096)
         chunk_num, chunks = struct.unpack('ll', data[:HEADER_SIZE])
         all_data += data[HEADER_SIZE:]
         if chunk_num == chunks:
             done = True
-    # all_data = lz4.frame.decompress(all_data)
-    all_data = all_data.decode("utf-8")
-    return all_data
+    all_data = lz4.frame.decompress(all_data)
+    return all_data.decode("utf-8")
 
 
 def send_request(request_data, server_address):
@@ -59,7 +58,7 @@ def send_request(request_data, server_address):
         # Send data
         data_bytes = bytes(data_st, 'utf-8')
         # print(f"bytes:{len(data_bytes)}")
-        # data_bytes = lz4.frame.compress(data_bytes)
+        data_bytes = lz4.frame.compress(data_bytes)
         sent = sock.sendto(data_bytes,
                            server_address)
         data = receive_data(sock)
@@ -188,13 +187,12 @@ class ClientConnector:
             self.last_received_snapshots = [response_info['snapshot_timestamp']]
 
             # set clock
-            if time.time() - self.last_sync > self.sync_freq:
+            if (time.time() - self.last_sync )> self.sync_freq:
                 self.server_tick = response_info['server_tick'] - (self.last_latency_ticks//2)
                 tick_delta = self.server_tick - clock.get_time()
                 if abs(tick_delta)>100:
                     clock.set_absolute_time(self.server_tick)
                 elif tick_delta>0:
-                    #
                     clock.set_absolute_time(clock.get_exact_time()+1)
                 elif tick_delta<0:
                     clock.set_absolute_time(clock.get_exact_time()-1)
@@ -213,7 +211,6 @@ class ClientConnector:
 
         while self.running:
             self.create_request()
-
 
 class GameClient:
 
@@ -251,12 +248,6 @@ class GameClient:
                 client_id = config.client_id, 
                 player_type=config.player_type, 
                 is_human=self.config.is_human)
-
-    # def sync_time(self):
-    #     if self.connector is None:
-    #         return
-    #     if self.connector.server_tick is not None:
-    #         clock.set_absolute_time(self.connector.server_tick)
 
     def send_local_events(self):
         if self.connector is None:
@@ -315,6 +306,7 @@ class GameClient:
         
         # Send events
         self.send_local_events()
+
         # Get Game Snapshot
         self.get_remote_state()
         self.update_player_info(self.render_time)

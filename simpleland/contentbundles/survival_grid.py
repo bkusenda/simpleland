@@ -3,12 +3,10 @@ from simpleland import physics_engine
 import random
 from typing import Dict, Any, Tuple
 
-import pymunk
-from pymunk import contact_point_set
-from pymunk.vec2d import Vec2d
 
-from ..common import (Body, Camera, Circle,  Line,
-                      Polygon, Shape, Space, Vector,
+
+from ..common import ( Camera, Circle,  Line,
+                      Polygon, Shape,  Vector,
                       TimeLoggingContainer)
 from ..event import (DelayedEvent, Event, InputEvent,
                      PeriodicEvent, SoundEvent, ViewEvent)
@@ -27,7 +25,7 @@ from ..clock import clock
 from typing import List,Dict,Any
 from ..event import InputEvent, Event, ViewEvent, DelayedEvent
 from .. import gamectx
-from ..common import Body, Vector
+from ..common import Vector
 import pygame
 from ..clock import clock
 from gym import spaces
@@ -92,8 +90,8 @@ class GameContent(Content):
         self.asset_bundle = load_asset_bundle()
         self.space_size = config['space_size']
         self.space_border = config['space_border']
-        self.food_energy = config['food_energy']
-        self.food_count = config['food_count']
+        # self.food_energy = config['food_energy']
+        # self.food_count = config['food_count']
         self.characters = {}
 
         self.item_types = ['tree', 'food', 'rock', 'player']
@@ -437,7 +435,6 @@ class GameContent(Content):
                 obj_stamina = obj.get_data_value("stamina", "NA")
 
                 lines.append(f"H:{obj_health}, E:{obj_energy}, S:{obj_stamina}")
-                lines.append("Current Velocity: {}".format(obj.get_body()._get_velocity()))
 
 
             if renderer.config.show_console:

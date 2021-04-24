@@ -5,8 +5,7 @@ import numpy as np
 import pygame
 
 
-from .common import (get_dict_snapshot, load_dict_snapshot, Body, Circle,  Line,
-                     Polygon, Space, Vector, Base, Camera)
+from .common import (get_dict_snapshot, load_dict_snapshot, Base, Camera)
 from .utils import gen_id
 
 from .object import GObject

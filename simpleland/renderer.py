@@ -80,6 +80,7 @@ class Renderer:
             for k,path in self.asset_bundle.sound_assets.items():
                 print(f"Loading ")
                 sound = pygame.mixer.Sound(pkg_resources.resource_filename(__name__,path))
+                sound.set_volume(0.1)
                 self.sounds[k] = sound
 
 
@@ -146,12 +147,12 @@ class Renderer:
                   angle,
                   center):
         obj_pos = self.get_view_position(obj)
-        obj_location1 = (obj_pos + line.a.rotated(obj.get_body().angle) - center)
+        obj_location1 = (obj_pos + line.a.rotated(obj.angle) - center)
         obj_location1 = obj_location1.rotated(-angle)
         p1 = scale(screen_factor,(obj_location1 + screen_view_center))
         p1 = to_pygame(p1, self._display_surf)
 
-        obj_location2 = (obj_pos + line.b.rotated(obj.get_body().angle) - center)
+        obj_location2 = (obj_pos + line.b.rotated(obj.angle) - center)
         obj_location2 = obj_location2.rotated(-angle)
         p2 = scale(screen_factor, (obj_location2 + screen_view_center))
         p2 = to_pygame(p2, self._display_surf)
@@ -190,14 +191,12 @@ class Renderer:
                      screen_view_center,
                      angle,
                      center):
-        body = obj.get_body()
         obj_pos = self.get_view_position(obj)
 
-        body_angle =body.angle
         verts = shape.get_vertices()
         new_verts = []
         for v in verts:
-            obj_location = (obj_pos + v.rotated(body_angle) - center)
+            obj_location = (obj_pos + v.rotated(obj.angle) - center)
             obj_location = obj_location.rotated(-angle)
             p = scale(screen_factor,(obj_location + screen_view_center))
             p = to_pygame(p, self._display_surf)
@@ -217,7 +216,7 @@ class Renderer:
                      center):
         obj_pos = self.get_view_position(obj)
 
-        body_angle =obj.get_body().angle
+        body_angle =obj.angle
         verts = shape.get_vertices()
         new_verts = []
         for v in verts:
@@ -239,9 +238,8 @@ class Renderer:
         if image_used:
             obj_pos:Vector = self.get_view_position(obj)
             
-            body_angle = obj.get_body().angle
+            body_angle = obj.angle
 
-            
             # TODO: fix, main_shape will not always have radius
             # 
 
@@ -379,7 +377,7 @@ class Renderer:
             if view_obj is not None:
                 center = self.get_view_position(view_obj)
                 if view_type == 0:
-                    angle = view_obj.get_body().angle
+                    angle = view_obj.angle
             else:
                 center = Vector(self.view_width/2,self.view_height/2)
         else:
@@ -404,7 +402,7 @@ class Renderer:
                     continue
                 if view_obj is not None and k == view_obj.get_id():
                     continue
-                # elif abs((center - obj.get_body().position).length) > camera.get_distance() and obj.get_data_value('type') != 'static':
+                # elif abs((center - obj.position).length) > camera.get_distance() and obj.get_data_value('type') != 'static':
                 #     continue
                 self._draw_object(center, obj, angle, screen_factor, screen_view_center, obj.shape_color)
             if view_obj is not None and view_obj.enabled and depth == view_obj.depth:

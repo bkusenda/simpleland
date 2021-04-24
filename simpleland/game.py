@@ -1,11 +1,9 @@
 import json
-from simpleland.physics_engine import PymunkPhysicsEngine
 from typing import List, Set, Dict, Any
 from uuid import UUID
 
 
-from .common import (Body, Circle,  Line
-                     , Polygon, Space,  Vector)
+
 from .object import (GObject)
 
 # from .renderer import SLRenderer
@@ -25,8 +23,7 @@ from .event import RemoveObjectEvent
 import pygame
 import sys
 from .content import Content
-from .common import Shape, Vector, load_dict_snapshot, Base, Body, dict_to_state, get_shape_from_dict, Camera
-from .common import get_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingContainer
+from .common import Shape, Vector, load_dict_snapshot, get_shape_from_dict
 
 class GameContext:
 
@@ -129,16 +126,13 @@ class GameContext:
     def build_object_from_dict(self,dict_data)->GObject:
         
         data = dict_data['data']
-        print(f"TYPE: {data['_type']}")
-
-        body = Body()
-        body.__setstate__(dict_to_state(dict_data['body']))
+        print(f"TYPE: {dict_data}")
         # shape_group = SLShapeGroup.build_from_dict(body,data['shape_group'])
-        obj = GObject(body=body, id=data['id'])
-        load_dict_snapshot(obj, dict_data, exclude_keys={"body"})       
+        obj = GObject(id=data['id'])
+        load_dict_snapshot(obj, dict_data, exclude_keys={""})       
 
         for k,v in data['shape_group']['data'].items():
-            obj.add_shape(get_shape_from_dict(body,v))
+            obj.add_shape(get_shape_from_dict(v))
         
         # print(data)
         if "data" in data:
@@ -232,9 +226,8 @@ class GameContext:
             # Check for changes in position or angle and log change time
             new_position_lookup = {}
             for k,o in self.object_manager.get_objects().items():
-                body = o.get_body()
-                angle = body.angle
-                position = body.position
+                angle = o.angle
+                position = o.position
                 current_position = {'angle':angle,'position':position}
 
                 last_position = self.last_position_lookup.get(k,None)

@@ -1,5 +1,5 @@
 
-from ..common import Body, Vector
+from ..common import Vector
 from .. import gamectx
 
 def vec_to_coord(v):

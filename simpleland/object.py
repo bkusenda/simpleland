@@ -3,7 +3,7 @@ from .utils import gen_id
 from typing import Callable, List, Dict
 import time
 
-from .common import Shape, Vector, load_dict_snapshot, Base, Body, dict_to_state, get_shape_from_dict, Camera
+from .common import Shape, Vector, load_dict_snapshot, Base, dict_to_state, get_shape_from_dict, Camera
 from .common import get_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingContainer
 from .common import COLLISION_TYPE
 from .clock import clock
@@ -12,7 +12,6 @@ class GObject(Base):
 
         
     def __init__(self,
-                 body:Body=None,
                  id= None,
                  data = None,
                  depth = 2):
@@ -20,7 +19,8 @@ class GObject(Base):
             self.id = gen_id()
         else:
             self.id = id
-        self.body: Body = body
+        self.position = Vector(0,0)
+        self.angle = 0
 
         self.shape_group: ShapeGroup = ShapeGroup()
         self.data = {} if data is None else data
@@ -76,8 +76,6 @@ class GObject(Base):
         self.data[k] = value
         self.update_last_change()
 
-    def get_body(self) -> Body:
-        return self.body
 
     def get_id(self):
         return self.id
@@ -93,10 +91,10 @@ class GObject(Base):
         self._update_position_callback(self,position)
 
     def set_position(self, position: Vector):
-        self.body.position = position
+        self.position = position
 
     def get_position(self):
-        return self.body.position
+        return self.position
 
     def __repr__(self) -> str:
         return f"{super().__repr__()}, id:{self.id}, data:{self.data}, dict_data:{self.__dict__}"
@@ -116,37 +114,26 @@ class GObject(Base):
         self.last_change = timestamp
 
     def get_last_change(self):
-        if self.body.last_change is None and self.last_change is None:
+        if self.last_change is None and self.last_change is None:
             return None
-        if self.body.last_change is None:
+        if self.last_change is None:
             return self.last_change
         if self.last_change is None:
             return None
-        if self.body.last_change > self.last_change:
-            return self.body.last_change
+        if self.last_change > self.last_change:
+            return self.last_change
         return self.last_change
 
     def get_snapshot(self):
-        data = get_dict_snapshot(self, exclude_keys={'body','on_change_func'})
-        print(f"_type {data['_type']}")
-        data['body'] = state_to_dict(self.body.__getstate__())
+        data = get_dict_snapshot(self, exclude_keys={'on_change_func'})
         data['data']['last_change']= self.get_last_change()
         data['data']['data'] = self.data
-        del data['body']['special']['_velocity_func']
-        del data['body']['special']['_position_func']
         return data
 
 
     def load_snapshot(self,timestamp, data):
-        load_dict_snapshot(self, data, exclude_keys={"body"})
-        body_data = data['body']
+        load_dict_snapshot(self, data, exclude_keys={""})
 
-        # This breaks things: self.body.__setstate__(data['body'])
-
-        self.body.position = body_data['general']['position']
-        self.body.velocity = body_data['general']['velocity']
-        self.body.angle = body_data['general']['angle']
-        self.body.angular_velocity = body_data['general']['angular_velocity']
 
 
 # def build_interpolated_object(obj_1:GObject,obj_2:GObject,fraction=0.5):

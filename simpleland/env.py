@@ -177,8 +177,6 @@ class SimplelandEnv:
     def runtime_config_update(self):
         return True, "msg"
 
-    
-
     def render(self, mode=None, player_id=None):
         # TODO: add rendering for observer window
         if player_id is None:
@@ -239,13 +237,14 @@ class SimplelandEnvSingle(gym.Env):
 
     def render(self,mode=None):
         return self.env_main.render(mode=mode)
+
 import time
 if __name__ == "__main__":
     agent_map = {str(i):{} for i in range(2)}
     debug = False
     time_profile = True
     mem_profile = False
-    render = True
+    render = False
     if mem_profile:
         import tracemalloc
         tracemalloc.start()

@@ -30,7 +30,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
 
         # Process Request data
         request_st = self.request[0]
-        # request_st = lz4.frame.decompress(request_st)
+        request_st = lz4.frame.decompress(request_st)
         request_st = request_st.decode('utf-8').strip()
         try:
             request_data = json.loads(request_st, cls=StateDecoder)
@@ -88,8 +88,10 @@ class UDPHandler(socketserver.BaseRequestHandler):
 
         # Convert response to json then compress and send in chunks
         response_data_st = json.dumps(response_data, cls=StateEncoder)
+        print("SNAPSHOT ((((((((((((((((((")
+        print(response_data_st)
         response_data_st = bytes(response_data_st, 'utf-8')
-        # response_data_st = lz4.frame.compress(response_data_st)
+        response_data_st = lz4.frame.compress(response_data_st)
 
         chunk_size = config.outgoing_chunk_size
         chunks = math.ceil(len(response_data_st)/chunk_size)
@@ -97,7 +99,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
         for i in range(chunks+1):  # TODO: +1 ??? why
             header = struct.pack('ll', i+1, chunks)
             data_chunk = header + response_data_st[i*chunk_size:(i+1)*chunk_size]
-            current_thread = threading.current_thread()
+            # current_thread = threading.current_thread()
             # Simulate packet loss
             # if random.random() < 0.01:
             #     print("random skip chunk")

@@ -3,9 +3,9 @@ from typing import Any, Dict, List
 import numpy
 import pygame
 import pymunk
-from pymunk import Vec2d
-from .common import (Body, Circle,  Line,
-                     Polygon, Space, Vector,  COLLISION_TYPE)
+from pymunk import Vec2d, Body
+from .common import (Circle,  Line,
+                     Polygon, Vector,  COLLISION_TYPE)
 from .object import GObject
 # from .player import Player
 from .utils import gen_id
@@ -114,8 +114,7 @@ class GridPhysicsEngine:
 
 
     def add_object(self, obj: GObject):
-        body = obj.body
-        body.last_change = clock.get_time()
+        obj.last_change = clock.get_time()
         obj.set_update_position_callback(self.update_obj_position)
         self.update_obj_position(obj,obj.get_position())
 
@@ -152,7 +151,7 @@ class GridPhysicsEngine:
 
             if not collision_effect:
                 self.space.move_obj_to(coord,obj)
-                obj.body.position = new_pos
+                obj.position = new_pos
 
         self.position_updates = {}
 
@@ -199,8 +198,9 @@ class PymunkPhysicsEngine:
         self.space.add(obj.get_body(), obj.get_shapes())
 
     def remove_object(self,obj):
-        self.space.remove(obj.get_shapes())
-        self.space.remove(obj.get_body())
+        pass
+        # self.space.remove(obj.get_shapes())
+        # self.space.remove(obj.get_body())
 
     def update(self):
         for _ in range(self.steps_per_update):
