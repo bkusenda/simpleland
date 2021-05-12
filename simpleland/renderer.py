@@ -255,7 +255,6 @@ class Renderer:
                 if image_size[0]> 5000:
                     image_size = 200,200
                     print("zoom out/ to close {}".format(image_size))
-                
 
                 image = pygame.transform.scale(image,image_size)
                 if rotate:  
@@ -343,14 +342,20 @@ class Renderer:
             self.draw_grid_line(p1,p2,angle,center,screen_view_center,color,screen_factor)
 
 
-    def filter_objects_for_rendering(self,objs,center):
-        object_list_depth_sorted = [{}, {}, {}, {}]
+    def filter_objects_for_rendering(self,objs,camera:Camera):
+        center = camera.get_center()
+        object_list_depth_sorted = [[], [], [], []]
         for k, o in objs.items():
             o:GObject = o
             if o is not None and not o.is_deleted and o.is_visible():
                 within_range = o.get_view_position().get_distance(center) < self.view_width
                 if within_range:
-                    object_list_depth_sorted[o.depth][k] = o
+                    object_list_depth_sorted[o.depth].append(o)
+
+        # TODO: Need to adjust with angle
+        center_bottom = center - Vector(0,100)
+        for lst in object_list_depth_sorted:
+            lst.sort(key=lambda o: -o.get_position().get_distance(center_bottom))
         return object_list_depth_sorted
 
     # TODO: Clean this up
@@ -367,7 +372,6 @@ class Renderer:
         angle = 0
         camera:Camera = None
         center:Vector = None
-        view_obj:GObject = None
         if player:
             camera = player.get_camera()
         else:
@@ -376,31 +380,23 @@ class Renderer:
         center = camera.get_center()
         angle = camera.get_angle()
                
-
-        # TODO: make max customizeable 
+        # TODO: Should be handled in camera not renderer 
         self.update_view(max(camera.get_distance(),1))
         
         center = center - camera.position_offset
         screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
         screen_view_center = Vector(self.view_width, self.view_height) / 2.0
 
-        obj_list_sorted_by_depth= self.filter_objects_for_rendering(gamectx.object_manager.get_objects(),center)
+        obj_list_sorted_by_depth= self.filter_objects_for_rendering(gamectx.object_manager.get_objects(),camera)
         if self.config.draw_grid:
             self._draw_grid(center, angle, screen_factor, screen_view_center, size=self.config.tile_size, view_type= self.config.view_type)
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
             obj:GObject
-            for k, obj in render_obj_dict.items():
+            for obj in render_obj_dict:
                 if not obj.enabled or obj.is_deleted or not obj.is_visible():
                     continue
-                if view_obj is not None and k == view_obj.get_id():
-                    continue
-                # elif abs((center - obj.position).length) > camera.get_distance() and obj.get_data_value('type') != 'static':
-                #     continue
                 self._draw_object(center, obj, angle, screen_factor, screen_view_center, obj.shape_color)
-            if view_obj is not None and view_obj.enabled and depth == view_obj.depth:
-                self._draw_object(center, view_obj, angle, screen_factor, screen_view_center, view_obj.shape_color)
             
-
         if self.config.show_console:
             console_info = ["FPS:{}".format(self.fps_counter.avg())]
             if self.log_info is not None:

@@ -57,15 +57,19 @@ def process_food_collision(player_obj: GObject, food_obj):
     gamectx.add_event(sound_event)
     return False
 
-def process_lava_collision(player_obj, lava_obj):
+def process_water_collision(player_obj, lava_obj):
     player_obj.set_data_value("health", 0)
     return False
+
+def process_monster_collision(pobj:GObject, mobj:GObject):
+    pobj.set_data_value("health", pobj.get_data_value('health')-20)
+    return True
 
 def default_collision_callback(obj1: GObject, obj2: GObject):
     if obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "food":
         return process_food_collision(obj1, obj2)
-    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "lava":
-        return process_lava_collision(obj1, obj2)
+    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "water":
+        return process_water_collision(obj1, obj2)
     elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "rock":
         obj1.set_data_value("action", None)
         return True
@@ -75,6 +79,10 @@ def default_collision_callback(obj1: GObject, obj2: GObject):
     elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "tree":
         obj1.set_data_value("action", None)
         return True
+    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "monster":
+        return process_monster_collision(obj1,obj2)
+    elif obj1.get_data_value('type') == "monster" and obj2.get_data_value('type') == "player":
+        return process_monster_collision(obj2,obj1)
     return False
 
 def get_item_map(item_types):
@@ -96,7 +104,7 @@ class GameContent(Content):
         
         self.characters = {}
 
-        self.item_types = ['tree', 'food', 'rock', 'player']
+        self.item_types = ['tree', 'food', 'rock', 'player', 'wood']
         self.item_map = get_item_map(self.item_types)
         self.default_v = np.zeros(len(self.item_types)+1)
         self.default_v[len(self.item_types)] = 1
@@ -105,7 +113,7 @@ class GameContent(Content):
         self.vision_distance = 2
 
         self.player_count = 0
-        self.keymap = [23, 19, 4, 1]
+        self.keymap = [23, 19, 4, 1, 5, 6, 18,0]
 
         self.spawn_locations = []
         self.food_locations = []
@@ -127,11 +135,43 @@ class GameContent(Content):
             'left': ['player_atk_left_1', 'player_atk_left_2', 'player_atk_left_3', 'player_atk_left_4', 'player_atk_left_5', 'player_atk_left_6'],
             'right': ['player_atk_right_1', 'player_atk_right_2', 'player_atk_right_3', 'player_atk_right_4', 'player_atk_right_5', 'player_atk_right_6']}
 
+        # Skel
+        self.skel_idle_sprites = {
+            'down': ['skel_idle_down_1', 'skel_idle_down_2', 'skel_idle_down_3', 'skel_idle_down_4', 'skel_idle_down_5', 'skel_idle_down_6'],
+            'up': ['skel_idle_up_1', 'skel_idle_up_2', 'skel_idle_up_3', 'skel_idle_up_4', 'skel_idle_up_5', 'skel_idle_up_6'],
+            'left': ['skel_idle_left_1', 'skel_idle_left_2', 'skel_idle_left_3', 'skel_idle_left_4', 'skel_idle_left_5', 'skel_idle_left_6'],
+            'right': ['skel_idle_right_1', 'skel_idle_right_2', 'skel_idle_right_3', 'skel_idle_right_4', 'skel_idle_right_5', 'skel_idle_right_6']}
+        self.skel_walk_sprites = {
+            'down': ['skel_walk_down_1', 'skel_walk_down_2', 'skel_walk_down_3', 'skel_walk_down_4', 'skel_walk_down_5', 'skel_walk_down_6'],
+            'up': ['skel_walk_up_1', 'skel_walk_up_2', 'skel_walk_up_3', 'skel_walk_up_4', 'skel_walk_up_5', 'skel_walk_up_6'],
+            'left': ['skel_walk_left_1', 'skel_walk_left_2', 'skel_walk_left_3', 'skel_walk_left_4', 'skel_walk_left_5', 'skel_walk_left_6'],
+            'right': ['skel_walk_right_1', 'skel_walk_right_2', 'skel_walk_right_3', 'skel_walk_right_4', 'skel_walk_right_5', 'skel_walk_right_6']}
+
     def speed_factor(self):
         return max(gamectx.speed_factor() * 1/6, 1)
 
     def get_asset_bundle(self):
         return self.asset_bundle
+
+    def get_class_by_type_name(self,name):
+        if name == "Character":
+            print("Creating Char")
+            return Character
+        elif name == "Tree":
+            return Tree
+        else:
+            return GObject
+
+    def reset_required(self):
+        for player in gamectx.player_manager.players_map.values():
+            if not player.get_data_value("reset_required", True):
+                return False
+        return True
+
+
+    #####################
+    # RL AGENT METHODS
+    #####################
 
     def reset(self):
         if not self.loaded:
@@ -149,21 +189,6 @@ class GameContent(Content):
 
         self.spawn_food()
         self.spawn_players()
-
-    def get_class_by_type_name(self,name):
-        if name == "Character":
-            print("Creating Char")
-            return Character
-        elif name == "Tree":
-            return Tree
-        else:
-            return GObject
-
-    def reset_required(self):
-        for player in gamectx.player_manager.players_map.values():
-            if not player.get_data_value("reset_required", True):
-                return False
-        return True
 
     def get_observation_space(self):
         x_dim = (self.vision_distance * 2 + 1)
@@ -281,32 +306,14 @@ class GameContent(Content):
                 spawn_count += 1
                 if limit is not None and spawn_count >= limit:
                     return
-
-    def load_map(self):
-        for i, layer in enumerate(map_layers):
-            lines = layer.split("\n")
-
-            self.spawn_locations = []
-            for ridx, line in enumerate(reversed(lines)):
-                for cidx, ch in enumerate(line):
-                    coord = (cidx, ridx)
-                    if ch == 'b':
-                        Rock().create(coord_to_vec(coord))
-                    elif ch == 'f':
-                        self.food_locations.append(coord)
-                    elif ch == 's':
-                        self.spawn_locations.append(coord)
-                    elif ch == 'g':
-                        Grass().create(coord_to_vec(coord))
-                    elif ch == 't':
-                        Tree().create(coord_to_vec(coord))
+        
 
     # **********************************
     # GAME LOAD
     # **********************************
     def load(self):
         self.loaded = False
-        self.load_map()
+        WorldMap(map_layers)
 
         gamectx.physics_engine.set_collision_callback(
             default_collision_callback,
@@ -380,11 +387,11 @@ class GameContent(Content):
         if 18 in keys:
             actions_set.add("ATTACK")
 
+        if 0 in keys:
+            actions_set.add("NA")
+
         if 31 in keys:
             events.append(ViewEvent(player.get_id(), 100))
-
-        if 10 in keys:
-            print("Adding admin_event ...TODO!!")
 
         if "GRAB" in actions_set:
             obj.grab()
@@ -398,17 +405,11 @@ class GameContent(Content):
         return events
 
     def update(self):
-        new_events = []
-        cur_time = clock.get_time()
-        for k, p in gamectx.player_manager.players_map.items():
-            if p.get_object_id() is None:
-                continue
-            o = gamectx.object_manager.get_by_id(p.get_object_id())
+        for k, o in gamectx.object_manager.get_objects().items():
             if o is None or o.is_deleted or not o.enabled:
                 continue
-            if o.enabled:
+            if o.is_enabled():
                 o.update()
-        return new_events
 
     def post_process_frame(self, render_time, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:

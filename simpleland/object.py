@@ -80,6 +80,9 @@ class GObject(Base):
     def enable(self):
         self.enabled=True
 
+    def is_enabled(self):
+        return self.enabled
+
     def set_shape_color(self,color):
         self.shape_color = color
 

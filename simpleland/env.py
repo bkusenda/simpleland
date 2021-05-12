@@ -19,6 +19,7 @@ from typing import Dict, Any
 import numpy as np
 from simpleland.utils import merged_dict
 from pyinstrument import Profiler
+from simpleland.clock import clock
 
 # keymap = [23,1,4]
 
@@ -239,12 +240,23 @@ class SimplelandEnvSingle(gym.Env):
         return self.env_main.render(mode=mode)
 
 import time
+import argparse
 if __name__ == "__main__":
-    agent_map = {str(i):{} for i in range(2)}
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--render", action="store_true", help="Render")
+    parser.add_argument("--mem_profile", action="store_true")
+    parser.add_argument("--time_profile", action="store_true")
+    parser.add_argument("--agent_count", default=1, type=int, help="Number test of agents")
+
+    args =  parser.parse_args()
+
+    agent_map = {str(i):{} for i in range(args.agent_count)}
     debug = False
-    time_profile = True
-    mem_profile = False
-    render = False
+    time_profile = args.time_profile
+    mem_profile = args.mem_profile
+    render = args.render
     if mem_profile:
         import tracemalloc
         tracemalloc.start()
@@ -283,7 +295,7 @@ if __name__ == "__main__":
                 print("----------")
                 action = env.action_spaces[id].sample() #input()
                 print(action)
-                time.sleep(.1)
+                # time.sleep(.1)
                 try:
                     action = int(action)
                 except:
