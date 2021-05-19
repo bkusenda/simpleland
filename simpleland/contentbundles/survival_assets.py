@@ -228,7 +228,7 @@ def load_asset_bundle():
     # sound_assets['crunch_eat'] = 'assets/sounds/crunch_eat.wav'
     sound_assets['bleep'] = 'assets/sounds/bleep.wav'
     music_assets = {}
-    music_assets['background'] = "assets/music/PianoMonolog.mp3"
+    music_assets['background'] = "assets/music/PianoMonolog.ogg"
 
 
 
@@ -242,6 +242,7 @@ def load_asset_bundle():
 class Food(GObject):
 
     def create(self,position):
+        self.depth = 1
         self.set_data_value("energy", gamectx.content.config['food_energy'])
         self.set_data_value("type", "food")
         self.set_image_id("food")
@@ -457,6 +458,12 @@ class Character(GObject):
                     self.modify_inventory("wood",10)
                 elif new_health < 30:
                     gamectx.remove_object_by_id(obj2.get_data_value("top_id"))
+            elif obj2.get_data_value("type") == "monster":
+                new_health = obj2.get_data_value("health") -10
+                obj2.set_data_value("health", new_health)
+                if new_health <= 0:
+                    gamectx.remove_object_by_id(oid)
+
         
         self.set_data_value("action",
             {
@@ -517,10 +524,15 @@ class Character(GObject):
 class Monster(GObject):
 
     def create(self,position):
+        self.depth = 2
         self.set_data_value("rotation_multiplier", 1)
         self.set_data_value("velocity_multiplier", 1)
         self.set_image_id("skel_idle_down_1")
         self.set_data_value("type","monster")
+        
+        self.set_data_value("health", 40)
+    
+        self.enable()
         self.set_position(position)
         ShapeFactory.attach_rectangle(self, width=TILE_SIZE, height=TILE_SIZE)
         gamectx.add_object(self)
@@ -556,16 +568,16 @@ class Monster(GObject):
         sprite_idx= None
         if action_data is not None:
             if action_data['start_tick'] + action_data['ticks'] > cur_tick:
-                if action_data['type'] == 'walk':
+                if action_data['type'] in ['walk','attack']:
                     sprites_list = gamectx.content.skel_walk_sprites
                     action_idx = (cur_tick - action_data['start_tick'])
                     sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))
                     return sprites_list[direction][sprite_idx]
-                elif action_data['type'] == 'attack':
-                    sprites_list = gamectx.content.skel_attack_sprites
-                    action_idx = (cur_tick - action_data['start_tick'])
-                    sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))
-                    return sprites_list[direction][sprite_idx]
+                # elif action_data['type'] == 'attack':
+                #     sprites_list = gamectx.content.skel_attack_sprites
+                #     action_idx = (cur_tick - action_data['start_tick'])
+                #     sprite_idx = int((action_idx/action_data['ticks']) * len(sprites_list[direction]))
+                #     return sprites_list[direction][sprite_idx]
         if sprite_idx is None:
             sprite_idx = int(cur_tick//gamectx.content.speed_factor()) % len(sprites_list[direction])
         return sprites_list[direction][sprite_idx]
@@ -588,6 +600,36 @@ class Monster(GObject):
                         obj_list.append(obj_seen)
                 
         return obj_list
+
+    def attack(self):
+        cur_tick = clock.get_tick_counter()
+        move_speed = 6
+        action_data = self.get_data_value("action")
+        if action_data is not None and action_data['start_tick'] + action_data['ticks'] > cur_tick:
+            return
+
+        ticks_in_action = move_speed * gamectx.content.speed_factor()
+        action_complete_time = clock.get_time() + ticks_in_action
+        self.set_data_value("action_completion_time",action_complete_time)
+        direction= Vector(0,1).rotated(self.angle)
+        target_pos= self.get_position() + (direction * TILE_SIZE)
+        target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
+
+        for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
+            obj2 = gamectx.object_manager.get_by_id(oid)
+            if obj2.get_data_value("type") == "player":
+                new_health = obj2.get_data_value("health") -10
+                obj2.set_data_value("health", new_health)
+        
+        print("Attacking!")
+        self.set_data_value("action",
+            {
+                'type':'attack',
+                'start_tick':clock.get_tick_counter(),
+                'ticks': ticks_in_action,
+                'step_size': TILE_SIZE/ticks_in_action,
+            })
+
 
     def move(self,direction,new_angle):
         cur_tick = clock.get_tick_counter()
@@ -623,26 +665,35 @@ class Monster(GObject):
         # TODO: Actions should be processed as event
         for obj in self.get_visible_object():
             if obj.get_data_value("type") == "player":
-                direction:Vector = obj.get_position() - self.get_position()
-                direction = direction.normalized()
-                # if abs(direction.x) > abs(direction.y):
-                #     direction.y = 0
-                #     if direction.x > 0.5:
-                #         direction.x = 1.0
-                #     elif direction.x < -0.5:
-                #         direction.x = -1.0
-                #     else:
-                #         direction.x = 0
-                # else:
-                #     direction.x = 0
-                #     if direction.y >= 0.5:
-                #         direction.y = 1.0
-                #     elif direction.y < -0.5:
-                #         direction.y = -1.0
-                #     else:
-                #         direction.y = 0
+                orig_direction:Vector = obj.get_position() - self.get_position()
+                direction = orig_direction.normalized()
+                updated_x = 0
+                updated_y = 0
+                if abs(direction.x) > abs(direction.y):
+                    updated_y = 0
+                    if direction.x > 0.5:
+                        updated_x = 1.0
+                    elif direction.x < -0.5:
+                        updated_x = -1.0
+                    else:
+                        updated_x = 0
+                else:
+                    updated_x = 0
+                    if direction.y >= 0.5:
+                        updated_y = 1.0
+                    elif direction.y < -0.5:
+                        updated_y = -1.0
+                    else:
+                        updated_y = 0
                 new_angle = Vector(0,1).get_angle_between(direction)
-                self.move(direction,new_angle)
+                if orig_direction.length <= TILE_SIZE:
+                    direction = Vector(0,0)                    
+                else:
+                    direction = Vector(updated_x,updated_y)
+                if orig_direction.length <= TILE_SIZE and new_angle == self.angle:
+                    self.attack()
+                else:
+                    self.move(direction,new_angle)
 
 
 class Tree(GObject):

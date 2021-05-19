@@ -104,8 +104,9 @@ class Renderer:
         if self.config.sound_enabled:
             if self.config.sound_enabled:
                 path =self.asset_bundle.music_assets[music_id]
-                print(f"Loading {path}")
-                pygame.mixer.music.load(pkg_resources.resource_filename(__name__,path))
+                full_path = pkg_resources.resource_filename(__name__,path)
+                print(f"Loading Music from: {full_path}")
+                pygame.mixer.music.load(full_path)
                 pygame.mixer.music.play(-1)
 
     def get_image_by_id(self, image_id):
@@ -120,7 +121,7 @@ class Renderer:
             pygame.mixer.pre_init(44100, -16, 4, 2048)
         pygame.init()
 
-        flags =  pygame.HWSURFACE | pygame.DOUBLEBUF
+        flags =  pygame.DOUBLEBUF # | pygame.RESIZABLE | pygame.SCALED
         self._display_surf = pygame.display.set_mode(self.resolution,flags)  # ,)
         # self._display_surf = pygame.display.set_mode(self.resolution)  # ,)
         self.load_sounds()

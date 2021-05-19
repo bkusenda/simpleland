@@ -62,7 +62,7 @@ def process_water_collision(player_obj, lava_obj):
     return False
 
 def process_monster_collision(pobj:GObject, mobj:GObject):
-    pobj.set_data_value("health", pobj.get_data_value('health')-20)
+    # pobj.set_data_value("health", pobj.get_data_value('health')-1)
     return True
 
 def default_collision_callback(obj1: GObject, obj2: GObject):
@@ -80,9 +80,12 @@ def default_collision_callback(obj1: GObject, obj2: GObject):
         obj1.set_data_value("action", None)
         return True
     elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "monster":
+        obj1.set_data_value("action", None)
         return process_monster_collision(obj1,obj2)
     elif obj1.get_data_value('type') == "monster" and obj2.get_data_value('type') == "player":
+        obj1.set_data_value("action", None)
         return process_monster_collision(obj2,obj1)
+
     return False
 
 def get_item_map(item_types):
@@ -258,8 +261,6 @@ class GameContent(Content):
     # NEW PLAYER
     # **********************************
     def new_player(self, client_id, player_id=None, player_type=0, is_human=False) -> Player:
-        if self.player_count > len(self.spawn_locations):
-            raise Exception("Number of players cannot exceed spawn locations")
         # Create Player
         if player_id is None:
             player_id = gen_id()
@@ -289,7 +290,7 @@ class GameContent(Content):
         if reset:
             character.reset()
 
-        character.spawn(coord_to_vec(self.spawn_locations[loc_idx]))
+        character.spawn(coord_to_vec(self.spawn_locations[loc_idx % len(self.spawn_locations)]))
         return character
 
 
