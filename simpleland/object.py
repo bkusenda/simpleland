@@ -102,11 +102,11 @@ class GObject(Base):
     def set_image_dims(self,height,width):
         self.image_width, self.image_height = (height,width)
 
-    def update_position(self, position: Vector):
-        self._update_position_callback(self,position)
+    def update_position(self, position: Vector,skip_collision_check=False):
+        self._update_position_callback(self,position,skip_collision_check=skip_collision_check)
 
     def set_position(self, position: Vector):
-        self.position = position
+        self.update_position(position,True)
 
     def get_position(self):
         return self.position

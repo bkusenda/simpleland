@@ -22,42 +22,37 @@ def game_def(content_overrides={}):
             "health_max": 100,
             "health_gen_period": 10,
             "stamina_max": 100,
+            "stamina_gen": 40,
+            "stamina_gen_period": 1,
+            "energy_start": 100,
+            "energy_max": 100,
+            "energy_decay_period": 50,
+            "energy_decay": 1,
+            "low_energy_health_penalty": 10,
+            "strength": 1,
+            "inventory_size": 1,
+            "walk_speed": 3.75,
+            "attack_speed": 0.75,
+            "vision_radius": 4
+        },
+        "monster_config": {
+            "health_start": 100,
+            "health_gen": 1,
+            "health_max": 100,
+            "health_gen_period": 10,
+            "stamina_max": 100,
             "stamina_gen": 20,
             "stamina_gen_period": 1,
             "energy_start": 100,
             "energy_max": 100,
-            "energy_decay_period": 5,
-            "energy_decay": 10,
-            "low_energy_health_penalty": 10,
+            "energy_decay_period": 0,
+            "energy_decay": 0,
+            "low_energy_health_penalty": 0,
             "strength": 1,
-            "inventory_size": 1
-        },
-        "actions": {
-            "rest": {
-                "duration": 1,
-                "energy_cost": 0,
-                "stamina_cost": 0
-            },
-            "walk": {
-                "duration": 4,
-                "energy_cost": 1,
-                "stamina_cost": 0
-            },
-            "run": {
-                "duration": 2,
-                "energy_cost": 3,
-                "stamina_cost": 10
-            },
-            "attack": {
-                "duration": 4,
-                "energy_cost": 12,
-                "stamina_cost": 20
-            },
-            "pickup": {
-                "duration": 6,
-                "energy_cost": 2,
-                "stamina_cost": 2
-            },
+            "inventory_size": 1,
+            "walk_speed": .2,
+            "attack_speed": .2,
+            "vision_radius": 4
         }
     }
 

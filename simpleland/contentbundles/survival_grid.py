@@ -32,21 +32,19 @@ import sys
 import math
 from .survival_assets import *
 from .survival_utils import *
-from .survival_config import TILE_SIZE
 
 ############################
 # COLLISION HANDLING
 ############################
 
-def process_food_collision(player_obj: GObject, food_obj):
+def process_food_collision(player_obj: AnimateObject, food_obj:Food):
 
-    food_energy = food_obj.get_data_value('energy')
-    player_energy = player_obj.get_data_value('energy')
-    player_obj.set_data_value("energy",
-                              player_energy + food_energy)
-    food_reward_count = player_obj.get_data_value('food_reward_count', 0)
-    food_reward_count += 1
-    player_obj.set_data_value("food_reward_count", food_reward_count)
+    food_energy = food_obj.energy
+    player_obj.energy +=food_energy
+
+    #TODO: replace
+    player_obj.reward +=1
+    
     food_counter = gamectx.data.get('food_counter', 0)
     gamectx.data['food_counter'] = food_counter - 1
 
@@ -57,36 +55,35 @@ def process_food_collision(player_obj: GObject, food_obj):
     gamectx.add_event(sound_event)
     return False
 
-def process_water_collision(player_obj, lava_obj):
-    player_obj.set_data_value("health", 0)
+def process_water_collision(player_obj:AnimateObject, obj):
+    player_obj.health =  0
     return False
 
 def process_monster_collision(pobj:GObject, mobj:GObject):
     # pobj.set_data_value("health", pobj.get_data_value('health')-1)
-    return True
+    return mobj.collision
 
-def default_collision_callback(obj1: GObject, obj2: GObject):
-    if obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "food":
+def default_collision_callback(obj1: PhysicalObject, obj2: PhysicalObject):
+    if obj1.type == "player" and obj2.type == "food":
         return process_food_collision(obj1, obj2)
-    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "water":
+    elif obj1.type == "player" and obj2.type == "water":
         return process_water_collision(obj1, obj2)
-    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "rock":
-        obj1.set_data_value("action", None)
-        return True
-    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "player":
-        obj1.set_data_value("action", None)
-        return True
-    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "tree":
-        obj1.set_data_value("action", None)
-        return True
-    elif obj1.get_data_value('type') == "player" and obj2.get_data_value('type') == "monster":
-        obj1.set_data_value("action", None)
+    elif obj1.type == "player" and obj2.type == "rock":
+        obj1.default_action()
+        return obj2.collision
+    elif obj1.type == "player" and obj2.type == "player":
+        obj1.default_action()
+        return obj2.collision
+    elif obj1.type == "player" and obj2.type == "tree":
+        obj1.default_action()
+        return obj2.collision
+    elif obj1.type == "player" and obj2.type == "monster":
+        obj1.default_action()
         return process_monster_collision(obj1,obj2)
-    elif obj1.get_data_value('type') == "monster" and obj2.get_data_value('type') == "player":
-        obj1.set_data_value("action", None)
+    elif obj1.type == "monster" and obj2.type == "player":
+        obj1.default_action()
         return process_monster_collision(obj2,obj1)
-
-    return False
+    return obj1.collision and obj2.collision
 
 def get_item_map(item_types):
     item_map = {}
@@ -104,6 +101,7 @@ class GameContent(Content):
         self.default_camera_zoom = config['default_camera_zoom']
         self.food_energy = config['food_energy']
         self.food_count = config['food_count']
+        self.tile_size = config['tile_size']
         
         self.characters = {}
 
@@ -121,44 +119,24 @@ class GameContent(Content):
         self.spawn_locations = []
         self.food_locations = []
         self.loaded = False
+        self.tilemap = TileMap()
 
-        self.player_idle_sprites = {
-            'down': ['player_idle_down_1', 'player_idle_down_2', 'player_idle_down_3', 'player_idle_down_4', 'player_idle_down_5', 'player_idle_down_6'],
-            'up': ['player_idle_up_1', 'player_idle_up_2', 'player_idle_up_3', 'player_idle_up_4', 'player_idle_up_5', 'player_idle_up_6'],
-            'left': ['player_idle_left_1', 'player_idle_left_2', 'player_idle_left_3', 'player_idle_left_4', 'player_idle_left_5', 'player_idle_left_6'],
-            'right': ['player_idle_right_1', 'player_idle_right_2', 'player_idle_right_3', 'player_idle_right_4', 'player_idle_right_5', 'player_idle_right_6']}
-        self.player_walk_sprites = {
-            'down': ['player_walk_down_1', 'player_walk_down_2', 'player_walk_down_3', 'player_walk_down_4', 'player_walk_down_5', 'player_walk_down_6'],
-            'up': ['player_walk_up_1', 'player_walk_up_2', 'player_walk_up_3', 'player_walk_up_4', 'player_walk_up_5', 'player_walk_up_6'],
-            'left': ['player_walk_left_1', 'player_walk_left_2', 'player_walk_left_3', 'player_walk_left_4', 'player_walk_left_5', 'player_walk_left_6'],
-            'right': ['player_walk_right_1', 'player_walk_right_2', 'player_walk_right_3', 'player_walk_right_4', 'player_walk_right_5', 'player_walk_right_6']}
-        self.player_attack_sprites = {
-            'down': ['player_atk_down_1', 'player_atk_down_2', 'player_atk_down_3', 'player_atk_down_4', 'player_atk_down_5', 'player_atk_down_6'],
-            'up': ['player_atk_up_1', 'player_atk_up_2', 'player_atk_up_3', 'player_atk_up_4', 'player_atk_up_5', 'player_atk_up_6'],
-            'left': ['player_atk_left_1', 'player_atk_left_2', 'player_atk_left_3', 'player_atk_left_4', 'player_atk_left_5', 'player_atk_left_6'],
-            'right': ['player_atk_right_1', 'player_atk_right_2', 'player_atk_right_3', 'player_atk_right_4', 'player_atk_right_5', 'player_atk_right_6']}
 
-        # Skel
-        self.skel_idle_sprites = {
-            'down': ['skel_idle_down_1', 'skel_idle_down_2', 'skel_idle_down_3', 'skel_idle_down_4', 'skel_idle_down_5', 'skel_idle_down_6'],
-            'up': ['skel_idle_up_1', 'skel_idle_up_2', 'skel_idle_up_3', 'skel_idle_up_4', 'skel_idle_up_5', 'skel_idle_up_6'],
-            'left': ['skel_idle_left_1', 'skel_idle_left_2', 'skel_idle_left_3', 'skel_idle_left_4', 'skel_idle_left_5', 'skel_idle_left_6'],
-            'right': ['skel_idle_right_1', 'skel_idle_right_2', 'skel_idle_right_3', 'skel_idle_right_4', 'skel_idle_right_5', 'skel_idle_right_6']}
-        self.skel_walk_sprites = {
-            'down': ['skel_walk_down_1', 'skel_walk_down_2', 'skel_walk_down_3', 'skel_walk_down_4', 'skel_walk_down_5', 'skel_walk_down_6'],
-            'up': ['skel_walk_up_1', 'skel_walk_up_2', 'skel_walk_up_3', 'skel_walk_up_4', 'skel_walk_up_5', 'skel_walk_up_6'],
-            'left': ['skel_walk_left_1', 'skel_walk_left_2', 'skel_walk_left_3', 'skel_walk_left_4', 'skel_walk_left_5', 'skel_walk_left_6'],
-            'right': ['skel_walk_right_1', 'skel_walk_right_2', 'skel_walk_right_3', 'skel_walk_right_4', 'skel_walk_right_5', 'skel_walk_right_6']}
 
     def speed_factor(self):
-        return max(gamectx.speed_factor() * 1/6, 1)
+        """
+        Step size in ticks
+        """
+        tick_rate = gamectx.tick_rate
+        if not tick_rate:
+            tick_rate = 1
+        return tick_rate * 1/6
 
     def get_asset_bundle(self):
         return self.asset_bundle
 
     def get_class_by_type_name(self,name):
         if name == "Character":
-            print("Creating Char")
             return Character
         elif name == "Tree":
             return Tree
@@ -234,19 +212,19 @@ class GameContent(Content):
                 return None, None, None, None
 
             obj_id = player.get_object_id()
-            obj = gamectx.object_manager.get_by_id(obj_id)
+            obj: AnimateObject = gamectx.object_manager.get_by_id(obj_id)
             observation = self.get_observation(obj)
             done = player.get_data_value("reset_required", False)
             if done:
                 player.set_data_value("allow_obs", False)
 
             info['lives_used'] = player.get_data_value("lives_used")
-            energy = obj.get_data_value("energy")
+            energy = obj.energy
             info['energy'] = energy
 
             # Claim food rewards
-            food_reward_count = obj.get_data_value("food_reward_count", 0)
-            obj.set_data_value("food_reward_count", 0)
+            food_reward_count = obj.reward
+            obj.reward = 0
             reward = food_reward_count
             # if energy == 0:
             #     reward += -1
@@ -256,6 +234,14 @@ class GameContent(Content):
             info['msg'] = "no player found"
         return observation, reward, done, info
     
+
+    def reset_player(self,player:Player):
+        player.set_data_value("lives_used", 0)
+        player.set_data_value("food_reward_count", 0)
+        player.set_data_value("reset_required", False)
+        player.set_data_value("allow_obs", True)
+        player.events = []
+
 
     # **********************************
     # NEW PLAYER
@@ -285,10 +271,10 @@ class GameContent(Content):
         if player.get_object_id() is not None:
             character = gamectx.object_manager.get_by_id(player.get_object_id())
         else:
-            character= Character().create(player)
+            character= Character(config=self.config['player_config'] ,player=player)
             self.characters[player.get_id()] = character
         if reset:
-            character.reset()
+            self.reset_player(player)
 
         character.spawn(coord_to_vec(self.spawn_locations[loc_idx % len(self.spawn_locations)]))
         return character
@@ -303,7 +289,7 @@ class GameContent(Content):
         spawn_count = 0
         for i, coord in enumerate(self.food_locations):
             if len(gamectx.physics_engine.space.get_objs_at(coord)) == 0:
-                Food().create(coord_to_vec(coord))
+                Food().spawn(coord_to_vec(coord))
                 spawn_count += 1
                 if limit is not None and spawn_count >= limit:
                     return
@@ -352,7 +338,9 @@ class GameContent(Content):
             return events
 
         # Queued action prevents movement until complete. Trigger at a certain time and releases action lock later but 
-        if  clock.get_tick_counter() < obj.get_data_value("action_completion_time",0):
+        # if  clock.get_tick_counter() < obj.get_data_value("action_completion_time",0):
+        #     return events
+        if obj.get_action().get('blocking',True):
             return events
 
         # Object Movement
@@ -401,7 +389,7 @@ class GameContent(Content):
         elif "ATTACK" in actions_set:
             obj.attack()
         elif "MOVE" in actions_set:
-            obj.move(direction,angle_update)
+            obj.walk(direction,angle_update)
 
         return events
 
@@ -412,24 +400,32 @@ class GameContent(Content):
             if o.is_enabled():
                 o.update()
 
+    def prepare_ac(self):
+        for k, o in gamectx.object_manager.get_objects().items():
+            if o is None or o.is_deleted or not o.enabled:
+                continue
+            if o.is_enabled():
+                o.update()
+
+
     def post_process_frame(self, render_time, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:
             lines = []
             lines.append("Lives Used: {}".format(player.get_data_value("lives_used", 0)))
 
-            obj = gamectx.object_manager.get_by_id(player.get_object_id())
+            obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
             obj_health = 0
             if obj is not None:
-                obj_energy = obj.get_data_value("energy", "NA")
-                obj_health = obj.get_data_value("health", "NA")
-                obj_stamina = obj.get_data_value("stamina", "NA")
-                inv = obj.get_data_value('inventory',{})
+                obj_energy = obj.energy
+                obj_health = obj.health
+                obj_stamina = obj.stamina
+                inv = obj.inventory
                 inventory_st = " ".join([f"{k}:{v}" for k,v in inv.items()])
                 lines.append(f"H:{obj_health}, E:{obj_energy}, S:{obj_stamina}")
                 lines.append(f"Inventory: {inventory_st}")
 
             if renderer.config.show_console:
-                renderer.render_to_console(lines, x=5, y=5, background_color=(0, 0, 0))
+                renderer.render_to_console(lines, x=5, y=5)
                 if obj_health <= 0:
                     renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)
 

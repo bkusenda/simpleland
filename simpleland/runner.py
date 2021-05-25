@@ -28,7 +28,7 @@ def get_game_def(
         enable_server,
         remote_client,
         port,
-        game_tick_rate=None,
+        tick_rate=None,
         sim_timestep=None,
         content_overrides={}
 ) -> GameDef:
@@ -39,7 +39,7 @@ def get_game_def(
     game_def.server_config.port = port
 
     # Game
-    game_def.game_config.tick_rate = game_tick_rate
+    game_def.game_config.tick_rate = tick_rate
     game_def.physics_config.sim_timestep = sim_timestep
 
     game_def.game_config.client_only_mode = not enable_server and remote_client
@@ -58,6 +58,7 @@ def get_player_def(
         render_shapes=None,
         disable_textures=None,
         is_human=True,
+        draw_grid = False,
         tile_size=None,
         debug_render_bodies=False,
         view_type=0,
@@ -77,7 +78,7 @@ def get_player_def(
     player_def.renderer_config.resolution = resolution
     player_def.renderer_config.render_shapes = render_shapes
     player_def.renderer_config.disable_textures = disable_textures
-    player_def.renderer_config.draw_grid = tile_size is not None
+    player_def.renderer_config.draw_grid = draw_grid
     player_def.renderer_config.tile_size = tile_size
     player_def.renderer_config.debug_render_bodies = debug_render_bodies
     player_def.renderer_config.view_type = view_type
@@ -105,6 +106,7 @@ def get_arguments(override_args=None):
     parser.add_argument("--tile_size", default=None, type=int, help="not = no grid")
     parser.add_argument("--debug_render_bodies", action="store_true", help="pymunk render")
     parser.add_argument("--disable_sound", action="store_true", help="disable_sound")
+    parser.add_argument("--draw_grid", action="store_true", help="draw_grid")
 
     # used for both client and server
     parser.add_argument("--port", default=10001, help="the port the server is running on")
@@ -112,7 +114,7 @@ def get_arguments(override_args=None):
     # Game Options
     parser.add_argument("--enable_profiler", action="store_true", help="Enable Performance profiler")
     parser.add_argument("--sim_timestep", default=0.01, type=float, help="sim_timestep, lower (eg 0.01) = more accurate, higher (eg 0.1) = less accurate but faster")
-    parser.add_argument("--game_tick_rate", default=60, type=int, help="game_tick_rate")
+    parser.add_argument("--tick_rate", default=60, type=int, help="tick_rate")
 
     parser.add_argument("--game_id", default="space_grid1", help="id of game")
     parser.add_argument("--content_overrides", default="{}", type=str,help="JSON string containing content updates. eg --content_overrides='{\"player_start_energy\":35}'")
@@ -141,7 +143,7 @@ def run(args):
         enable_server=args.enable_server,
         remote_client=args.remote_client,
         port=args.port,
-        game_tick_rate=args.game_tick_rate,
+        tick_rate=args.tick_rate,
         sim_timestep=args.sim_timestep,
         content_overrides = json.loads(args.content_overrides)
     )
@@ -166,6 +168,7 @@ def run(args):
         render_shapes=args.render_shapes,
         resolution=resolution,
         fps=args.fps,
+        draw_grid = args.draw_grid,
         player_type=args.player_type,
         tile_size=args.tile_size,
         debug_render_bodies = args.debug_render_bodies,

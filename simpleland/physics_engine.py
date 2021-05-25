@@ -112,10 +112,16 @@ class GridPhysicsEngine:
     def add_object(self, obj: GObject):
         obj.last_change = clock.get_time()
         obj.set_update_position_callback(self.update_obj_position)
-        self.update_obj_position(obj,obj.get_position())
+        self.update_obj_position(obj,obj.get_position(),skip_collision_check=True)
 
-    def update_obj_position(self,obj:GObject,new_pos):
-        self.position_updates[obj.get_id()] = (obj,new_pos)
+    def update_obj_position(self,obj:GObject,new_pos,skip_collision_check=False):
+        if skip_collision_check:
+            coord =self.vec_to_coord(new_pos)
+            self.space.move_obj_to(coord,obj)
+            obj.position = new_pos
+        else:
+            self.position_updates[obj.get_id()] = (obj,new_pos)
+
 
     def remove_object(self,obj):
         self.space.remove_obj(obj.get_id())

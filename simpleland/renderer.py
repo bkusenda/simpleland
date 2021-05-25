@@ -44,6 +44,7 @@ class Renderer:
         if config.sdl_video_driver:
             os.environ["SDL_VIDEODRIVER"] = config.sdl_video_driver
         self.asset_bundle = asset_bundle
+        self.map_loader = asset_bundle.tilemaploader
         self.config:RendererConfig = config
         self.format = config.format
         self._display_surf = None
@@ -54,18 +55,26 @@ class Renderer:
         self.frame_cache = None
         self.debug=config.debug_render_bodies
         # These will be source object properties eventually
-        self.view_height = 60000.0
+        self.view_height = 600000.0
         self.view_width = self.view_height * self.aspect_ratio
-        logging.info(f"{self.view_width} by {self.view_width}")
-        self.center = Vector.zero()
+        print(f"Screen = {self.view_height} by {self.view_width}")
 
         self.images = {}
+        self.image_cache = {}
         self.sounds = {}
         self.sprite_sheets = {}
 
         # FPS Counter
         self.fps_counter = TickPerSecCounter(2)
         self.log_info = None
+        self.font = {}
+        self.fps_clock = pygame.time.Clock()
+        self.background = None
+        self.background_center = None
+        self.background_size = None
+        self.background_updates = 0
+        
+
 
         
 
@@ -111,9 +120,25 @@ class Renderer:
 
     def get_image_by_id(self, image_id):
         return self.images.get(image_id)
+    
+    def get_scaled_image_by_id(self, image_id,scale_x,scale_y):
+        image_sizes = self.image_cache.get(image_id,{})
+        img = image_sizes.get((scale_x,scale_y))
+        if img is None:
+            img_orig = self.get_image_by_id(image_id)
+            if img_orig is None:
+                return None
+            body_w, body_h = img_orig.get_size()
+            image_size = int(body_w*scale_x),int(body_h*scale_y)    
+            if image_size[0]> 500:
+                image_size = 500
+            img = pygame.transform.scale(img_orig,image_size)
+            image_sizes[(scale_x,scale_y)] = img
+            self.image_cache[image_id]= image_sizes
+        return img
 
     def update_view(self, view_height):
-        self.view_height = max(view_height, 0.001)
+        self.view_height = max(view_height, 10)
         self.view_width = self.view_height * self.aspect_ratio
 
     def initialize(self):
@@ -131,13 +156,12 @@ class Renderer:
 
         self.initialized = True
 
-    def render_to_console(self, lines, x, y, fsize=18, spacing=12, color=(180, 180, 180), background_color=None):
-        font = pygame.font.SysFont(None, fsize)
-        num_lines = len(lines)
-        if background_color is not None:
-            pygame.draw.rect(self._display_surf, background_color, pygame.Rect(x-3, y-3, self.view_width, y+num_lines*spacing+3))
+    def render_to_console(self, lines, x, y, fsize=18, spacing=12, color=(255, 255, 255)):
+        font = self.font.get(fsize)
+        if font is None:
+            font = pygame.font.SysFont(None, fsize)
+            self.font[fsize] = font
         for i, l in enumerate(lines):
-            font.render(l, False, (0, 0, 0))
             self._display_surf.blit(font.render(l, True, color), (x, y + spacing * i))
         
 
@@ -233,6 +257,9 @@ class Renderer:
                 new_verts,
                 0)
 
+
+
+
     def _draw_object(self, center, obj:GObject, angle, screen_factor, screen_view_center, color=None):
 
         image_id= obj.get_image_id(angle)
@@ -243,21 +270,9 @@ class Renderer:
             
             body_angle = obj.angle
 
-            # TODO: fix, main_shape will not always have radius
-            # 
-
-            image = self.get_image_by_id(image_id)
+            image = self.get_scaled_image_by_id(image_id,screen_factor[0],screen_factor[1])
             
             if image is not None:
-                scale_w, scale_h = 1,1 #obj.get_image_dims()
-                body_w, body_h = image.get_size()
-                image_size = int(body_w*screen_factor[0] *scale_w)+1,int(body_h*screen_factor[1] *scale_h)+1
-                
-                if image_size[0]> 5000:
-                    image_size = 200,200
-                    print("zoom out/ to close {}".format(image_size))
-
-                image = pygame.transform.scale(image,image_size)
                 if rotate:  
                     image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
                 rect = image.get_rect()
@@ -359,6 +374,86 @@ class Renderer:
             lst.sort(key=lambda o: -o.get_position().get_distance(center_bottom))
         return object_list_depth_sorted
 
+
+    def _draw_background_image(self, image, center,  angle, screen_factor, screen_view_center):
+
+        rect = image.get_rect()
+        # image_loc = scale(screen_factor, Vector(self.background_center[0],self.background_center[1]))
+        bkround_center = Vector(self.background_center[0],self.background_center[1])
+        # image_loc = scale(screen_factor, -center)  + screen_view_center
+        # image_loc = bkround_center
+        image_loc = bkround_center[0] - self.background_size[0]/2, bkround_center[1] - self.background_size[1]/2#scale(screen_factor, ((- center + bkround_center).rotated(-angle)  + screen_view_center))
+        # image_loc = scale(screen_factor, ((- center).rotated(-angle))  + screen_view_center)
+        # image_loc = to_pygame(image_loc, self._display_surf)
+        rect.center = image_loc
+        
+        # self._display_surf.blit(image,rect)
+        self._display_surf.blit(image,rect)
+
+    def check_bounds(self, cv,cs, bv, bs):
+        return ((bv - bs/2) >= (cv - cs/2)) or ((bv+bs/2) <= (cv + cs/2))
+        
+
+    def get_background_image(self,center,screen_factor):
+        surface_width = int(self.view_width*3)
+        surface_height = int(self.view_height*3)
+        sur_center_x = surface_width/2 - center.x
+        sur_center_y = surface_height/2 - center.y
+        if self.background is not None:
+            # print(f"updates:{self.background_updates}  ctr:{sur_center_x} {sur_center_y}  view:{self.view_width}x{self.view_height}  bg_center:{self.background_center} bg_size:{self.background_size}")
+
+            need_update = self.check_bounds(
+                sur_center_x,
+                self.view_width,
+                self.background_center[0],
+                self.background_size[0])
+            if not need_update:
+                # print("No update needed?")
+                need_update = self.check_bounds(
+                    sur_center_y,
+                    self.view_height,
+                    self.background_center[1],
+                    self.background_size[1])
+                if not need_update:
+                    return self.background
+            
+            
+        print("GETTING NEW BACKGROUND")
+        xoffset = 0#self.config.tile_size/2
+        yoffset = 0#self.config.tile_size/2
+
+        tilemap = self.asset_bundle.tilemaploader.get_tilemap("")
+        sur_center_tile_x =sur_center_x // self.config.tile_size
+        sur_center_tile_y =sur_center_y // self.config.tile_size
+
+        tmp_surface = pygame.Surface((surface_width, surface_height))
+        for tile_x in range(surface_width//self.config.tile_size):
+            ltile_x = (sur_center_tile_x - tile_x) 
+            for tile_y in range(surface_height//self.config.tile_size):
+                ltile_y = (sur_center_tile_y - tile_y) 
+                background_image_id = tilemap.get_by_loc(ltile_x,ltile_y)
+                image = self.get_image_by_id(background_image_id)
+                #                image = self.get_scaled_image_by_id(background_image_id,screen_factor[0],screen_factor[1])
+
+                
+                pos = (int(tile_x * self.config.tile_size -xoffset),int(tile_y * self.config.tile_size -yoffset))
+                pos = to_pygame(pos,tmp_surface)
+                tmp_surface.blit(image,pos)
+
+        
+        image_size = int(surface_width*screen_factor[0]),int(surface_height*screen_factor[1])
+        
+        # if image_size[0]> 50000:
+        #     image_size = 200,200
+
+        # tmp_surface = pygame.transform.scale(tmp_surface,image_size)
+        self.background = tmp_surface
+        self.background_center = (sur_center_x,sur_center_y)
+        self.background_size = surface_width, surface_height
+        self.background_screen_factor = screen_factor
+        self.background_updates+=1
+        return self.background
+
     # TODO: Clean this up
     def process_frame(self,
                     render_time,
@@ -368,7 +463,7 @@ class Renderer:
             self.initialize()
 
         # import pdb;pdb.set_trace()
-        self._display_surf.fill((20, 100, 20))
+        self._display_surf.fill((150, 130, 80))
 
         angle = 0
         camera:Camera = None
@@ -378,19 +473,38 @@ class Renderer:
         else:
             camera = Camera(center=Vector(self.view_width/2,self.view_height/2))
 
+        if camera.distance > 1000:
+            camera.distance = 1000
+        elif camera.distance < 100:
+            camera.distance = 100
+
         center = camera.get_center()
         angle = camera.get_angle()
                
-        # TODO: Should be handled in camera not renderer 
-        self.update_view(max(camera.get_distance(),1))
+        # TODO: View Width/Height should only be in camera
+        self.update_view(camera.get_distance())
         
         center = center - camera.position_offset
         screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
         screen_view_center = Vector(self.view_width, self.view_height) / 2.0
 
-        obj_list_sorted_by_depth= self.filter_objects_for_rendering(gamectx.object_manager.get_objects(),camera)
         if self.config.draw_grid:
-            self._draw_grid(center, angle, screen_factor, screen_view_center, size=self.config.tile_size, view_type= self.config.view_type)
+            self._draw_grid(center, 
+                angle, 
+                screen_factor, 
+                screen_view_center, 
+                size=self.config.tile_size, 
+                view_type= self.config.view_type)
+
+        background = self.get_background_image(center,screen_factor)
+
+        self._draw_background_image(background,center,0,screen_factor,screen_view_center)
+
+
+
+        obj_list_sorted_by_depth= self.filter_objects_for_rendering(gamectx.object_manager.get_objects(),camera)
+
+        
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
             obj:GObject
             for obj in render_obj_dict:
@@ -399,13 +513,34 @@ class Renderer:
                 self._draw_object(center, obj, angle, screen_factor, screen_view_center, obj.shape_color)
             
         if self.config.show_console:
-            console_info = ["FPS:{}".format(self.fps_counter.avg())]
+            background_color = (0,0,0)
+            pygame.draw.rect(self._display_surf, background_color, pygame.Rect(0, 0, self.width, int(self.height/6)))
+            lines = ["FPS:{}".format(self.fps_counter.avg())]
+            lines.append("FPS2:{}".format(self.fps_clock.get_fps()))
             if self.log_info is not None:
-                console_info.append(self.log_info)
-            self.render_to_console(console_info, self. config.resolution[0]-100, 5)
+                lines.append(self.log_info)
+            self.render_to_console(lines,x=5, y=int(self.width /2))
+
+        # pygame.draw.rect(self._display_surf, 
+        #     (250,250,250), 
+        #     pygame.Rect(screen_view_center.x * screen_factor.x, screen_view_center.y * screen_factor.y, 5,5))
+
+
+        # pos_x, pos_y = to_pygame((center.x * screen_factor.x, center.y * screen_factor.y),self._display_surf)
+        pos_x, pos_y = (center.x * screen_factor.x, center.y * screen_factor.y)
+        # pos_x, pos_y = center.x, center.y #to_pygame((center.x, center.y),self._display_surf)
+
+        # pygame.draw.rect(self._display_surf, 
+        #     (0,250,250), 
+        #     pygame.Rect(*to_pygame((self.b.x, center.y), self._display_surf), 5,5))
+
+        pygame.draw.rect(self._display_surf, 
+            (0,250,250), 
+            pygame.Rect(*to_pygame((center.x, center.y), self._display_surf), 5,5))
 
     def render_frame(self):
         self.fps_counter.tick()
+        self.fps_clock.tick()
         if self.config.save_observation:
             self.get_last_frame()
         frame = self.frame_cache

@@ -32,7 +32,7 @@ class SimplelandEnv:
             port = 10001, 
             dry_run=False,
             agent_map={'1':{},'2':{}},
-            game_tick_rate = 0,
+            tick_rate = 0,
             sim_timestep = 0.01,
             enable_server = False,
             view_type=0,
@@ -45,7 +45,7 @@ class SimplelandEnv:
             enable_server=enable_server, 
             port=port,
             remote_client=False,
-            game_tick_rate = game_tick_rate,
+            tick_rate = tick_rate,
             sim_timestep=sim_timestep)
 
         game_def.content_config = merged_dict(
@@ -76,7 +76,7 @@ class SimplelandEnv:
                 hostname=hostname,
                 port = port,
                 resolution = resolution,
-                fps=game_tick_rate,
+                fps=tick_rate,
                 render_shapes=render_shapes,
                 player_type=player_type,
                 is_human=False,
@@ -210,13 +210,13 @@ class SimplelandEnvSingle(gym.Env):
             render_shapes=True,
             player_type=1,
             view_type=1,
-            game_tick_rate=10000):
+            tick_rate=10000):
         print("Starting SL v21")
         self.agent_id = "1"
         self.env_main = SimplelandEnv(
             agent_map={self.agent_id:{}},
             enable_server=False,
-            game_tick_rate=game_tick_rate,
+            tick_rate=tick_rate,
             content_config=content_config,
             view_type=view_type,
             player_type=player_type,

@@ -12,7 +12,6 @@ class PhysicsConfig(Base):
         self.space_dampening = .5
         self.steps_per_second = 60
         self.clock_multiplier = 1
-        self.tick_rate = 60
         self.sim_timestep=0.02
         self.player_angular_vel_max = 3
         self.tile_size = 32

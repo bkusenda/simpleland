@@ -71,11 +71,8 @@ class GameContext:
             print("Loading Game Content.")
             content.load()
 
-    def speed_factor(self):
-        if self.tick_rate:
-            return self.tick_rate
-        else:
-            return 1
+    def tick(self):
+        clock.tick(self.tick_rate)
 
     def get_content(self)->Content:
         return self.content
@@ -212,9 +209,6 @@ class GameContext:
 
     def run_update(self):
         self.content.update()
-
-    def tick(self):
-        clock.tick(self.tick_rate)     
 
     def add_player(self, player):
         self.player_manager.add_player(player) 
