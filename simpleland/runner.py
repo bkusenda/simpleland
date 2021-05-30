@@ -59,7 +59,7 @@ def get_player_def(
         disable_textures=None,
         is_human=True,
         draw_grid = False,
-        tile_size=None,
+        tile_size=16,
         debug_render_bodies=False,
         view_type=0,
         sound_enabled = True) -> PlayerDefinition:
@@ -103,7 +103,7 @@ def get_arguments(override_args=None):
     parser.add_argument("--fps", default=60, type=int, help="fps")
     parser.add_argument("--player_type", default=0, type=int, help="Player type (0=default, 10=observer_only)")
     parser.add_argument("--view_type", default=0, type=int, help="NOT USED at moment: View type (0=perspective, 1=world)")
-    parser.add_argument("--tile_size", default=None, type=int, help="not = no grid")
+    parser.add_argument("--tile_size", default=16, type=int, help="not = no grid")
     parser.add_argument("--debug_render_bodies", action="store_true", help="pymunk render")
     parser.add_argument("--disable_sound", action="store_true", help="disable_sound")
     parser.add_argument("--draw_grid", action="store_true", help="draw_grid")

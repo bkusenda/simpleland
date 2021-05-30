@@ -57,6 +57,7 @@ def get_input_events(player:Player) -> List[Event]:
     key_list.append(pygame.K_r)
     key_list.append(pygame.K_w)
     key_list.append(pygame.K_q)
+    key_list.append(pygame.K_g)
     key_list.append(pygame.K_s)
     key_list.append(pygame.K_a)
     key_list.append(pygame.K_d)

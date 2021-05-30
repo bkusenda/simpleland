@@ -14,9 +14,8 @@ def game_def(content_overrides={}):
     content_config = {
         'default_camera_zoom': TILE_SIZE*10,
         "tile_size": TILE_SIZE,
-        "food_energy":10,
-        "food_count": 1,
-        "player_config": {
+
+        "human_config": {
             "health_start": 100,
             "health_gen": 5,
             "health_max": 100,
@@ -26,12 +25,12 @@ def game_def(content_overrides={}):
             "stamina_gen_period": 1,
             "energy_start": 100,
             "energy_max": 100,
-            "energy_decay_period": 50,
+            "energy_decay_period": 5,
             "energy_decay": 1,
             "low_energy_health_penalty": 10,
             "strength": 1,
             "inventory_size": 1,
-            "walk_speed": 3.75,
+            "walk_speed": 1.75,
             "attack_speed": 0.75,
             "vision_radius": 4
         },

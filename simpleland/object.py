@@ -42,7 +42,10 @@ class GObject(Base):
 
     # This function should be overridden
     def create(self,*args,**kwargs):
-        pass        
+        pass
+
+    def get_types(self):
+        return set()     
 
     def update(self):
         pass
@@ -105,6 +108,9 @@ class GObject(Base):
     def update_position(self, position: Vector,skip_collision_check=False):
         self._update_position_callback(self,position,skip_collision_check=skip_collision_check)
 
+    def sync_position(self):
+        self.update_position(self.position,True)
+
     def set_position(self, position: Vector):
         self.update_position(position,True)
 
@@ -138,8 +144,8 @@ class GObject(Base):
         return data
 
 
-    def load_snapshot(self,timestamp, data):
-        load_dict_snapshot(self, data, exclude_keys={""})
+    def load_snapshot(self, data,exclude_keys=set()):
+        load_dict_snapshot(self, data, exclude_keys=exclude_keys)
 
 
 

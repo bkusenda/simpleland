@@ -26,7 +26,7 @@ from simpleland.clock import clock
 class SimplelandEnv:
 
     def __init__(self, 
-            resolution=(640,365), 
+            resolution=(1280,720), 
             game_id="survival_grid", 
             hostname = 'localhost', 
             port = 10001, 

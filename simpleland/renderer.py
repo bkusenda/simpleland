@@ -25,16 +25,6 @@ from .content import Content
 def scale(vec,vec2):
     return Vector(vec.x * vec2.x, vec.y* vec2.y)
 
-def to_pygame(p, surface):
-    """Convenience method to convert pymunk coordinates to pygame surface
-    local coordinates.
-
-    Note that in case positive_y_is_up is False, this function wont actually do
-    anything except converting the point to integers.
-    """
-
-    return int(p[0]), surface.get_height() - int(p[1])
-
 
 class Renderer:
 
@@ -73,9 +63,7 @@ class Renderer:
         self.background_center = None
         self.background_size = None
         self.background_updates = 0
-        
-
-
+        self.background_screen_factor = None
         
 
     def set_log_info(self,log_info):
@@ -177,12 +165,10 @@ class Renderer:
         obj_location1 = (obj_pos + line.a.rotated(obj.angle) - center)
         obj_location1 = obj_location1.rotated(-angle)
         p1 = scale(screen_factor,(obj_location1 + screen_view_center))
-        p1 = to_pygame(p1, self._display_surf)
 
         obj_location2 = (obj_pos + line.b.rotated(obj.angle) - center)
         obj_location2 = obj_location2.rotated(-angle)
         p2 = scale(screen_factor, (obj_location2 + screen_view_center))
-        p2 = to_pygame(p2, self._display_surf)
 
         pygame.draw.line(self._display_surf,
                          color,
@@ -201,8 +187,7 @@ class Renderer:
         obj_pos = obj.get_view_position() + circle.offset # TODO: Doesn't work with offset
         obj_location = (obj_pos - center)
         obj_location = obj_location.rotated(-angle)
-        p = scale(screen_factor,(obj_location + screen_view_center))
-        p = to_pygame(p, self._display_surf)
+        p = scale(screen_factor,obj_location ) + screen_view_center
         size = int(circle.radius * screen_factor[0])
         pygame.draw.circle(self._display_surf,
                            color,
@@ -225,8 +210,7 @@ class Renderer:
         for v in verts:
             obj_location = (obj_pos + v.rotated(obj.angle) - center)
             obj_location = obj_location.rotated(-angle)
-            p = scale(screen_factor,(obj_location + screen_view_center))
-            p = to_pygame(p, self._display_surf)
+            p = scale(screen_factor,obj_location ) + screen_view_center
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
                 color,
@@ -249,15 +233,12 @@ class Renderer:
         for v in verts:
             obj_location = (obj_pos + v.rotated(body_angle) - center)
             obj_location = obj_location.rotated(-angle)
-            p = scale(screen_factor,(obj_location + screen_view_center))
-            p = to_pygame(p, self._display_surf)
+            p = scale(screen_factor,obj_location) +screen_view_center
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
                 color,
                 new_verts,
                 0)
-
-
 
 
     def _draw_object(self, center, obj:GObject, angle, screen_factor, screen_view_center, color=None):
@@ -277,8 +258,9 @@ class Renderer:
                     image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
                 rect = image.get_rect()
 
-                image_loc = scale(screen_factor, ((obj_pos- center - obj.image_offset).rotated(-angle)  + screen_view_center))
-                image_loc = to_pygame(image_loc, self._display_surf)
+                # image_loc = scale(screen_factor, ((obj_pos- center - obj.image_offset).rotated(-angle)  + screen_view_center))
+                image_loc = scale(screen_factor, obj_pos- center - obj.image_offset)  + screen_view_center
+
                 rect.center = image_loc
                 
                 # self._display_surf.blit(image,rect)
@@ -311,7 +293,6 @@ class Renderer:
                                     angle = angle,
                                     center = center)
                 elif type(shape) == Polygon:
-                    
                     self._draw_polygon(obj,
                                     shape,
                                     color,
@@ -323,16 +304,15 @@ class Renderer:
 
     def draw_grid_line(self,p1,p2,angle,center,screen_view_center,color,screen_factor):
         p1 = (p1 - center).rotated(angle)
-        p1 = scale(screen_factor, (p1 + screen_view_center))
-        p1 = to_pygame(p1, self._display_surf)
+        p1 = scale(screen_factor, (p1 )) + screen_view_center
+        p1 = p1
 
         p2 = (p2 - center).rotated(angle)
-        p2 = scale(screen_factor, (p2 + screen_view_center))
-        p2 = to_pygame(p2, self._display_surf)
+        p2 = scale(screen_factor, (p2)) + screen_view_center
         pygame.draw.line(self._display_surf,
                 color,
-                to_pygame(p1,self._display_surf),
-                to_pygame(p2,self._display_surf),
+                p1,
+                p2,
                 1)
 
 
@@ -371,84 +351,80 @@ class Renderer:
         # TODO: Need to adjust with angle
         center_bottom = center - Vector(0,100)
         for lst in object_list_depth_sorted:
-            lst.sort(key=lambda o: -o.get_position().get_distance(center_bottom))
+            lst.sort(key=lambda o: o.get_position().get_distance(center_bottom))
         return object_list_depth_sorted
 
+    def ta(self,val):
+        return int((val//self.config.tile_size) * self.config.tile_size)
 
     def _draw_background_image(self, image, center,  angle, screen_factor, screen_view_center):
 
         rect = image.get_rect()
-        # image_loc = scale(screen_factor, Vector(self.background_center[0],self.background_center[1]))
-        bkround_center = Vector(self.background_center[0],self.background_center[1])
-        # image_loc = scale(screen_factor, -center)  + screen_view_center
-        # image_loc = bkround_center
-        image_loc = bkround_center[0] - self.background_size[0]/2, bkround_center[1] - self.background_size[1]/2#scale(screen_factor, ((- center + bkround_center).rotated(-angle)  + screen_view_center))
-        # image_loc = scale(screen_factor, ((- center).rotated(-angle))  + screen_view_center)
-        # image_loc = to_pygame(image_loc, self._display_surf)
+        image_loc = scale(
+            Vector(self.background_center[0] - center.x, 
+                self.background_center[1]  - center.y),
+             screen_factor) + screen_view_center
         rect.center = image_loc
-        
-        # self._display_surf.blit(image,rect)
         self._display_surf.blit(image,rect)
+
 
     def check_bounds(self, cv,cs, bv, bs):
         return ((bv - bs/2) >= (cv - cs/2)) or ((bv+bs/2) <= (cv + cs/2))
         
 
     def get_background_image(self,center,screen_factor):
-        surface_width = int(self.view_width*3)
-        surface_height = int(self.view_height*3)
-        sur_center_x = surface_width/2 - center.x
-        sur_center_y = surface_height/2 - center.y
-        if self.background is not None:
-            # print(f"updates:{self.background_updates}  ctr:{sur_center_x} {sur_center_y}  view:{self.view_width}x{self.view_height}  bg_center:{self.background_center} bg_size:{self.background_size}")
 
+        # Align with tile coords
+        center = Vector(self.ta(center.x),self.ta(center.y))
+
+        # Align and make sure odd number of tiles so center can be a single tile
+        surface_width = self.ta(self.view_width/2) * 5 + self.config.tile_size
+        surface_height = self.ta(self.view_height/2) *5 + self.config.tile_size
+
+        if screen_factor == self.background_screen_factor and self.background is not None:
             need_update = self.check_bounds(
-                sur_center_x,
+                center.x,
                 self.view_width,
                 self.background_center[0],
                 self.background_size[0])
             if not need_update:
-                # print("No update needed?")
                 need_update = self.check_bounds(
-                    sur_center_y,
+                    center.y,
                     self.view_height,
                     self.background_center[1],
                     self.background_size[1])
                 if not need_update:
                     return self.background
             
-            
-        print("GETTING NEW BACKGROUND")
-        xoffset = 0#self.config.tile_size/2
-        yoffset = 0#self.config.tile_size/2
-
         tilemap = self.asset_bundle.tilemaploader.get_tilemap("")
+        
+        # Center tile for tile image id lookup
+        sur_center_x = surface_width/2 - center.x
+        sur_center_y = surface_height/2 - center.y
         sur_center_tile_x =sur_center_x // self.config.tile_size
         sur_center_tile_y =sur_center_y // self.config.tile_size
 
         tmp_surface = pygame.Surface((surface_width, surface_height))
-        for tile_x in range(surface_width//self.config.tile_size):
-            ltile_x = (sur_center_tile_x - tile_x) 
-            for tile_y in range(surface_height//self.config.tile_size):
-                ltile_y = (sur_center_tile_y - tile_y) 
-                background_image_id = tilemap.get_by_loc(ltile_x,ltile_y)
-                image = self.get_image_by_id(background_image_id)
-                #                image = self.get_scaled_image_by_id(background_image_id,screen_factor[0],screen_factor[1])
+        for z in tilemap.get_layers():
+            for tile_x in range(surface_width//self.config.tile_size):
+                ltile_x = (tile_x - sur_center_tile_x) 
+                for tile_y in range(surface_height//self.config.tile_size):
+                    ltile_y = (tile_y - sur_center_tile_y) 
+                    background_image_id = tilemap.get_by_loc(ltile_x,ltile_y,z)
+                    if background_image_id is not None:
+                        tile_image = self.get_image_by_id(background_image_id)
 
-                
-                pos = (int(tile_x * self.config.tile_size -xoffset),int(tile_y * self.config.tile_size -yoffset))
-                pos = to_pygame(pos,tmp_surface)
-                tmp_surface.blit(image,pos)
+                        rect = tile_image.get_rect()
+                        tile_pos = (int(tile_x * self.config.tile_size ),int(tile_y * self.config.tile_size))
+                        rect.topleft = tile_pos
+                        tmp_surface.blit(tile_image,rect)
 
         
         image_size = int(surface_width*screen_factor[0]),int(surface_height*screen_factor[1])
-        
-        # if image_size[0]> 50000:
-        #     image_size = 200,200
 
-        # tmp_surface = pygame.transform.scale(tmp_surface,image_size)
+        tmp_surface = pygame.transform.scale(tmp_surface,image_size)
         self.background = tmp_surface
-        self.background_center = (sur_center_x,sur_center_y)
+        self.background_center = center
         self.background_size = surface_width, surface_height
         self.background_screen_factor = screen_factor
         self.background_updates+=1
@@ -456,14 +432,13 @@ class Renderer:
 
     # TODO: Clean this up
     def process_frame(self,
-                    render_time,
                     player:Player):
        
         if not self.initialized:
             self.initialize()
 
         # import pdb;pdb.set_trace()
-        self._display_surf.fill((150, 130, 80))
+        self._display_surf.fill((0, 0, 0))
 
         angle = 0
         camera:Camera = None
@@ -486,7 +461,12 @@ class Renderer:
         
         center = center - camera.position_offset
         screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
-        screen_view_center = Vector(self.view_width, self.view_height) / 2.0
+        screen_view_center = scale(screen_factor,Vector(self.view_width, self.view_height) / 2.0)
+
+
+        background = self.get_background_image(center,screen_factor)
+        self._draw_background_image(background,center,0,screen_factor,screen_view_center)
+        
 
         if self.config.draw_grid:
             self._draw_grid(center, 
@@ -494,16 +474,11 @@ class Renderer:
                 screen_factor, 
                 screen_view_center, 
                 size=self.config.tile_size, 
-                view_type= self.config.view_type)
-
-        background = self.get_background_image(center,screen_factor)
-
-        self._draw_background_image(background,center,0,screen_factor,screen_view_center)
-
-
-
+                view_type= self.config.view_type,
+                color=(20,20,20))
+        
+        
         obj_list_sorted_by_depth= self.filter_objects_for_rendering(gamectx.object_manager.get_objects(),camera)
-
         
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
             obj:GObject
@@ -513,30 +488,25 @@ class Renderer:
                 self._draw_object(center, obj, angle, screen_factor, screen_view_center, obj.shape_color)
             
         if self.config.show_console:
-            background_color = (0,0,0)
-            pygame.draw.rect(self._display_surf, background_color, pygame.Rect(0, 0, self.width, int(self.height/6)))
+            #background_color = (0,0,0)
+            # pygame.draw.rect(self._display_surf, background_color, pygame.Rect(0, 0, self.width, int(self.height/6)))
             lines = ["FPS:{}".format(self.fps_counter.avg())]
             lines.append("FPS2:{}".format(self.fps_clock.get_fps()))
             if self.log_info is not None:
                 lines.append(self.log_info)
             self.render_to_console(lines,x=5, y=int(self.width /2))
 
-        # pygame.draw.rect(self._display_surf, 
-        #     (250,250,250), 
-        #     pygame.Rect(screen_view_center.x * screen_factor.x, screen_view_center.y * screen_factor.y, 5,5))
 
+        if self.debug:
+            pos_x, pos_y = (center.x * screen_factor.x, center.y * screen_factor.y)
 
-        # pos_x, pos_y = to_pygame((center.x * screen_factor.x, center.y * screen_factor.y),self._display_surf)
-        pos_x, pos_y = (center.x * screen_factor.x, center.y * screen_factor.y)
-        # pos_x, pos_y = center.x, center.y #to_pygame((center.x, center.y),self._display_surf)
+            pygame.draw.rect(self._display_surf, 
+                (0,250,250), 
+                pygame.Rect(center.x+ self.width/2, center.y+self.height/2, 5,5))
 
-        # pygame.draw.rect(self._display_surf, 
-        #     (0,250,250), 
-        #     pygame.Rect(*to_pygame((self.b.x, center.y), self._display_surf), 5,5))
-
-        pygame.draw.rect(self._display_surf, 
-            (0,250,250), 
-            pygame.Rect(*to_pygame((center.x, center.y), self._display_surf), 5,5))
+            pygame.draw.rect(self._display_surf, 
+                (255,255,50), 
+                pygame.Rect(self.width/2, self.height/2, 5,5))
 
     def render_frame(self):
         self.fps_counter.tick()

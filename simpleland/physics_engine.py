@@ -44,6 +44,11 @@ class GridSpace:
         self.coord_to_obj= {}
         self.obj_to_coord = {}
         self.tracked_objs ={}
+        # NOT USED
+        self.sectors = {}
+
+    def get_sector_id(self,coord):
+        return coord[0] // 20, coord[1] // 20
 
     def get_objs_at(self,coord):
         return self.coord_to_obj.get(coord,[])
@@ -95,10 +100,10 @@ class GridPhysicsEngine:
 
     def vec_to_coord(self,v):
         
-        return (int(v.x / self.tile_size),int(v.y / self.tile_size))
+        return (round(v.x / self.tile_size),round(v.y / self.tile_size))#(round(v.x / self.tile_size),round(v.y / self.tile_size))
 
     def coord_to_vec(self,coord):
-        return Vector(float(coord[0] * self.tile_size),float(coord[1] * self.tile_size))
+        return Vector(coord[0] * self.tile_size, coord[1] * self.tile_size)
 
     def set_collision_callback(self, 
             callback, 
@@ -135,7 +140,6 @@ class GridPhysicsEngine:
             new_pos = Vector(round(new_pos.x),round(new_pos.y))
             coord =self.vec_to_coord(new_pos)
             coll_objs_ids = self.space.get_objs_at(coord)
-
             collision_effect = False
             for obj_id_2 in coll_objs_ids:
                 if obj_id_2 != obj.get_id():
@@ -145,11 +149,11 @@ class GridPhysicsEngine:
                     collition_types1 = [shape.collision_type for shape in obj.get_shapes()]
                     collition_types2 = [shape.collision_type for shape in obj2.get_shapes()]
                     for col_type1 in collition_types1:
-                        for col_type2 in collition_types2:
-                            if self.collision_callbacks.get((col_type1,col_type2))(obj,obj2):
+                        for col_type2 in collition_types2:                            
+                            cb = self.collision_callbacks.get((col_type1,col_type2))
+                            if cb is not None and cb(obj,obj2):
                                 collision_effect = True
                     
-
             if not collision_effect:
                 self.space.move_obj_to(coord,obj)
                 obj.position = new_pos

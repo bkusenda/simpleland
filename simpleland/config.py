@@ -14,7 +14,7 @@ class PhysicsConfig(Base):
         self.clock_multiplier = 1
         self.sim_timestep=0.02
         self.player_angular_vel_max = 3
-        self.tile_size = 32
+        self.tile_size = 16
 
 class RendererConfig(Base):
 
@@ -31,7 +31,7 @@ class RendererConfig(Base):
         self.sound_enabled = True
         self.render_to_screen = True 
         self.draw_grid = False
-        self.tile_size = 32
+        self.tile_size = 16
         self.view_type = 0
         self.debug_render_bodies = False
 

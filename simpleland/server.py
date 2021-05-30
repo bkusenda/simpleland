@@ -20,6 +20,7 @@ from simpleland.registry import load_game_content, load_game_def
 from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
 import traceback
+import time
 from simpleland import gamectx
 from .clock import clock
 
@@ -80,6 +81,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
         response_data = {}
         response_data['info'] = {
             'server_tick': clock.get_tick_counter(),
+            'server_time': clock.get_game_time(),
             'message': "UPDATE",
             'client_id': client.get_id(),
             'player_id': player.get_id(),

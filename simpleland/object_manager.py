@@ -10,6 +10,7 @@ class GObjectManager:
 
     def __init__(self):
         self.objects: Dict[str, GObject] = {}
+        
 
     def add(self,obj: GObject):
         # self.objects[obj.get_id()] = obj

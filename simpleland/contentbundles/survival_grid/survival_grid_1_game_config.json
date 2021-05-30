@@ -1,0 +1,32 @@
+{
+ "game_id": "survival_grid",
+ "tile_size": 16,
+ "start_map": "main",
+ "asset_bundle": "asset_bundle",
+ "player_types": {
+  "1": {
+   "default_camera_zoom": 160,
+   "object_type": "human"
+  }
+ },
+ "maps": {
+  "main": {
+   "format": "txt",
+   "layers": [
+    "may_layer_1.txt"
+   ]
+  }
+ },
+ "objects": {
+  "human1": {
+   "obj_type": "Human",
+   "sound_config": "human_sound1",
+   "model_config": "model_config"
+  },
+  "monster1": {
+   "obj_type": "Human",
+   "sound_config": "human_sound1",
+   "model_config": "model_config"
+  }
+ }
+}

@@ -40,7 +40,6 @@ class GameContext:
         self.content:Content=None
         self.state = None
         self.step_counter = 0
-        self.last_position_lookup = {}
 
         self.tick_rate = None
         self.pre_event_callback = lambda : []
@@ -63,16 +62,15 @@ class GameContext:
 
         self.state = "RUNNING"
         self.tick_rate = self.config.tick_rate
+        clock.set_tick_rate(self.tick_rate)
         self.step_counter = 0
-        self.last_position_lookup = {}
 
         self.content = content
-        if not self.config.client_only_mode:
-            print("Loading Game Content.")
-            content.load()
+
+        self.content.load(self.config.client_only_mode)
 
     def tick(self):
-        clock.tick(self.tick_rate)
+        clock.tick()
 
     def get_content(self)->Content:
         return self.content
@@ -107,9 +105,9 @@ class GameContext:
         client:RemoteClient = client
         snapshot_timestamp = clock.get_time()
         om_snapshot = self.object_manager.get_snapshot_update(client.last_snapshot_time_ms)
+        # om_snapshot = self.object_manager.get_snapshot_full()
         pm_snapshot = self.player_manager.get_snapshot() # TODO, updates since
         eventsnapshot = client.pull_events_snapshot()
-        # em_snapshot = self.event_manager.get_snapshot_for_client(client.last_snapshot_time_ms)
         return snapshot_timestamp, {
             'om':om_snapshot,
             'pm':pm_snapshot,
@@ -133,26 +131,33 @@ class GameContext:
 
         return obj
     
-    def load_object_snapshot(self, timestamp,data):
+    def load_object_snapshot(self, data, client_obj_ids=set()):
+        client_obj_snapshots = {}
         for odata in data:
-            current_obj = self.object_manager.get_by_id(odata['data']['id'])
+            obj_id = odata['data']['id']
+            current_obj = self.object_manager.get_by_id(obj_id)    
             if current_obj is None:
                 obj = self.build_object_from_dict(odata)
                 self.add_object(obj)
+                obj.sync_position()
             else:
-                current_obj.load_snapshot(timestamp,odata)
+                if obj_id in client_obj_ids:
+                    client_obj_snapshots[obj_id] = odata
+                else:
+                    current_obj.load_snapshot(odata)
+                    current_obj.sync_position()
+        return client_obj_snapshots
 
 
-    def load_snapshot(self,snapshot):
-        snapshot_timestamp = snapshot['timestamp']
+    def load_snapshot(self,snapshot,client_obj_ids=set()):
+        client_obj_snapshots = {}
         if 'om' in snapshot:
-            self.load_object_snapshot(
-                snapshot_timestamp,
-                snapshot['om'])
+            client_obj_snapshots = self.load_object_snapshot(snapshot['om'],client_obj_ids)
         if 'pm' in snapshot:
             self.player_manager.load_snapshot(snapshot['pm'])
         if 'em' in snapshot:
             self.event_manager.load_snapshot(snapshot['em'])
+        return client_obj_snapshots
 
     def run_pre_event_processing(self):
         """
@@ -214,7 +219,6 @@ class GameContext:
         self.player_manager.add_player(player) 
 
     def add_object(self,obj:GObject):
-        # print(f"ADDING OBJECT {obj.get_id()}")       
         obj.set_last_change(clock.get_time())
         self.object_manager.add(obj)
         self.physics_engine.add_object(obj)
@@ -303,8 +307,8 @@ class GameContext:
 
     def run_step(self):
         self.run_event_processing()
+        self.run_physics_processing()
         if not self.config.client_only_mode:
-            self.run_physics_processing()
             self.run_update()
 
         self.tick()

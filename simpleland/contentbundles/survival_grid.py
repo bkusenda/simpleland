@@ -59,31 +59,16 @@ def process_water_collision(player_obj:AnimateObject, obj):
     player_obj.health =  0
     return False
 
-def process_monster_collision(pobj:GObject, mobj:GObject):
-    # pobj.set_data_value("health", pobj.get_data_value('health')-1)
-    return mobj.collision
-
 def default_collision_callback(obj1: PhysicalObject, obj2: PhysicalObject):
-    if obj1.type == "player" and obj2.type == "food":
+    if obj1.type == "human" and obj2.type == "food":
         return process_food_collision(obj1, obj2)
-    elif obj1.type == "player" and obj2.type == "water":
+    elif ('animal' in obj1.get_types() and obj2.type == "water") or ('water' in obj1.get_types() and 'animal' in obj2.get_types()):
         return process_water_collision(obj1, obj2)
-    elif obj1.type == "player" and obj2.type == "rock":
+    elif 'animal' in obj1.get_types()  and obj2.collision_type >0:
         obj1.default_action()
-        return obj2.collision
-    elif obj1.type == "player" and obj2.type == "player":
-        obj1.default_action()
-        return obj2.collision
-    elif obj1.type == "player" and obj2.type == "tree":
-        obj1.default_action()
-        return obj2.collision
-    elif obj1.type == "player" and obj2.type == "monster":
-        obj1.default_action()
-        return process_monster_collision(obj1,obj2)
-    elif obj1.type == "monster" and obj2.type == "player":
-        obj1.default_action()
-        return process_monster_collision(obj2,obj1)
-    return obj1.collision and obj2.collision
+        return obj2.collision_type
+    
+    return obj1.collision_type >0 and obj1.collision_type == obj2.collision_type
 
 def get_item_map(item_types):
     item_map = {}
@@ -120,26 +105,42 @@ class GameContent(Content):
         self.food_locations = []
         self.loaded = False
         self.tilemap = TileMap()
+        self._speed_factor = None
+        self.call_counter = 0
 
 
 
     def speed_factor(self):
+        if self._speed_factor is not None:
+            return self._speed_factor
+        
         """
         Step size in ticks
         """
         tick_rate = gamectx.tick_rate
-        if not tick_rate:
+        if not tick_rate or tick_rate == 0:
             tick_rate = 1
-        return tick_rate * 1/6
+        self._speed_factor = max(tick_rate * 1/6,1)
+        return self._speed_factor
 
     def get_asset_bundle(self):
         return self.asset_bundle
 
     def get_class_by_type_name(self,name):
-        if name == "Character":
-            return Character
+        if name == "Human":
+            return Human
+        elif name == "Monster":
+            return Monster
+        elif name == "Food":
+            return Food
+        elif name == "Deer":
+            return Deer
         elif name == "Tree":
             return Tree
+        elif name == "Rock":
+            return Rock
+        elif name == "Wood":
+            return Wood
         else:
             return GObject
 
@@ -171,15 +172,18 @@ class GameContent(Content):
         self.spawn_food()
         self.spawn_players()
 
+    # TODO: get from player to object
     def get_observation_space(self):
         x_dim = (self.vision_distance * 2 + 1)
         y_dim = x_dim
         chans = len(self.item_types) + 1
         return spaces.Box(low=0, high=1, shape=(x_dim, y_dim, chans))
 
+    # TODO: get from player to object
     def get_action_space(self):
         return spaces.Discrete(len(self.keymap))
 
+    # TODO: get from player to object
     def get_observation(self, obj: GObject):
         obj_coord = gamectx.physics_engine.vec_to_coord(obj.get_position())
         xvis = self.vision_distance
@@ -226,8 +230,7 @@ class GameContent(Content):
             food_reward_count = obj.reward
             obj.reward = 0
             reward = food_reward_count
-            # if energy == 0:
-            #     reward += -1
+
             if done:
                 reward = -5
         else:
@@ -247,7 +250,6 @@ class GameContent(Content):
     # NEW PLAYER
     # **********************************
     def new_player(self, client_id, player_id=None, player_type=0, is_human=False) -> Player:
-        # Create Player
         if player_id is None:
             player_id = gen_id()
         player = gamectx.player_manager.get_player(player_id)
@@ -271,7 +273,7 @@ class GameContent(Content):
         if player.get_object_id() is not None:
             character = gamectx.object_manager.get_by_id(player.get_object_id())
         else:
-            character= Character(config=self.config['player_config'] ,player=player)
+            character= Human(config=self.config['human_config'] ,player=player)
             self.characters[player.get_id()] = character
         if reset:
             self.reset_player(player)
@@ -298,22 +300,38 @@ class GameContent(Content):
     # **********************************
     # GAME LOAD
     # **********************************
-    def load(self):
+    def load(self, is_client_only=False):
         self.loaded = False
-        WorldMap(map_layers)
+        if not is_client_only:
+            WorldMap(map_layers)
 
         gamectx.physics_engine.set_collision_callback(
             default_collision_callback,
             COLLISION_TYPE['default'],
             COLLISION_TYPE['default'])
-
         self.loaded = True
 
     ########################
     # GET INPUT
     ########################
+
+    def is_valid_input_event(self, input_event:InputEvent):
+        # TODO: Switch to filter multiple input events
+        
+        player = gamectx.player_manager.get_player(input_event.player_id)
+        
+        if player is None or not player.get_data_value("allow_input",False) or player.get_data_value("reset_required",False):
+            return False
+
+        obj:Human = gamectx.object_manager.get_by_id(player.get_object_id())
+
+        if obj is not None and obj.get_action().get('blocking',True):
+            return False
+        return True
+
     def process_input_event(self, input_event:InputEvent):
         events= []
+
 
         player = gamectx.player_manager.get_player(input_event.player_id)
         if player is None:
@@ -323,7 +341,7 @@ class GameContent(Content):
             return []
         keys = set(input_event.input_data['inputs'])
 
-        obj:Character = gamectx.object_manager.get_by_id(player.get_object_id())
+        obj:Human = gamectx.object_manager.get_by_id(player.get_object_id())
 
         if 27 in keys:
             print("QUITTING")
@@ -337,24 +355,19 @@ class GameContent(Content):
             print("Episode is over. Reset required")
             return events
 
-        # Queued action prevents movement until complete. Trigger at a certain time and releases action lock later but 
-        # if  clock.get_tick_counter() < obj.get_data_value("action_completion_time",0):
-        #     return events
-        if obj.get_action().get('blocking',True):
-            return events
 
         # Object Movement
         actions_set = set()
         direction = Vector.zero()
         angle_update = None
         if 23 in keys:
-            direction = Vector(0, 1)
-            angle_update = 0
+            direction = Vector(0, -1)
+            angle_update = math.pi
             actions_set.add("MOVE")
 
         if 19 in keys:
-            direction = Vector(0, -1)
-            angle_update = math.pi
+            direction = Vector(0, 1)
+            angle_update = 0
             actions_set.add("MOVE")
 
         if 4 in keys:
@@ -376,6 +389,9 @@ class GameContent(Content):
         if 18 in keys:
             actions_set.add("ATTACK")
 
+        if  7 in keys:
+            actions_set.add("PUSH")
+
         if 0 in keys:
             actions_set.add("NA")
 
@@ -388,6 +404,8 @@ class GameContent(Content):
             obj.drop()
         elif "ATTACK" in actions_set:
             obj.attack()
+        elif "PUSH" in actions_set:
+            obj.push()
         elif "MOVE" in actions_set:
             obj.walk(direction,angle_update)
 
@@ -408,7 +426,7 @@ class GameContent(Content):
                 o.update()
 
 
-    def post_process_frame(self, render_time, player: Player, renderer: Renderer):
+    def post_process_frame(self, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:
             lines = []
             lines.append("Lives Used: {}".format(player.get_data_value("lives_used", 0)))
@@ -423,6 +441,7 @@ class GameContent(Content):
                 inventory_st = " ".join([f"{k}:{v}" for k,v in inv.items()])
                 lines.append(f"H:{obj_health}, E:{obj_energy}, S:{obj_stamina}")
                 lines.append(f"Inventory: {inventory_st}")
+   
 
             if renderer.config.show_console:
                 renderer.render_to_console(lines, x=5, y=5)

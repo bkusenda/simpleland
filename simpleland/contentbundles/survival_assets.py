@@ -15,6 +15,8 @@ from ..player import Player
 from ..event import (DelayedEvent)
 from .survival_config import TILE_SIZE
 from .survival_utils import coord_to_vec
+import numpy as np
+from gym import spaces
 
 # map_layer_1 = (
 #     f"gggggggggggggggggggggggggggggg\n"
@@ -43,17 +45,76 @@ from .survival_utils import coord_to_vec
 # s
 
 map_layer_2 = (
-
-    f"          rrrrrrrrrrrrrr\n"
-    f"  t            t     fffffffr\n"
-    f"                   r\n"
-    f"    t          t  t   r rr\n"
-    f"       f        r         m  r\n"
-    f"   t      s     f  s      r\n"
-    f"              d           r\n"
-    f"      m           \n"
-
+    f"wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww\n"
+    f"w  m                                  rrrrw\n"
+    f"w                          t     s      trw\n"
+    f"w    t                              f    rw\n"
+    f"w                                        rw\n"
+    f"w                                        rw\n"
+    f"w         f     f                        rw\n"
+    f"w   f                                    rw\n"
+    f"w                             f          rw\n"
+    f"w                                        rw\n"
+    f"w                                        rw\n"
+    f"w                               b        rw\n"
+    f"w   t                                     w\n"
+    f"w           f                   t     m trw\n"
+    f"w    t                                   rw\n"
+    f"w                                       r w\n"
+    f"w                                       r w\n"
+    f"w                                       r w\n"
+    f"w                 f                     r w\n"
+    f"w                               b        rw\n"
+    f"w   t                                     w\n"
+    f"w           f                   t     m  tw\n"
+    f"w    t                                   rw\n"
+    f"w                             f         r w\n"
+    f"w                       f               r w\n"
+    f"w                                       r w\n"
+    f"w         f                     b        rw\n"
+    f"w   t                      m              w\n"
+    f"w                      f         t       rw\n"
+    f"w   s  d                         d       rw\n"
+    f"wrrrrrrrrr            f  rrrrrrrrrrrrrrrr w\n"
+    f"wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww\n"
 )
+
+
+# map_layer_2 = (
+#     f"\n"
+#     f"  m                                  rrrr\n"
+#     f"                          t     s      tr\n"
+#     f"    t                              f    r\n"
+#     f"                                        r\n"
+#     f"                                        r\n"
+#     f"         f     f                        r\n"
+#     f"   f                                    r\n"
+#     f"                             f          r\n"
+#     f"                                        r\n"
+#     f"                                        r\n"
+#     f"                               b        r\n"
+#     f"   t                                     \n"
+#     f"           f                   t     m tr\n"
+#     f"    t                                   r\n"
+#     f"                                       r \n"
+#     f"                                       r \n"
+#     f"                                       r \n"
+#     f"                 f                     r \n"
+#     f"                               b        r\n"
+#     f"   t                                     \n"
+#     f"           f                   t     m  t\n"
+#     f"    t                                   r\n"
+#     f"                             f         r \n"
+#     f"                       f               r \n"
+#     f"                                       r \n"
+#     f"         f                     b        r\n"
+#     f"   t                      m              \n"
+#     f"                      f         t       r\n"
+#     f"   s  d                         d       r\n"
+#     f"rrrrrrrrr            f  rrrrrrrrrrrrrrrr \n"
+#     f"\n"
+# )
+
 
 map_layers = [map_layer_2]
 
@@ -61,7 +122,7 @@ map_layers = [map_layer_2]
 import hashlib
 
 
-def rand_int_from_coord(x,y,seed):
+def rand_int_from_coord(x,y,seed=123):
     v =  (x + y * seed ) % 12783723
     h = hashlib.sha1()
     h.update(str.encode(f"{v}"))
@@ -76,13 +137,21 @@ class TileMap:
 
     def __init__(self,seed = 123):
         self.seed = seed
+
+    def get_layers(self):
+        return range(2)
         
-    def get_by_loc(self,x,y):
+    def get_by_loc(self,x,y, layer_id):
+        if layer_id == 0:
+            return get_tile_image_id(x,y,self.seed)
+        
+        loc_id = rand_int_from_coord(x,y,self.seed)
         if x ==0 and y==0:
             return "baby_tree"
         if x ==2 and y==3:
             return "baby_tree"
-        return get_tile_image_id(x,y,self.seed)
+        return None
+    
 
 class TileMapLoader:
 
@@ -245,9 +314,9 @@ def load_asset_bundle():
     # OTHER
     image_assets['grass1'] = ('assets/tinyadventurepack/Other/Misc/Grass.png', None)
     image_assets['grass2'] = ('assets/tinyadventurepack/Other/Misc/Grass2.png', None)
-    # image_assets['grass3'] = ('assets/tinyadventurepack/Other/Misc/Grass3.png', None)
+    image_assets['grass3'] = ('assets/tinyadventurepack/Other/Misc/Grass3.png', None)
     
-    image_assets['grass3'] = ('assets/tinyadventurepack/Other/Green_orb.png', None)
+    # image_assets['grass3'] = ('assets/tinyadventurepack/Other/Green_orb.png', None)
     
     image_assets['tree'] = ('assets/tinyadventurepack/Other/Misc/Tree/Tree.png', None)
     image_assets['tree_trunk'] = ('assets/tinyadventurepack/Other/Misc/Tree/Tree_trunk.png', None)
@@ -308,14 +377,38 @@ def angle_to_direction(angle):
     angle_num = angle/math.pi
     direction = "down"
     if angle_num < 0.25 and angle_num >= -0.25:
-        direction = "up"
+        direction = "down"
     elif angle_num > 0.25 and angle_num <= 0.75:
         direction = "left"
     elif angle_num < -0.25 and angle_num >= -0.75:
         direction = "right"
     elif abs(angle_num) >= 0.75:
-        direction = "down"
+        direction = "up"
     return direction
+
+
+type_tree={
+    'physical_object': None,
+    'plant': 'physical_object',
+    'tree': 'plant',
+    'bush':'plant',
+    'monster': 'animal',
+    'human': 'animal',
+    'deer': 'animal',
+    'rock': 'physical_object',
+}
+
+def get_types(cur_type):
+    all_types = set()
+    done = False
+    while not done:
+        all_types.add(cur_type)
+        new_type = type_tree.get(cur_type)
+        if new_type is None:
+            break
+        else:
+            cur_type = new_type
+    return all_types
 
 """
 'type': 'idle',
@@ -344,13 +437,15 @@ class PhysicalObject(GObject):
     def __init__(self,config={}, *args,**kwargs):
         super().__init__(*args,**kwargs)
         self.config = config
-        self.type="NA"
+        self.type = "physical_object"
+        self._types = None
         self.image_id_default = None
         self.health = 50
         self.created_tick = 0
         self.animated = True
         self.breakable = True
-        self.collision = True
+        self.collision_type = 1
+        self.pushable = True
 
         # Can it be placed in inventory?
         self.collectable = False
@@ -365,9 +460,11 @@ class PhysicalObject(GObject):
         self.default_action()
         self.disable()
         ShapeFactory.attach_rectangle(self, width=TILE_SIZE, height=TILE_SIZE)
-        gamectx.add_object(self)
+
 
     def spawn(self,position):
+        gamectx.add_object(self)
+
         self._action = {
             'type': 'spawn',
             'ticks':1,
@@ -379,6 +476,11 @@ class PhysicalObject(GObject):
         self.created_tick = clock.get_tick_counter()
         self.enable()
         self.set_position(position=position)
+
+    def get_types(self):
+        if self._types is None:
+            self._types = get_types(self.type)
+        return self._types
 
     def get_action(self):
         cur_tick = clock.get_tick_counter()
@@ -398,8 +500,8 @@ class PhysicalObject(GObject):
 
         }
 
-    def move(self, direction, new_angle):
-        move_speed = 1/3
+    def move(self, direction, new_angle, move_speed = 1):
+        
         direction = direction * 1
         if new_angle is not None and self.angle != new_angle:
             ticks_in_action = gamectx.content.speed_factor()/move_speed
@@ -420,7 +522,7 @@ class PhysicalObject(GObject):
 
         self.update_position(new_pos)
 
-    def get_image_id(self, angle):
+    def get_image_id(self, angle=0):
         action = self.get_action()
         sprites = self.sprites.get(action['type'])
         if sprites is None:
@@ -442,6 +544,7 @@ class PhysicalObject(GObject):
         action = self.get_action()
         if action.get('start_position') is not None:
             idx = cur_tick - action['start_tick']
+            # if idx > 0:
             direction = (self.position - action['start_position']).normalized()
             view_position = action['step_size'] * idx * direction + action['start_position']
             return view_position
@@ -449,8 +552,12 @@ class PhysicalObject(GObject):
 
     def receive_damage(self, attacker_obj, damage):
         self.health -= damage
-        if self.health <0:
-            self.destroy()
+
+
+    def receive_push(self,pusher_obj,power, direction):
+        if not self.pushable or not self.collision_type:
+            return
+        self.move(direction,None)
 
     def destroy(self):
         if self.breakable:
@@ -490,6 +597,8 @@ class AnimateObject(PhysicalObject):
         self.inventory_capacity = 1
         self.inventory_slots = 1
         self.selected_item = None
+        self.walk_counter = 0
+
 
 
     def spawn(self,position:Vector):
@@ -502,6 +611,36 @@ class AnimateObject(PhysicalObject):
         self.next_energy_decay = 0
         self.next_health_gen = 0
         self.next_stamina_gen =0
+
+    # TODO: not in use
+    def get_observation_space(self):
+        x_dim = (gamectx.content.vision_distance * 2 + 1)
+        y_dim = x_dim
+        chans = len(gamectx.content.item_types) + 1
+        return spaces.Box(low=0, high=1, shape=(x_dim, y_dim, chans))
+
+    # TODO: not in use
+    def get_observation(self):
+        obj_coord = gamectx.physics_engine.vec_to_coord(self.get_position())
+        vrad = self.vision_radius
+        
+        col_min = obj_coord[0] - vrad
+        col_max = obj_coord[0] + vrad
+        row_min = obj_coord[1] - vrad
+        row_max = obj_coord[1] + vrad
+        results = []
+        for r in range(row_max, row_min-1, -1):
+            row_results = []
+            for c in range(col_min, col_max+1):
+                obj_ids = gamectx.physics_engine.space.get_objs_at((c, r))
+                if len(obj_ids) > 0:
+                    obj_id = obj_ids[0]
+                    obj_seen = gamectx.object_manager.get_by_id(obj_id)
+                    row_results.append(gamectx.content.item_map.get(obj_seen.get_data_value('type')))
+                else:
+                    row_results.append(gamectx.content.default_v)
+            results.append(row_results)
+        return np.array(results)
 
     def set_player(self,player:Player):
         self.player_id = player.get_id()
@@ -538,12 +677,16 @@ class AnimateObject(PhysicalObject):
     def modify_inventory(self, name, count):
         self.inventory[name] = self.get_item_amount(name) + count
 
+    def receive_push(self,*args,**kwargs):
+        super().receive_push(*args,**kwargs)
+        self.stunned()
+
     def walk(self, direction, new_angle):
         walk_speed = self.walk_speed
         if self.stamina <= 0:
             walk_speed = walk_speed/2
         else:
-            self.stamina -= 15
+            self.stamina -= 0
 
         direction = direction * self.velocity_multiplier
         self.angle = new_angle
@@ -560,6 +703,7 @@ class AnimateObject(PhysicalObject):
                 'start_position': self.position,
                 'blocking':True
             }
+        self.walk_counter +=1
 
         self.update_position(new_pos)
 
@@ -567,13 +711,12 @@ class AnimateObject(PhysicalObject):
 
         ticks_in_action = int(gamectx.content.speed_factor())
 
-        direction = Vector(0, 1).rotated(self.angle)
+        direction = Vector(0, 1).rotated(self.angle).normalized()
 
         target_pos = self.get_position() + (direction * TILE_SIZE)
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
         for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
             target_obj:PhysicalObject = gamectx.object_manager.get_by_id(oid)
-            print(target_obj.type)
             if target_obj.collectable:
                 gamectx.remove_object(target_obj)
                 self.modify_inventory(target_obj.type, 1)
@@ -584,6 +727,16 @@ class AnimateObject(PhysicalObject):
                 'start_tick': clock.get_tick_counter(),
                 'ticks': ticks_in_action,
                 'step_size': TILE_SIZE/ticks_in_action
+            }
+
+    def stunned(self):
+        ticks_in_action = int(gamectx.content.speed_factor())  * 10 
+        self._action = \
+            {
+                'type': 'stunned',
+                'start_tick': clock.get_tick_counter(),
+                'ticks': ticks_in_action,
+                'step_size': TILE_SIZE/ticks_in_action,
             }
 
     def drop(self):
@@ -617,14 +770,15 @@ class AnimateObject(PhysicalObject):
         else:
             self.stamina -= 15
 
-        ticks_in_action = int(gamectx.content.speed_factor()/attack_speed)
+        ticks_in_action = round(gamectx.content.speed_factor()/attack_speed)
         direction = Vector(0, 1).rotated(self.angle)
         target_pos = self.get_position() + (direction * TILE_SIZE)
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
 
         for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
             obj2: PhysicalObject = gamectx.object_manager.get_by_id(oid)
-            obj2.receive_damage(self, self.attack_strength)
+            if obj2.collision_type > 0:
+                obj2.receive_damage(self, self.attack_strength)
 
         self._action =\
             {
@@ -634,8 +788,35 @@ class AnimateObject(PhysicalObject):
                 'step_size': TILE_SIZE/ticks_in_action,
             }
 
+    def push(self):
+        attack_speed = self.attack_speed
+
+        if self.stamina <= 0:
+            attack_speed = attack_speed/2
+        else:
+            self.stamina -= 15
+
+        ticks_in_action = round(gamectx.content.speed_factor()/attack_speed)
+        direction = Vector(0, 1).rotated(self.angle)
+        target_pos = self.get_position() + (direction * TILE_SIZE)
+        target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
+
+        for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
+            obj2: PhysicalObject = gamectx.object_manager.get_by_id(oid)
+            obj2.receive_push(self, self.attack_strength,direction)
+
+        self._action =\
+            {
+                'type': 'push',
+                'start_tick': clock.get_tick_counter(),
+                'ticks': ticks_in_action,
+                'step_size': TILE_SIZE/ticks_in_action,
+            }
+
     def update(self):
+
         cur_time = clock.get_time()
+        self.set_last_change(cur_time)
         if cur_time > self.next_energy_decay:
             self.energy = max(0, self.energy - self.config.get('energy_decay',0))
             if self.energy <= 0:
@@ -645,7 +826,7 @@ class AnimateObject(PhysicalObject):
 
         # Health regen
         if cur_time > self.next_health_gen:
-            self.health = min(self.config.get('health_max',0), self.health + self.config.get('health_gen',0))
+            self.health = min(self.config.get('health_max',100), self.health + self.config.get('health_gen',0))
             self.next_health_gen = cur_time + (self.config.get('health_gen_period',0) * gamectx.content.speed_factor())
 
         # Stamina regen
@@ -653,26 +834,27 @@ class AnimateObject(PhysicalObject):
             self.stamina = min(self.config.get('stamina_max',10), self.stamina + self.config.get('stamina_gen',5))
             gen_delay = (self.config.get('stamina_gen_period',0) * gamectx.content.speed_factor())
             self.next_stamina_gen = cur_time + gen_delay
+
+        if self.breakable and self.health <= 0:
+            self.destroy()
         
 
 
-class Character(AnimateObject):
+class Human(AnimateObject):
 
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
-        self.type = "player"
+        self.type = "human"
         self.set_image_id("player_idle_down_1")
         self.sprites={}
         self.sprites['idle'] = player_idle_sprites
         self.sprites['walk'] = player_walk_sprites
         self.sprites['attack'] = player_attack_sprites
 
-        self.next_energy_decay = 0
+        self.next_energy_decay = 10
         self.next_health_gen = 0
         self.attack_strength = 10
         self.health =  40
-    
-
 
     def update(self):
         super().update()
@@ -719,7 +901,7 @@ class Monster(AnimateObject):
 
         # TODO: Actions should be processed as event
         for obj in self.get_visible_objects():
-            if obj.type == "player":
+            if obj.type != self.type and 'animal' in obj.get_types():
                 orig_direction: Vector = obj.get_position() - self.get_position()
                 direction = orig_direction.normalized()
                 updated_x = 0
@@ -751,21 +933,16 @@ class Monster(AnimateObject):
                     self.walk(direction, new_angle)
 
 
+
 class Deer(AnimateObject):
 
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
         self.type = "deer"
         self.set_image_id("deer")
+        self.attack_strength = 3
+        self.health =  100
 
-        # self.set_image_id("skel_idle_down_1")
-        # self.sprites={}
-        # self.sprites['idle'] = skel_idle_sprites
-        # self.sprites['walk'] = skel_walk_sprites
-        # self.sprites['attack'] = skel_walk_sprites
-
-        self.attack_strength = 10
-        self.health =  40
 
     def update(self):
         super().update()
@@ -774,7 +951,7 @@ class Deer(AnimateObject):
 
         # TODO: Actions should be processed as event
         for obj in self.get_visible_objects():
-            if obj.type == "player":
+            if  obj.type != self.type and 'animal' in obj.get_types():
                 orig_direction: Vector = obj.get_position() - self.get_position()
                 direction = orig_direction.normalized()
                 updated_x = 0
@@ -796,14 +973,8 @@ class Deer(AnimateObject):
                     else:
                         updated_y = 0
                 new_angle = Vector(0, 1).get_angle_between(direction)
-                if orig_direction.length <= gamectx.content.tile_size:
-                    direction = Vector(0, 0)
-                else:
-                    direction = Vector(-updated_x, -updated_y)
-                if orig_direction.length <= gamectx.content.tile_size and new_angle == self.angle:
-                    self.attack()
-                else:
-                    self.walk(direction, new_angle)
+                direction = Vector(-updated_x, -updated_y)
+                self.walk(direction, new_angle)
 
 
 class Tree(PhysicalObject):
@@ -811,42 +982,57 @@ class Tree(PhysicalObject):
 
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
-        self.type = "tree"
+        
+        self.type="tree"
         self.health =  100
         self.set_visiblity(False)
+        self.pushable = False
+        self.top_id = None
+        self.trunk_id = None
 
     def spawn(self,position):
         super().spawn(position=position)
-        self.trunk = self.add_tree_trunk()
-        self.top = self.add_tree_top()
+        self.add_tree_trunk()
+        self.add_tree_top()
+
+    
 
     def add_tree_trunk(self):
         o = PhysicalObject(depth=1)
         o.type = "part"
+        o.pushable = False
+        o.collision_type = 0
         o.set_image_id(f"tree_trunk")
         o.spawn(position=self.get_position())
-        o.collision = False
-        return o
+
+        self.trunk_id = o.get_id()
 
     def add_tree_top(self):
         o = PhysicalObject(depth=3)
         o.type = "part"
         o.set_image_id(f"tree_top")
-        o.set_image_offset(Vector(0, -gamectx.content.tile_size*1.4))
-        o.spawn(position=self.get_position())
-        o.collision = False
-        return o
+        o.pushable = False
+        o.set_image_offset(Vector(0, gamectx.content.tile_size*1.4))
+        o.collision_type = 0
+        o.spawn(position=self.get_position())        
+        self.top_id = o.get_id()
+    
+    def get_trunk(self):
+        return gamectx.object_manager.get_by_id(self.trunk_id)
+        
+    def get_top(self):
+        return gamectx.object_manager.get_by_id(self.top_id)
 
     def receive_damage(self, attacker_obj, damage):
         super().receive_damage(attacker_obj, damage)
         if self.health <=0:
-            gamectx.remove_object(self.top)
-            gamectx.remove_object(self.trunk)
+            gamectx.remove_object_by_id(self.top_id)
+            gamectx.remove_object_by_id(self.trunk_id)
             gamectx.remove_object(self)
             Wood().spawn(self.position)
             
         if self.health <20:
-            self.top.disable()
+            self.get_top().disable()
 
         
         
@@ -855,11 +1041,13 @@ class Wood(PhysicalObject):
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
         self.depth = 1
-        self.type =  'wood'
+        self.type = "wood"
+        
         self.set_image_id('wood')
         self.collectable = True
         self.collision = True
         self.breakable = False
+        self.pushable = False
         self.set_shape_color(color=(200, 200, 50))
 
     def spawn(self,position):
@@ -921,19 +1109,20 @@ class Grass(PhysicalObject):
         self.set_shape_color(color=(100, 130, 100))
         self.breakable=False
         self.collision = False
+        self.pushable = False
 
 
 class WorldMap:
 
     def __init__(self,map_layers, seed = 123):
         self.seed = seed
-        Water().spawn(coord_to_vec((0,0)))
-        Water().spawn(coord_to_vec((3,2)))
-        Water().spawn(coord_to_vec((2,3)))
+        Wood().spawn(coord_to_vec((0,0)))
+        # Rock().spawn(coord_to_vec((3,2)))
+        Rock().spawn(coord_to_vec((2,3)))
         for i, layer in enumerate(map_layers):
             lines = layer.split("\n")
             self.spawn_locations = []
-            for ridx, line in enumerate(reversed(lines)):
+            for ridx, line in enumerate(lines):
                 for cidx, ch in enumerate(line):
                     coord = (cidx, ridx)
                     if ch == 'r':
