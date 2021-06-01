@@ -119,13 +119,15 @@ class GridPhysicsEngine:
         obj.set_update_position_callback(self.update_obj_position)
         self.update_obj_position(obj,obj.get_position(),skip_collision_check=True)
 
-    def update_obj_position(self,obj:GObject,new_pos,skip_collision_check=False):
+    def update_obj_position(self,obj:GObject,new_pos,skip_collision_check=False,callback=None):
         if skip_collision_check:
             coord =self.vec_to_coord(new_pos)
             self.space.move_obj_to(coord,obj)
             obj.position = new_pos
+            if callback is not None:
+                callback(True)
         else:
-            self.position_updates[obj.get_id()] = (obj,new_pos)
+            self.position_updates[obj.get_id()] = (obj,new_pos,callback)
 
 
     def remove_object(self,obj):
@@ -134,7 +136,7 @@ class GridPhysicsEngine:
     def update(self):
         obj:GObject
 
-        for obj,new_pos in self.position_updates.values():
+        for obj,new_pos,callback in self.position_updates.values():
             if not obj.enabled:
                 continue
             new_pos = Vector(round(new_pos.x),round(new_pos.y))
@@ -157,6 +159,8 @@ class GridPhysicsEngine:
             if not collision_effect:
                 self.space.move_obj_to(coord,obj)
                 obj.position = new_pos
+                if callback:
+                    callback(True)
 
         self.position_updates = {}
 

@@ -38,7 +38,7 @@ def get_dict_snapshot(obj, exclude_keys = {}):
     _type = type(obj).__name__
     data = {}
     for k, v in obj.__dict__.items():
-        if k in exclude_keys:
+        if k in exclude_keys or k.startswith("__"):
             continue
         if issubclass(type(v), Base):
             data[k] = v.get_snapshot()
@@ -70,7 +70,7 @@ def get_dict_snapshot(obj, exclude_keys = {}):
 def load_dict_snapshot(obj, dict_data, exclude_keys={}):
 
     for k, v in dict_data['data'].items():
-        if k in exclude_keys:
+        if k in exclude_keys or k.startswith("__"):
             continue
         if issubclass(type(v), Base):
             obj.__dict__[k] = v.load_snapshot(obj.__dict__[k], v)

@@ -37,32 +37,13 @@ from .survival_utils import *
 # COLLISION HANDLING
 ############################
 
-def process_food_collision(player_obj: AnimateObject, food_obj:Food):
 
-    food_energy = food_obj.energy
-    player_obj.energy +=food_energy
-
-    #TODO: replace
-    player_obj.reward +=1
-    
-    food_counter = gamectx.data.get('food_counter', 0)
-    gamectx.data['food_counter'] = food_counter - 1
-
-    gamectx.remove_object(food_obj)
-
-    sound_event = SoundEvent(
-        sound_id="bleep")
-    gamectx.add_event(sound_event)
-    return False
-
-def process_water_collision(player_obj:AnimateObject, obj):
-    player_obj.health =  0
+def process_water_collision(obj:AnimateObject, water_obj):
+    obj.health =  0
     return False
 
 def default_collision_callback(obj1: PhysicalObject, obj2: PhysicalObject):
-    if obj1.type == "human" and obj2.type == "food":
-        return process_food_collision(obj1, obj2)
-    elif ('animal' in obj1.get_types() and obj2.type == "water") or ('water' in obj1.get_types() and 'animal' in obj2.get_types()):
+    if ('animal' in obj1.get_types() and obj2.type == "water") or ('water' in obj1.get_types() and 'animal' in obj2.get_types()):
         return process_water_collision(obj1, obj2)
     elif 'animal' in obj1.get_types()  and obj2.collision_type >0:
         obj1.default_action()
@@ -78,17 +59,43 @@ def get_item_map(item_types):
         item_map[k] = v
     return item_map
 
+import pkg_resources
+import json
+import os
+
+def read_json_file(path):
+    try:
+        full_path = pkg_resources.resource_filename(__name__,path)
+        with open(full_path,'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(e)
+        return {}
+
+
+def read_game_config(sub_dir, game_config):
+    game_config = read_json_file(os.path.join(sub_dir,game_config))
+    game_config['asset_bundle'] = read_json_file(
+            os.path.join(sub_dir,game_config['asset_bundle']))
+    for id, obj_data in game_config['objects'].items():
+        obj_data['config'] = read_json_file(os.path.join(sub_dir,obj_data.get('config',"")))
+        obj_data['sounds'] = read_json_file(os.path.join(sub_dir,obj_data.get('sounds',"")))
+        obj_data['model'] = read_json_file(os.path.join(sub_dir,obj_data.get('model',"")))
+    return game_config
+
+
 class GameContent(Content):
 
     def __init__(self, config):
         super().__init__(config)
-        self.asset_bundle = load_asset_bundle()
+        self.config_path = 'survival_grid'
+        self.game_config = read_game_config(self.config_path,'game_config.json')
+        self.asset_bundle = load_asset_bundle(self.game_config['asset_bundle'])
+
+        # TODO, load from game config
         self.default_camera_zoom = config['default_camera_zoom']
-        self.food_energy = config['food_energy']
-        self.food_count = config['food_count']
-        self.tile_size = config['tile_size']
+        self.tile_size = self.game_config['tile_size']
         
-        self.characters = {}
 
         self.item_types = ['tree', 'food', 'rock', 'player', 'wood']
         self.item_map = get_item_map(self.item_types)
@@ -109,7 +116,45 @@ class GameContent(Content):
         self.call_counter = 0
 
 
+        self.spawn_points = {}
+        self.objs = {}
+        
 
+    def add_spawn_point(self,config_id, pos):
+        pos_list = self.get_spawn_points(config_id)
+        pos_list.append(pos)
+        self.spawn_points[config_id] = pos_list
+
+    def get_spawn_points(self,config_id):
+        return self.spawn_points.get(config_id,[])
+
+    def get_object_sprites(self,config_id):
+        return self.game_config['objects'].get(config_id,{}).get('model',{})
+    
+    def get_object_sounds(self,config_id):
+        return self.game_config['objects'].get(config_id,{}).get('sounds',{})
+
+    def add_object(self,object:PhysicalObject):
+        config_id = object.config_id
+        obj_id_set = self.get_objects_by_config_id(config_id)
+        obj_id_set.add(object.get_id())
+        self.objs[config_id] = obj_id_set
+        gamectx.add_object(object)
+
+    def get_objects_by_config_id(self,config_id):
+        return self.objs.get(config_id,set())
+
+    def remove_object_by_id(self,obj_id):
+        obj:PhysicalObject = gamectx.object_manager.get_by_id(obj_id)
+        if obj is not None:
+            self.remove_object(obj)
+
+    def remove_object(self,obj:PhysicalObject):
+        objs = self.get_objects_by_config_id(obj.config_id)
+        objs.discard(obj.get_id())
+        gamectx.remove_object_by_id(obj.get_id())
+
+    #
     def speed_factor(self):
         if self._speed_factor is not None:
             return self._speed_factor
@@ -141,14 +186,17 @@ class GameContent(Content):
             return Rock
         elif name == "Wood":
             return Wood
+        elif name == "Water":
+            return Water
         else:
-            return GObject
+            return PhysicalObject
 
     def reset_required(self):
         for player in gamectx.player_manager.players_map.values():
             if not player.get_data_value("reset_required", True):
                 return False
         return True
+
 
 
     #####################
@@ -160,14 +208,14 @@ class GameContent(Content):
             self.load()
         gamectx.remove_all_events()
 
-        def food_event_callback(event: PeriodicEvent, data: Dict[str, Any]):
-            self.spawn_food(limit=1)
-            return [], True
+        # def food_event_callback(event: PeriodicEvent, data: Dict[str, Any]):
+        #     self.spawn_food(limit=1)
+        #     return [], True
 
-        new_food_event = PeriodicEvent(
-            food_event_callback, 
-            execution_step_interval=random.randint(10, 16) * self.speed_factor())
-        gamectx.add_event(new_food_event)
+        # new_food_event = PeriodicEvent(
+        #     food_event_callback, 
+        #     execution_step_interval=random.randint(10, 16) * self.speed_factor())
+        # gamectx.add_event(new_food_event)
 
         self.spawn_food()
         self.spawn_players()
@@ -185,6 +233,8 @@ class GameContent(Content):
 
     # TODO: get from player to object
     def get_observation(self, obj: GObject):
+        if obj is None:
+            return None
         obj_coord = gamectx.physics_engine.vec_to_coord(obj.get_position())
         xvis = self.vision_distance
         yvis = self.vision_distance
@@ -217,6 +267,8 @@ class GameContent(Content):
 
             obj_id = player.get_object_id()
             obj: AnimateObject = gamectx.object_manager.get_by_id(obj_id)
+            if obj is None:
+                return None, reward, done, info
             observation = self.get_observation(obj)
             done = player.get_data_value("reset_required", False)
             if done:
@@ -269,22 +321,15 @@ class GameContent(Content):
     #########################
     # Loading/Spawning
     #########################
-    def spawn_player(self,player:Player, reset=False,loc_idx=0):
-        if player.get_object_id() is not None:
-            character = gamectx.object_manager.get_by_id(player.get_object_id())
-        else:
-            character= Human(config=self.config['human_config'] ,player=player)
-            self.characters[player.get_id()] = character
-        if reset:
-            self.reset_player(player)
 
-        character.spawn(coord_to_vec(self.spawn_locations[loc_idx % len(self.spawn_locations)]))
-        return character
-
-
-    def spawn_players(self,reset=True):
-        for loc_idx,player in enumerate(gamectx.player_manager.players_map.values()):
-            self.spawn_player(player,reset,loc_idx)
+    def spawn_objects(self):
+        config_id = 'monster1'
+        objs = self.get_objects_by_config_id(config_id)
+        if len(objs) < 5:
+            print("spawning")
+            spawn_points = self.get_spawn_points(config_id)            
+            object_config = gamectx.content.game_config['objects'][config_id]['config']
+            Monster(config=object_config).spawn(spawn_points[0])
 
     def spawn_food(self, limit=None):
         # Spawn food
@@ -295,6 +340,34 @@ class GameContent(Content):
                 spawn_count += 1
                 if limit is not None and spawn_count >= limit:
                     return
+
+    def spawn_player(self,player:Player, reset=False):
+        if player.get_object_id() is not None:
+            player_object = gamectx.object_manager.get_by_id(player.get_object_id())
+        else:
+            player_config = self.game_config['player_types']['1']
+            config_id = player_config['config_id']
+            object_config = self.game_config['objects'][config_id]['config']
+            spawn_points = self.get_spawn_points(config_id)
+            player.set_data_value("spawn_point",spawn_points[0])
+            # TODO: get objkey from player_config
+            player_object= Human(
+                config=object_config ,
+                player=player)
+        if reset:
+            self.reset_player(player)
+
+        spawn_point = player.get_data_value("spawn_point")
+
+        player_object.spawn(spawn_point)
+        return player_object
+
+
+    def spawn_players(self,reset=True):
+        for player in gamectx.player_manager.players_map.values():
+            self.spawn_player(player,reset)
+
+
         
 
     # **********************************
@@ -303,7 +376,10 @@ class GameContent(Content):
     def load(self, is_client_only=False):
         self.loaded = False
         if not is_client_only:
-            WorldMap(map_layers)
+            map_config = self.game_config['maps'][self.game_config['start_map']]
+            WorldMap(
+                path = self.config_path,
+                map_config=map_config)
 
         gamectx.physics_engine.set_collision_callback(
             default_collision_callback,
@@ -407,6 +483,12 @@ class GameContent(Content):
         elif "PUSH" in actions_set:
             obj.push()
         elif "MOVE" in actions_set:
+            # def event_fn(event: DelayedEvent, data):
+            #     obj.walk(direction,angle_update)
+            #     return []
+            # delay = 0
+            # event = DelayedEvent(event_fn, delay)
+            # events.append(event)
             obj.walk(direction,angle_update)
 
         return events
@@ -417,6 +499,9 @@ class GameContent(Content):
                 continue
             if o.is_enabled():
                 o.update()
+        self.spawn_objects()
+        
+        # TODO: Check if respawns are needed
 
     def prepare_ac(self):
         for k, o in gamectx.object_manager.get_objects().items():

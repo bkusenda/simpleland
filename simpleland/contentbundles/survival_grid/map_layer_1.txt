@@ -1,32 +1,32 @@
-wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
-w  m                                  rrrrw
-w                          t     s      trw
-w    t                              f    rw
-w                                        rw
-w                                        rw
-w         f     f                        rw
-w   f                                    rw
-w                             f          rw
-w                                        rw
-w                                        rw
-w                               b        rw
-w   t                                     w
-w           f                   t     m trw
-w    t                                   rw
-w                                       r w
-w                                       r w
-w                                       r w
-w                 f                     r w
-w                               b        rw
-w   t                                     w
-w           f                   t     m  tw
-w    t                                   rw
-w                             f         r w
-w                       f               r w
-w                                       r w
-w         f                     b        rw
-w   t                      m              w
-w                      f         t       rw
-w   s  d                         d       rw
-wrrrrrrrrr            f  rrrrrrrrrrrrrrrr w
-wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1
+w1    m1                                                                    r1r1r1r1w1
+w1                                                    t1          s0          t1t1r1w1
+w1        t1                                                            f1        r1w1
+w1                                                                                r1w1
+w1                                                                                r1w1
+w1                  f1          f1                                                r1w1
+w1      f1                                                                        r1w1
+w1                                                          f1                    r1w1
+w1                                                                                r1w1
+w1                                                                                r1w1
+w1                            m0                                b1                r1w1
+w1      t1                                                                          w1
+w1                      f1                                      t1          m1  t1r1w1
+w1        t1                                                                      r1w1
+w1                                                                              r1  w1
+w1                                                                              r1  w1
+w1                                                                              r1  w1
+w1                                  f1                                          r1  w1
+w1                                                              b1                r1w1
+w1      t1                                                                          w1
+w1                      f1                                      t1          m1    t1w1
+w1        t1                                                                      r1w1
+w1                                                          f1                  r1  w1
+w1                                              f1                              r1  w1
+w1                                                                              r1  w1
+w1                  f1                                          b1                r1w1
+w1      t1                                            m1                            w1
+w1                                            f1                  t1              r1w1
+w1      s0    d1                                                  d1              r1w1
+w1r1r1r1r1r1r1r1r1r1                        f1    r1r1r1r1r1r1r1r1r1r1r1r1r1r1r1r1  w1
+w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1w1

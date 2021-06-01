@@ -1,0 +1,71 @@
+{
+ "game_id": "survival_grid",
+ "tile_size": 16,
+ "asset_bundle": "asset_bundle.json",
+ "start_map": "main",
+ "player_types": {
+  "1": {
+   "default_camera_zoom": 160,
+   "config_id": "human1"
+  }
+ },
+ "maps": {
+  "main": {
+   "format": "txt",
+   "layers": [
+    "map_layer_1.txt"
+   ],
+   "index":{
+    "s0":  {"type":"spawn_point", "obj":"human1"},
+    "m0":  {"type":"spawn_point", "obj":"monster1"},
+    "m1":  {"type":"obj", "obj":"monster1"},
+    "f1":  {"type":"obj", "obj":"food1"},
+    "t1":  {"type":"obj", "obj":"tree1"},
+    "w1":  {"type":"obj", "obj":"water1"},
+    "d1":  {"type":"obj", "obj":"deer1"},
+    "r1":  {"type":"obj", "obj":"rock1"}
+ }
+  }
+ },
+ "objects": {
+  "human1": {
+   "obj_class": "Human",
+   "config": "human_1_config.json",
+   "sounds": "human_1_sounds.json",
+   "model": "human_1_model.json"
+  },
+  "monster1": {
+    "obj_class": "Monster",
+    "config": "monster_1_config.json",
+    "sounds": "monster_1_sounds.json",
+    "model": "monster_1_model.json"
+   },
+   "food1": {
+    "obj_class": "Food",
+    "config": "food_1_config.json",
+    "sounds": "food_1_sounds.json",
+    "model": "food_1_model.json"
+   }
+   ,
+   "tree1": {
+    "obj_class": "Tree",
+    "config": "tree_1_config.json",
+    "sounds": "tree_1_sounds.json",
+    "model": "tree_1_model.json"
+   }   ,
+   "water1": {
+    "obj_class": "Water",
+    "config": "water_1_config.json",
+    "sounds": "water_1_sounds.json",
+    "model": "water_1_model.json"
+   }
+   ,
+   "deer1": {
+    "obj_class": "Deer"
+   }
+   ,
+   "rock1": {
+    "obj_class": "Rock"
+   }
+ }
+}

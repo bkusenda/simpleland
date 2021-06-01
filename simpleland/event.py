@@ -107,11 +107,13 @@ class SoundEvent(Event):
                 id=None, 
                 sound_id = None,
                 is_client_event=True,
+                position = None,
                 **kwargs):
         super().__init__(id,
             is_client_event=is_client_event,
             **kwargs)
         self.sound_id = sound_id
+        self.position = position
 
     def get_id(self):
         return self.id

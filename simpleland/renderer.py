@@ -47,7 +47,6 @@ class Renderer:
         # These will be source object properties eventually
         self.view_height = 600000.0
         self.view_width = self.view_height * self.aspect_ratio
-        print(f"Screen = {self.view_height} by {self.view_width}")
 
         self.images = {}
         self.image_cache = {}
@@ -72,10 +71,12 @@ class Renderer:
     def load_sounds(self):
         if self.config.sound_enabled:
             pass
-            for k,path in self.asset_bundle.sound_assets.items():
+            for k,sound_data in self.asset_bundle.sound_assets.items():
+                path = sound_data[0]
+                vol = sound_data[1]
                 print(f"Loading ")
                 sound = pygame.mixer.Sound(pkg_resources.resource_filename(__name__,path))
-                sound.set_volume(0.1)
+                sound.set_volume(vol)
                 self.sounds[k] = sound
 
 
@@ -100,11 +101,12 @@ class Renderer:
     def play_music(self, music_id):
         if self.config.sound_enabled:
             if self.config.sound_enabled:
-                path =self.asset_bundle.music_assets[music_id]
-                full_path = pkg_resources.resource_filename(__name__,path)
+                data =self.asset_bundle.music_assets[music_id]
+                full_path = pkg_resources.resource_filename(__name__,data[0])
                 print(f"Loading Music from: {full_path}")
                 pygame.mixer.music.load(full_path)
                 pygame.mixer.music.play(-1)
+                pygame.mixer.music.set_volume(data[1])
 
     def get_image_by_id(self, image_id):
         return self.images.get(image_id)

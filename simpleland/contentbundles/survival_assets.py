@@ -17,108 +17,9 @@ from .survival_config import TILE_SIZE
 from .survival_utils import coord_to_vec
 import numpy as np
 from gym import spaces
-
-# map_layer_1 = (
-#     f"gggggggggggggggggggggggggggggg\n"
-#     f"gggggggggggggggggggggggggggggg\n"
-#     f"gggggggggggggggggggggggggggggg\n"
-#     f"ggwwwggggggggggggggggggggggggg\n"
-#     f"gggwwwgggggggggggggggggggggggg\n"
-#     f"ggwwwwwwgggggggggggggggggggggg\n"
-#     f"ggggwwwggggggggggggggggggggggg\n"
-#     f"gggggwwwgggggggggggggggggggggggg\n"
-#     f"gggggwwggggggggggggggggggggggg\n"
-#     f"gggggwgggggggggggggggggggggggg\n"
-#     f"gggggwgggggggggggggggggggg\n"
-#     f"gggwwwgggggggggggggggggggggggg\n"
-#     f"gggggwwwwwwgggggggggggggggggggggg\n"
-#     f"gggggggggwwwggggggggggggggggggggggg\n"
-#     f"gggggggggggwwwgggggggggggggggggggggggg\n"
-#     f"ggggggggggggwwggggggggggggggggggggggg\n"
-#     f"gggggggggggggwgggggggggggggggggggggggg\n"
-#     f"gggggggggggggggggggggggggggggg\n"
-#     f"gggggggggggggggggggggggggggggg\n"
-#     f"gggggggggggggggggggggggggggggg\n"
-#     f"\n"
-
-# )
-# s
-
-map_layer_2 = (
-    f"wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww\n"
-    f"w  m                                  rrrrw\n"
-    f"w                          t     s      trw\n"
-    f"w    t                              f    rw\n"
-    f"w                                        rw\n"
-    f"w                                        rw\n"
-    f"w         f     f                        rw\n"
-    f"w   f                                    rw\n"
-    f"w                             f          rw\n"
-    f"w                                        rw\n"
-    f"w                                        rw\n"
-    f"w                               b        rw\n"
-    f"w   t                                     w\n"
-    f"w           f                   t     m trw\n"
-    f"w    t                                   rw\n"
-    f"w                                       r w\n"
-    f"w                                       r w\n"
-    f"w                                       r w\n"
-    f"w                 f                     r w\n"
-    f"w                               b        rw\n"
-    f"w   t                                     w\n"
-    f"w           f                   t     m  tw\n"
-    f"w    t                                   rw\n"
-    f"w                             f         r w\n"
-    f"w                       f               r w\n"
-    f"w                                       r w\n"
-    f"w         f                     b        rw\n"
-    f"w   t                      m              w\n"
-    f"w                      f         t       rw\n"
-    f"w   s  d                         d       rw\n"
-    f"wrrrrrrrrr            f  rrrrrrrrrrrrrrrr w\n"
-    f"wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww\n"
-)
-
-
-# map_layer_2 = (
-#     f"\n"
-#     f"  m                                  rrrr\n"
-#     f"                          t     s      tr\n"
-#     f"    t                              f    r\n"
-#     f"                                        r\n"
-#     f"                                        r\n"
-#     f"         f     f                        r\n"
-#     f"   f                                    r\n"
-#     f"                             f          r\n"
-#     f"                                        r\n"
-#     f"                                        r\n"
-#     f"                               b        r\n"
-#     f"   t                                     \n"
-#     f"           f                   t     m tr\n"
-#     f"    t                                   r\n"
-#     f"                                       r \n"
-#     f"                                       r \n"
-#     f"                                       r \n"
-#     f"                 f                     r \n"
-#     f"                               b        r\n"
-#     f"   t                                     \n"
-#     f"           f                   t     m  t\n"
-#     f"    t                                   r\n"
-#     f"                             f         r \n"
-#     f"                       f               r \n"
-#     f"                                       r \n"
-#     f"         f                     b        r\n"
-#     f"   t                      m              \n"
-#     f"                      f         t       r\n"
-#     f"   s  d                         d       r\n"
-#     f"rrrrrrrrr            f  rrrrrrrrrrrrrrrr \n"
-#     f"\n"
-# )
-
-
-map_layers = [map_layer_2]
-
-
+import os
+import pkg_resources
+from ..event import SoundEvent
 import hashlib
 
 
@@ -163,214 +64,13 @@ class TileMapLoader:
             self.tilemap = gamectx.content.tilemap
         return self.tilemap
 
-def load_asset_bundle():
-    image_assets = {}
-
-    # player idle
-    image_assets['player_idle_down_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "1")
-    image_assets['player_idle_down_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "2")
-    image_assets['player_idle_down_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "3")
-    image_assets['player_idle_down_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "4")
-    image_assets['player_idle_down_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "5")
-    image_assets['player_idle_down_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_down.png', "6")
-
-    image_assets['player_idle_up_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "1")
-    image_assets['player_idle_up_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "2")
-    image_assets['player_idle_up_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "3")
-    image_assets['player_idle_up_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "4")
-    image_assets['player_idle_up_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "5")
-    image_assets['player_idle_up_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_up.png', "6")
-
-    image_assets['player_idle_right_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "1")
-    image_assets['player_idle_right_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "2")
-    image_assets['player_idle_right_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "3")
-    image_assets['player_idle_right_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "4")
-    image_assets['player_idle_right_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "5")
-    image_assets['player_idle_right_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_right.png', "6")
-
-    image_assets['player_idle_left_1'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "1")
-    image_assets['player_idle_left_2'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "2")
-    image_assets['player_idle_left_3'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "3")
-    image_assets['player_idle_left_4'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "4")
-    image_assets['player_idle_left_5'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "5")
-    image_assets['player_idle_left_6'] = ('assets/tinyadventurepack/Character/Char_one/Idle/Char_idle_left.png', "6")
-
-    # player walk
-    image_assets['player_walk_down_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "1")
-    image_assets['player_walk_down_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "2")
-    image_assets['player_walk_down_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "3")
-    image_assets['player_walk_down_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "4")
-    image_assets['player_walk_down_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "5")
-    image_assets['player_walk_down_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_down.png', "6")
-
-    image_assets['player_walk_up_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "1")
-    image_assets['player_walk_up_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "2")
-    image_assets['player_walk_up_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "3")
-    image_assets['player_walk_up_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "4")
-    image_assets['player_walk_up_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "5")
-    image_assets['player_walk_up_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_up.png', "6")
-
-    image_assets['player_walk_right_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "1")
-    image_assets['player_walk_right_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "2")
-    image_assets['player_walk_right_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "3")
-    image_assets['player_walk_right_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "4")
-    image_assets['player_walk_right_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "5")
-    image_assets['player_walk_right_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_right.png', "6")
-
-    image_assets['player_walk_left_1'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "1")
-    image_assets['player_walk_left_2'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "2")
-    image_assets['player_walk_left_3'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "3")
-    image_assets['player_walk_left_4'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "4")
-    image_assets['player_walk_left_5'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "5")
-    image_assets['player_walk_left_6'] = ('assets/tinyadventurepack/Character/Char_one/Walk/Char_walk_left.png', "6")
-
-    # player attack
-    image_assets['player_atk_down_1'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_down.png', "1")
-    image_assets['player_atk_down_2'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_down.png', "2")
-    image_assets['player_atk_down_3'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_down.png', "3")
-    image_assets['player_atk_down_4'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_down.png', "4")
-    image_assets['player_atk_down_5'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_down.png', "5")
-    image_assets['player_atk_down_6'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_down.png', "6")
-
-    image_assets['player_atk_up_1'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_up.png', "1")
-    image_assets['player_atk_up_2'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_up.png', "2")
-    image_assets['player_atk_up_3'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_up.png', "3")
-    image_assets['player_atk_up_4'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_up.png', "4")
-    image_assets['player_atk_up_5'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_up.png', "5")
-    image_assets['player_atk_up_6'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_up.png', "6")
-
-    image_assets['player_atk_right_1'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_right.png', "1")
-    image_assets['player_atk_right_2'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_right.png', "2")
-    image_assets['player_atk_right_3'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_right.png', "3")
-    image_assets['player_atk_right_4'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_right.png', "4")
-    image_assets['player_atk_right_5'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_right.png', "5")
-    image_assets['player_atk_right_6'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_right.png', "6")
-
-    image_assets['player_atk_left_1'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_left.png', "1")
-    image_assets['player_atk_left_2'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_left.png', "2")
-    image_assets['player_atk_left_3'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_left.png', "3")
-    image_assets['player_atk_left_4'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_left.png', "4")
-    image_assets['player_atk_left_5'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_left.png', "5")
-    image_assets['player_atk_left_6'] = ('assets/tinyadventurepack/Character/Char_one/Attack/Char_atk_left.png', "6")
-
-    # skel idle
-    image_assets['skel_idle_down_1'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_down.png', "1")
-    image_assets['skel_idle_down_2'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_down.png', "2")
-    image_assets['skel_idle_down_3'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_down.png', "3")
-    image_assets['skel_idle_down_4'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_down.png', "4")
-    image_assets['skel_idle_down_5'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_down.png', "5")
-    image_assets['skel_idle_down_6'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_down.png', "6")
-
-    image_assets['skel_idle_up_1'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_up.png', "1")
-    image_assets['skel_idle_up_2'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_up.png', "2")
-    image_assets['skel_idle_up_3'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_up.png', "3")
-    image_assets['skel_idle_up_4'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_up.png', "4")
-    image_assets['skel_idle_up_5'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_up.png', "5")
-    image_assets['skel_idle_up_6'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_up.png', "6")
-
-    image_assets['skel_idle_right_1'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_right.png', "1")
-    image_assets['skel_idle_right_2'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_right.png', "2")
-    image_assets['skel_idle_right_3'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_right.png', "3")
-    image_assets['skel_idle_right_4'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_right.png', "4")
-    image_assets['skel_idle_right_5'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_right.png', "5")
-    image_assets['skel_idle_right_6'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_right.png', "6")
-
-    image_assets['skel_idle_left_1'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_left.png', "1")
-    image_assets['skel_idle_left_2'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_left.png', "2")
-    image_assets['skel_idle_left_3'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_left.png', "3")
-    image_assets['skel_idle_left_4'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_left.png', "4")
-    image_assets['skel_idle_left_5'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_left.png', "5")
-    image_assets['skel_idle_left_6'] = ('assets/tinyadventurepack/Skeleton/Idle/Skel_idle_left.png', "6")
-
-    # skel walk
-    image_assets['skel_walk_down_1'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_down.png', "1")
-    image_assets['skel_walk_down_2'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_down.png', "2")
-    image_assets['skel_walk_down_3'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_down.png', "3")
-    image_assets['skel_walk_down_4'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_down.png', "4")
-    image_assets['skel_walk_down_5'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_down.png', "5")
-    image_assets['skel_walk_down_6'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_down.png', "6")
-
-    image_assets['skel_walk_up_1'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_up.png', "1")
-    image_assets['skel_walk_up_2'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_up.png', "2")
-    image_assets['skel_walk_up_3'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_up.png', "3")
-    image_assets['skel_walk_up_4'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_up.png', "4")
-    image_assets['skel_walk_up_5'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_up.png', "5")
-    image_assets['skel_walk_up_6'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_up.png', "6")
-
-    image_assets['skel_walk_right_1'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_right.png', "1")
-    image_assets['skel_walk_right_2'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_right.png', "2")
-    image_assets['skel_walk_right_3'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_right.png', "3")
-    image_assets['skel_walk_right_4'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_right.png', "4")
-    image_assets['skel_walk_right_5'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_right.png', "5")
-    image_assets['skel_walk_right_6'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_right.png', "6")
-
-    image_assets['skel_walk_left_1'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_left.png', "1")
-    image_assets['skel_walk_left_2'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_left.png', "2")
-    image_assets['skel_walk_left_3'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_left.png', "3")
-    image_assets['skel_walk_left_4'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_left.png', "4")
-    image_assets['skel_walk_left_5'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_left.png', "5")
-    image_assets['skel_walk_left_6'] = ('assets/tinyadventurepack/Skeleton/Walk/Skel_walk_left.png', "6")
-
-    # OTHER
-    image_assets['grass1'] = ('assets/tinyadventurepack/Other/Misc/Grass.png', None)
-    image_assets['grass2'] = ('assets/tinyadventurepack/Other/Misc/Grass2.png', None)
-    image_assets['grass3'] = ('assets/tinyadventurepack/Other/Misc/Grass3.png', None)
-    
-    # image_assets['grass3'] = ('assets/tinyadventurepack/Other/Green_orb.png', None)
-    
-    image_assets['tree'] = ('assets/tinyadventurepack/Other/Misc/Tree/Tree.png', None)
-    image_assets['tree_trunk'] = ('assets/tinyadventurepack/Other/Misc/Tree/Tree_trunk.png', None)
-    image_assets['tree_top'] = ('assets/tinyadventurepack/Other/Misc/Tree/Tree_top.png', None)
-    image_assets['food'] = ('assets/tinyadventurepack/Other/Red_orb.png', None)
-    image_assets['wood'] = ('assets/tinyadventurepack/Other/Misc/Tree/wood.png', None)
-    image_assets['baby_tree'] = ('assets/tinyadventurepack/Other/Misc/Tree/baby_tree.png', None)
-
-    image_assets['rock'] = ('assets/tinyadventurepack/Other/Misc/Rock.png', None)
-    image_assets['deer'] = ('assets/tinyadventurepack/Other/Misc/deer.png', None)
-
-    sound_assets = {}
-    # sound_assets['crunch_eat'] = 'assets/sounds/crunch_eat.wav'
-    sound_assets['bleep'] = 'assets/sounds/bleep.wav'
-    music_assets = {}
-    music_assets['background'] = "assets/music/PianoMonolog.ogg"
+def load_asset_bundle(asset_bundle):
 
     return AssetBundle(
-        image_assets=image_assets,
-        sound_assets=sound_assets,
-        music_assets=music_assets,
+        image_assets=asset_bundle['images'],
+        sound_assets=asset_bundle['sounds'],
+        music_assets=asset_bundle['music'],
         tilemaploader = TileMapLoader())
-
-
-player_idle_sprites = {
-    'down': ['player_idle_down_1', 'player_idle_down_2', 'player_idle_down_3', 'player_idle_down_4', 'player_idle_down_5', 'player_idle_down_6'],
-    'up': ['player_idle_up_1', 'player_idle_up_2', 'player_idle_up_3', 'player_idle_up_4', 'player_idle_up_5', 'player_idle_up_6'],
-    'left': ['player_idle_left_1', 'player_idle_left_2', 'player_idle_left_3', 'player_idle_left_4', 'player_idle_left_5', 'player_idle_left_6'],
-    'right': ['player_idle_right_1', 'player_idle_right_2', 'player_idle_right_3', 'player_idle_right_4', 'player_idle_right_5', 'player_idle_right_6']}
-
-player_walk_sprites = {
-    'down': ['player_walk_down_1', 'player_walk_down_2', 'player_walk_down_3', 'player_walk_down_4', 'player_walk_down_5', 'player_walk_down_6'],
-    'up': ['player_walk_up_1', 'player_walk_up_2', 'player_walk_up_3', 'player_walk_up_4', 'player_walk_up_5', 'player_walk_up_6'],
-    'left': ['player_walk_left_1', 'player_walk_left_2', 'player_walk_left_3', 'player_walk_left_4', 'player_walk_left_5', 'player_walk_left_6'],
-    'right': ['player_walk_right_1', 'player_walk_right_2', 'player_walk_right_3', 'player_walk_right_4', 'player_walk_right_5', 'player_walk_right_6']}
-
-player_attack_sprites = {
-    'down': ['player_atk_down_1', 'player_atk_down_2', 'player_atk_down_3', 'player_atk_down_4', 'player_atk_down_5', 'player_atk_down_6'],
-    'up': ['player_atk_up_1', 'player_atk_up_2', 'player_atk_up_3', 'player_atk_up_4', 'player_atk_up_5', 'player_atk_up_6'],
-    'left': ['player_atk_left_1', 'player_atk_left_2', 'player_atk_left_3', 'player_atk_left_4', 'player_atk_left_5', 'player_atk_left_6'],
-    'right': ['player_atk_right_1', 'player_atk_right_2', 'player_atk_right_3', 'player_atk_right_4', 'player_atk_right_5', 'player_atk_right_6']}
-
-# Skel
-skel_idle_sprites = {
-    'down': ['skel_idle_down_1', 'skel_idle_down_2', 'skel_idle_down_3', 'skel_idle_down_4', 'skel_idle_down_5', 'skel_idle_down_6'],
-    'up': ['skel_idle_up_1', 'skel_idle_up_2', 'skel_idle_up_3', 'skel_idle_up_4', 'skel_idle_up_5', 'skel_idle_up_6'],
-    'left': ['skel_idle_left_1', 'skel_idle_left_2', 'skel_idle_left_3', 'skel_idle_left_4', 'skel_idle_left_5', 'skel_idle_left_6'],
-    'right': ['skel_idle_right_1', 'skel_idle_right_2', 'skel_idle_right_3', 'skel_idle_right_4', 'skel_idle_right_5', 'skel_idle_right_6']}
-skel_walk_sprites = {
-    'down': ['skel_walk_down_1', 'skel_walk_down_2', 'skel_walk_down_3', 'skel_walk_down_4', 'skel_walk_down_5', 'skel_walk_down_6'],
-    'up': ['skel_walk_up_1', 'skel_walk_up_2', 'skel_walk_up_3', 'skel_walk_up_4', 'skel_walk_up_5', 'skel_walk_up_6'],
-    'left': ['skel_walk_left_1', 'skel_walk_left_2', 'skel_walk_left_3', 'skel_walk_left_4', 'skel_walk_left_5', 'skel_walk_left_6'],
-    'right': ['skel_walk_right_1', 'skel_walk_right_2', 'skel_walk_right_3', 'skel_walk_right_4', 'skel_walk_right_5', 'skel_walk_right_6']}
-
 
 
 def angle_to_direction(angle):
@@ -410,31 +110,10 @@ def get_types(cur_type):
             cur_type = new_type
     return all_types
 
-"""
-'type': 'idle',
-'ticks':6,
-'step_size':TILE_SIZE/6,
-'start_tick': clock.get_tick_counter(),
-'blocking':False
-
-'start_position' used if position changes
-"""
-
-"""
-OBJECT TYPES
-- AnimateObject (can move, fire?, projectile)
-- AnimalObject (monster,character)
-- PlantObject (grows from seeds)
-- ItemObject (collectable, used for crafting, or consumption)
-- StaticObject (Rock Wall, Wood Wall, Water, Lava)
-- Terrain (Water, ,)
-
-"""
-
 class PhysicalObject(GObject):
 
 
-    def __init__(self,config={}, *args,**kwargs):
+    def __init__(self,config_id="",config={}, *args,**kwargs):
         super().__init__(*args,**kwargs)
         self.config = config
         self.type = "physical_object"
@@ -444,26 +123,42 @@ class PhysicalObject(GObject):
         self.created_tick = 0
         self.animated = True
         self.breakable = True
-        self.collision_type = 1
         self.pushable = True
+        self.collision_type = 1
+        self.collectable = False
+        
+        self.__sprites = None
+        self.__sounds = None
 
         # Can it be placed in inventory?
-        self.collectable = False
-
         self.default_action_type = "idle"
         self._action = {}
+        self.config_id = config_id
 
-        # Available States
-        self.sprites = {}
-        self.sprites[self.default_action_type] = None
-        self.sprites['spawn'] = None
         self.default_action()
         self.disable()
         ShapeFactory.attach_rectangle(self, width=TILE_SIZE, height=TILE_SIZE)
 
+        
+
+    def get_sprites(self):
+        if self.__sprites is None:
+            model = gamectx.content.get_object_sprites(self.config_id)
+            if "body" in model:
+                self.__sprites =  gamectx.content.get_object_sprites(self.config_id)['body']
+            else:
+                self.__sprites = model.get("default",{})
+        return self.__sprites
+
+    def play_sound(self,name):
+        if self.__sounds is None:
+            self.__sounds = gamectx.content.get_object_sounds(self.config_id)
+        sound_id = self.__sounds.get(name)
+        if sound_id is not None:
+            gamectx.add_event(SoundEvent(sound_id=sound_id,position=self.get_view_position()))
 
     def spawn(self,position):
-        gamectx.add_object(self)
+        gamectx.content.add_object(self)
 
         self._action = {
             'type': 'spawn',
@@ -476,6 +171,7 @@ class PhysicalObject(GObject):
         self.created_tick = clock.get_tick_counter()
         self.enable()
         self.set_position(position=position)
+        self.play_sound("spawn")
 
     def get_types(self):
         if self._types is None:
@@ -500,33 +196,11 @@ class PhysicalObject(GObject):
 
         }
 
-    def move(self, direction, new_angle, move_speed = 1):
-        
-        direction = direction * 1
-        if new_angle is not None and self.angle != new_angle:
-            ticks_in_action = gamectx.content.speed_factor()/move_speed
-            self.angle = new_angle
-            return []
-        ticks_in_action = move_speed * gamectx.content.speed_factor()
-
-        new_pos = TILE_SIZE * direction + self.get_position()
-        self._action = \
-            {
-                'type': 'move',
-                'start_tick': clock.get_tick_counter(),
-                'ticks': ticks_in_action,
-                'step_size': TILE_SIZE/ticks_in_action,
-                'start_position': self.position,
-                'blocking':True
-            }
-
-        self.update_position(new_pos)
-
     def get_image_id(self, angle=0):
         action = self.get_action()
-        sprites = self.sprites.get(action['type'])
+        sprites = self.get_sprites().get(action['type'])
         if sprites is None:
-            sprites = self.sprites.get(self.default_action_type)
+            sprites = self.get_sprites().get(self.default_action_type)
         if sprites is None:
             return self.image_id_default
 
@@ -550,18 +224,45 @@ class PhysicalObject(GObject):
             return view_position
         return self.get_position()
 
+    def move(self, direction, new_angle, move_speed = 1):
+        
+        direction = direction * 1
+        if new_angle is not None and self.angle != new_angle:
+            ticks_in_action = gamectx.content.speed_factor()/move_speed
+            self.angle = new_angle
+            return []
+        ticks_in_action = move_speed * gamectx.content.speed_factor()
+
+        new_pos = TILE_SIZE * direction + self.get_position()
+        self._action = \
+            {
+                'type': 'move',
+                'start_tick': clock.get_tick_counter(),
+                'ticks': ticks_in_action,
+                'step_size': TILE_SIZE/ticks_in_action,
+                'start_position': self.position,
+                'blocking':True
+            }
+
+        self.update_position(new_pos)
+        self.play_sound("move")
+
+
+
     def receive_damage(self, attacker_obj, damage):
         self.health -= damage
+        self.play_sound("receive_damage")
 
 
     def receive_push(self,pusher_obj,power, direction):
         if not self.pushable or not self.collision_type:
             return
         self.move(direction,None)
+        self.play_sound("receive_push")
 
     def destroy(self):
         if self.breakable:
-            self.disable()
+            gamectx.content.remove_object(self)
 
 
 class AnimateObject(PhysicalObject):
@@ -597,8 +298,6 @@ class AnimateObject(PhysicalObject):
         self.inventory_capacity = 1
         self.inventory_slots = 1
         self.selected_item = None
-        self.walk_counter = 0
-
 
 
     def spawn(self,position:Vector):
@@ -681,6 +380,11 @@ class AnimateObject(PhysicalObject):
         super().receive_push(*args,**kwargs)
         self.stunned()
 
+    def consume_food(self,food_obj:PhysicalObject):
+        self.energy += food_obj.energy
+        food_obj.destroy()
+        self.play_sound("eat")
+
     def walk(self, direction, new_angle):
         walk_speed = self.walk_speed
         if self.stamina <= 0:
@@ -692,7 +396,6 @@ class AnimateObject(PhysicalObject):
         self.angle = new_angle
             
         ticks_in_action = gamectx.content.speed_factor()/walk_speed
-
         new_pos = TILE_SIZE * direction + self.get_position()
         self._action = \
             {
@@ -702,10 +405,9 @@ class AnimateObject(PhysicalObject):
                 'step_size': TILE_SIZE/ticks_in_action,
                 'start_position': self.position,
                 'blocking':True
-            }
-        self.walk_counter +=1
+            }     
 
-        self.update_position(new_pos)
+        self.update_position(new_pos, callback = lambda suc: self.play_sound('walk') if suc else None )
 
     def grab(self):
 
@@ -715,11 +417,15 @@ class AnimateObject(PhysicalObject):
 
         target_pos = self.get_position() + (direction * TILE_SIZE)
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
+        grab_successful = False
         for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
             target_obj:PhysicalObject = gamectx.object_manager.get_by_id(oid)
             if target_obj.collectable:
                 gamectx.remove_object(target_obj)
                 self.modify_inventory(target_obj.type, 1)
+                grab_successful = True
+        if grab_successful:
+            self.play_sound("grab")
 
         self._action = \
             {
@@ -728,6 +434,7 @@ class AnimateObject(PhysicalObject):
                 'ticks': ticks_in_action,
                 'step_size': TILE_SIZE/ticks_in_action
             }
+        
 
     def stunned(self):
         ticks_in_action = int(gamectx.content.speed_factor())  * 10 
@@ -738,6 +445,7 @@ class AnimateObject(PhysicalObject):
                 'ticks': ticks_in_action,
                 'step_size': TILE_SIZE/ticks_in_action,
             }
+        self.play_sound("stunned")
 
     def drop(self):
         ticks_in_action = int(gamectx.content.speed_factor())
@@ -760,6 +468,7 @@ class AnimateObject(PhysicalObject):
                 'ticks': ticks_in_action,
                 'step_size': TILE_SIZE/ticks_in_action,
             }
+        self.play_sound("drop")
         
 
     def attack(self):
@@ -780,6 +489,8 @@ class AnimateObject(PhysicalObject):
             if obj2.collision_type > 0:
                 obj2.receive_damage(self, self.attack_strength)
 
+        gamectx.add_event(SoundEvent(sound_id="hit1"))
+
         self._action =\
             {
                 'type': 'attack',
@@ -787,6 +498,7 @@ class AnimateObject(PhysicalObject):
                 'ticks': ticks_in_action,
                 'step_size': TILE_SIZE/ticks_in_action,
             }
+        self.play_sound("attack")
 
     def push(self):
         attack_speed = self.attack_speed
@@ -812,6 +524,7 @@ class AnimateObject(PhysicalObject):
                 'ticks': ticks_in_action,
                 'step_size': TILE_SIZE/ticks_in_action,
             }
+        self.play_sound("push")
 
     def update(self):
 
@@ -839,6 +552,13 @@ class AnimateObject(PhysicalObject):
             self.destroy()
         
 
+    def destroy(self):
+        if self.get_player() is not None:
+            self.disable()
+        else:
+            super().destroy()
+        self.play_sound("destroy")
+
 
 class Human(AnimateObject):
 
@@ -846,15 +566,12 @@ class Human(AnimateObject):
         super().__init__(*args,**kwargs)
         self.type = "human"
         self.set_image_id("player_idle_down_1")
-        self.sprites={}
-        self.sprites['idle'] = player_idle_sprites
-        self.sprites['walk'] = player_walk_sprites
-        self.sprites['attack'] = player_attack_sprites
-
         self.next_energy_decay = 10
         self.next_health_gen = 0
         self.attack_strength = 10
         self.health =  40
+        self.config_id = "human1"
+      
 
     def update(self):
         super().update()
@@ -866,6 +583,7 @@ class Human(AnimateObject):
             lives_used = p.get_data_value("lives_used", 0)
             lives_used += 1
             p.set_data_value("lives_used", lives_used)
+            p.set_data_value("allow_input", False)
             self.disable()
 
             def event_fn(event: DelayedEvent, data):
@@ -884,15 +602,12 @@ class Monster(AnimateObject):
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
         self.type = "monster"
-
-        self.set_image_id("skel_idle_down_1")
-        self.sprites={}
-        self.sprites['idle'] = skel_idle_sprites
-        self.sprites['walk'] = skel_walk_sprites
-        self.sprites['attack'] = skel_walk_sprites
-
         self.attack_strength = 10
         self.health =  40
+        self.config_id = "monster1"
+
+    def get_sprites(self):
+        return gamectx.content.get_object_sprites(self.config_id).get('body',{})
 
     def update(self):
         super().update()
@@ -989,13 +704,14 @@ class Tree(PhysicalObject):
         self.pushable = False
         self.top_id = None
         self.trunk_id = None
+        self.fruit_ids = []
 
     def spawn(self,position):
         super().spawn(position=position)
         self.add_tree_trunk()
         self.add_tree_top()
-
-    
+        for i in range(0,random.randint(0,3)):
+            self.add_fruit()
 
     def add_tree_trunk(self):
         o = PhysicalObject(depth=1)
@@ -1004,8 +720,21 @@ class Tree(PhysicalObject):
         o.collision_type = 0
         o.set_image_id(f"tree_trunk")
         o.spawn(position=self.get_position())
-
+        
         self.trunk_id = o.get_id()
+
+    def add_fruit(self):
+        o = PhysicalObject(depth=3)
+        o.type = "part"
+        o.pushable = False
+        o.collision_type = 0
+        o.set_image_id(f"food")
+        y = random.random() * gamectx.content.tile_size*1.8
+        x = random.random()* gamectx.content.tile_size - gamectx.content.tile_size/2
+        o.set_image_offset(Vector(x,y))
+        o.spawn(position=self.get_position())
+        self.fruit_ids.append(o.get_id())
+
 
     def add_tree_top(self):
         o = PhysicalObject(depth=3)
@@ -1017,23 +746,24 @@ class Tree(PhysicalObject):
         o.spawn(position=self.get_position())        
         self.top_id = o.get_id()
     
-    def get_trunk(self):
+    def get_trunk(self)->PhysicalObject:
         return gamectx.object_manager.get_by_id(self.trunk_id)
         
-    def get_top(self):
+    def get_top(self)->PhysicalObject:
         return gamectx.object_manager.get_by_id(self.top_id)
 
     def receive_damage(self, attacker_obj, damage):
         super().receive_damage(attacker_obj, damage)
+        if self.health <20:
+            gamectx.content.remove_object_by_id(self.top_id)
+            for fruit_id in self.fruit_ids:
+                gamectx.content.remove_object_by_id(fruit_id)
+            self.fruit_ids = []
         if self.health <=0:
-            gamectx.remove_object_by_id(self.top_id)
-            gamectx.remove_object_by_id(self.trunk_id)
-            gamectx.remove_object(self)
+            gamectx.content.remove_object_by_id(self.trunk_id)
+            gamectx.content.remove_object(self)
             Wood().spawn(self.position)
             
-        if self.health <20:
-            self.get_top().disable()
-
         
         
 class Wood(PhysicalObject):
@@ -1042,19 +772,15 @@ class Wood(PhysicalObject):
         super().__init__(*args,**kwargs)
         self.depth = 1
         self.type = "wood"
-        
         self.set_image_id('wood')
         self.collectable = True
         self.collision = True
-        self.breakable = False
+        self.breakable = True
         self.pushable = False
         self.set_shape_color(color=(200, 200, 50))
 
     def spawn(self,position):
         super().spawn(position=position)
-
-
-
 
 class Food(PhysicalObject):
 
@@ -1065,15 +791,12 @@ class Food(PhysicalObject):
         self.set_image_id('food')
         self.set_shape_color(color=(100, 130, 100))
         self.energy = gamectx.content.config['food_energy']
-        self.collision = False
+        self.collision = True
+        self.collectable = True
+        self.breakable = True
         
-
     def spawn(self,position):
         super().spawn(position=position)
-        gamectx.data['food_counter'] = gamectx.data.get('food_counter', 0) + 1
-
-
-
 
 class Rock(PhysicalObject):
 
@@ -1099,51 +822,32 @@ class Water(PhysicalObject):
 
 
 
-class Grass(PhysicalObject):
-
-    def __init__(self, *args,**kwargs):
-        super().__init__(*args,**kwargs)
-        self.depth = 0
-        self.type =  'grass'
-        self.set_image_id(f"grass{random.randint(1,3)}")
-        self.set_shape_color(color=(100, 130, 100))
-        self.breakable=False
-        self.collision = False
-        self.pushable = False
-
-
 class WorldMap:
 
-    def __init__(self,map_layers, seed = 123):
-        self.seed = seed
-        Wood().spawn(coord_to_vec((0,0)))
-        # Rock().spawn(coord_to_vec((3,2)))
-        Rock().spawn(coord_to_vec((2,3)))
-        for i, layer in enumerate(map_layers):
-            lines = layer.split("\n")
+    def __init__(self,path,map_config):
+        full_path = pkg_resources.resource_filename(__name__,path)
+        map_layers = []
+        for layer_filename in map_config['layers']:
+            with open(os.path.join(full_path,layer_filename),'r') as f:
+                layer = f.readlines()
+                map_layers.append(layer)            
+        
+        keys = set(map_config['index'].keys())
+        for i, lines in enumerate(map_layers):
             self.spawn_locations = []
             for ridx, line in enumerate(lines):
-                for cidx, ch in enumerate(line):
-                    coord = (cidx, ridx)
-                    if ch == 'r':
-                        Rock().spawn(coord_to_vec(coord))
-                    elif ch == 'f':
-                        gamectx.content.food_locations.append(coord)
-                    elif ch == 's':
-                        gamectx.content.spawn_locations.append(coord)
-                    elif ch == 'g':
-                        Grass().spawn(coord_to_vec(coord))
-                    elif ch == 't':
-                        Tree().spawn(coord_to_vec(coord))
-                    elif ch == 'w':
-                        Water().spawn(coord_to_vec(coord))
-                    elif ch == 'm':
-                        Monster(config=gamectx.content.config.get('monster_config',{})).spawn(coord_to_vec(coord))
-                    elif ch == 'd':
-                        Deer().spawn(coord_to_vec(coord))
-                    elif ch == 'a':
-                        AnimateObject().spawn(coord_to_vec(coord))
-                        
-
-    # def get_object_at(self,coord):
-    #     # used seed + coord to get object type
+                linel = len(line)
+                for cidx in range(0,linel,2):
+                    key = line[cidx:cidx+2]
+                    coord = (cidx//2, ridx)
+                    if key in keys:
+                        info = map_config['index'].get(key)
+                        config_id = info['obj']
+                        if info.get('type') == "spawn_point":
+                            gamectx.content.add_spawn_point(config_id,coord_to_vec(coord))
+                        else:
+                            object_config = gamectx.content.game_config['objects'].get(config_id)
+                            cls = gamectx.content.get_class_by_type_name(object_config['obj_class'])
+                            obj:PhysicalObject = cls(config_id=config_id,config=object_config)
+                            obj.spawn(position=coord_to_vec(coord))
+                            

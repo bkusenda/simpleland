@@ -1,7 +1,8 @@
 {
- "walk": "human_walk1",
- "idle": "",
- "attack": "human_punch1",
- "hurt": "human_hurt1",
- "die": "human1_die1"
+ "walk": "walk1",
+ "idle": null,
+ "attack": "hit1",
+ "destroy": null,
+ "drop": "drop1",
+ "grab": "grab1"
 }
