@@ -95,7 +95,6 @@ class Renderer:
     def play_sounds(self, sound_ids):
         if self.config.sound_enabled:
             for sid in sound_ids:
-                print("PLAYING SOUND")
                 self.sounds[sid].play()
 
     def play_music(self, music_id):
@@ -134,6 +133,7 @@ class Renderer:
     def initialize(self):
         if self.config.sound_enabled:
             pygame.mixer.pre_init(44100, -16, 4, 2048)
+            pygame.mixer.init()
         pygame.init()
 
         flags =  pygame.DOUBLEBUF # | pygame.RESIZABLE | pygame.SCALED
@@ -142,7 +142,7 @@ class Renderer:
         self.load_sounds()
         self.load_images()
         self.play_music("background")
-        pygame.key.set_repeat(500,100)
+        # pygame.key.set_repeat(500,100)
 
         self.initialized = True
 

@@ -78,9 +78,9 @@ def read_game_config(sub_dir, game_config):
     game_config['asset_bundle'] = read_json_file(
             os.path.join(sub_dir,game_config['asset_bundle']))
     for id, obj_data in game_config['objects'].items():
-        obj_data['config'] = read_json_file(os.path.join(sub_dir,obj_data.get('config',"")))
-        obj_data['sounds'] = read_json_file(os.path.join(sub_dir,obj_data.get('sounds',"")))
-        obj_data['model'] = read_json_file(os.path.join(sub_dir,obj_data.get('model',"")))
+        obj_data['config'] = read_json_file(os.path.join(sub_dir,obj_data.get('config',f"{id}_config.json")))
+        obj_data['sounds'] = read_json_file(os.path.join(sub_dir,obj_data.get('sounds',f"{id}_sounds.json")))
+        obj_data['model'] = read_json_file(os.path.join(sub_dir,obj_data.get('model',f"{id}_model.json")))
     return game_config
 
 
@@ -106,7 +106,7 @@ class GameContent(Content):
         self.vision_distance = 2
 
         self.player_count = 0
-        self.keymap = [23, 19, 4, 1, 5, 6, 18,0]
+        self.keymap = [23, 19, 4, 1, 5, 6, 18,0, 26,3, 24]
 
         self.spawn_locations = []
         self.food_locations = []
@@ -186,6 +186,8 @@ class GameContent(Content):
             return Rock
         elif name == "Wood":
             return Wood
+        elif name == "Wall":
+            return Wall
         elif name == "Water":
             return Water
         else:
@@ -250,7 +252,10 @@ class GameContent(Content):
                 if len(obj_ids) > 0:
                     obj_id = obj_ids[0]
                     obj_seen = gamectx.object_manager.get_by_id(obj_id)
-                    row_results.append(self.item_map.get(obj_seen.get_data_value('type')))
+                    if obj_seen is None:
+                        print("ERROR cannot find object {}".format(obj_seen))
+                    else:   
+                        row_results.append(gamectx.content.item_map.get(obj_seen.type))
                 else:
                     row_results.append(self.default_v)
             results.append(row_results)
@@ -415,11 +420,13 @@ class GameContent(Content):
             return []
         if not player.get_data_value("allow_input",False):
             return []
-        keys = set(input_event.input_data['inputs'])
+        keypressed = set(input_event.input_data['pressed'])
+        keydown = set(input_event.input_data['keydown'])
+        keyup = set(input_event.input_data['keyup'])
 
         obj:Human = gamectx.object_manager.get_by_id(player.get_object_id())
 
-        if 27 in keys:
+        if 27 in keydown:
             print("QUITTING")
             gamectx.change_game_state("STOPPED")
             return events
@@ -436,53 +443,79 @@ class GameContent(Content):
         actions_set = set()
         direction = Vector.zero()
         angle_update = None
-        if 23 in keys:
+        if 23 in keypressed:
             direction = Vector(0, -1)
             angle_update = math.pi
-            actions_set.add("MOVE")
+            actions_set.add("WALK")
 
-        if 19 in keys:
+        if 19 in keypressed:
             direction = Vector(0, 1)
             angle_update = 0
-            actions_set.add("MOVE")
+            actions_set.add("WALK")
 
-        if 4 in keys:
+        if 4 in keypressed:
             direction = Vector(1, 0)
             angle_update = -math.pi/2
-            actions_set.add("MOVE")
+            actions_set.add("WALK")
             
-        if 1 in keys:
+        if 1 in keypressed:
             direction = Vector(-1, 0)
             angle_update = math.pi/2
-            actions_set.add("MOVE")
+            actions_set.add("WALK")
 
-        if 5 in keys:
+        # TODO: Establish action presidence
+        if 5 in keypressed:
             actions_set.add("GRAB")
 
-        if 6 in keys:
+        if 6 in keypressed:
             actions_set.add("DROP")
 
-        if 18 in keys:
-            actions_set.add("ATTACK")
+        if 18 in keypressed:
+            actions_set.add("USE")
 
-        if  7 in keys:
+        if 26 in keydown:
+            actions_set.add("PREV_ITEM")
+
+        if 3 in keydown:
+            actions_set.add("NEXT_ITEM")
+
+        if 2 in keydown:
+            actions_set.add("NEXT_CRAFT_TYPE")
+
+        if 22 in keydown:
+            actions_set.add("PREV_CRAFT_TYPE")
+        
+        if 17 in keydown:
+            actions_set.add("CRAFT")
+
+        if  7 in keypressed:
             actions_set.add("PUSH")
 
-        if 0 in keys:
+        if 0 in keypressed:
             actions_set.add("NA")
 
-        if 31 in keys:
+        if 31 in keydown:
             events.append(ViewEvent(player.get_id(), 100))
 
         if "GRAB" in actions_set:
             obj.grab()
         elif "DROP" in actions_set:
             obj.drop()
-        elif "ATTACK" in actions_set:
-            obj.attack()
+        elif "USE" in actions_set:
+            obj.use()
+        elif "NEXT_ITEM" in actions_set:
+            obj.select_item()
+        elif "PREV_ITEM" in actions_set:
+            obj.select_item(prev=True)
+        elif "CRAFT" in actions_set:
+            obj.craft()
+        elif "NEXT_CRAFT_TYPE" in actions_set:
+            obj.select_craft_type()
+        elif "PREV_CRAFT_TYPE" in actions_set:
+            obj.select_craft_type(prev=True)
         elif "PUSH" in actions_set:
             obj.push()
-        elif "MOVE" in actions_set:
+        elif "WALK" in actions_set:
             # def event_fn(event: DelayedEvent, data):
             #     obj.walk(direction,angle_update)
             #     return []
@@ -510,6 +543,11 @@ class GameContent(Content):
             if o.is_enabled():
                 o.update()
 
+    def create_from_config_id(self,config_id):
+        object_config = gamectx.content.game_config['objects'].get(config_id)
+        cls = gamectx.content.get_class_by_type_name(object_config['obj_class'])
+        obj:PhysicalObject = cls(config_id=config_id,config=object_config)
+        return obj
 
     def post_process_frame(self, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:
@@ -522,10 +560,11 @@ class GameContent(Content):
                 obj_energy = obj.energy
                 obj_health = obj.health
                 obj_stamina = obj.stamina
-                inv = obj.inventory
-                inventory_st = " ".join([f"{k}:{v}" for k,v in inv.items()])
+
                 lines.append(f"H:{obj_health}, E:{obj_energy}, S:{obj_stamina}")
-                lines.append(f"Inventory: {inventory_st}")
+                lines.append(f"Inventory: {obj.inventory().as_string()}")
+                lines.append(f"Craft Menu: {obj.craftmenu().as_string()}")
+                
    
 
             if renderer.config.show_console:

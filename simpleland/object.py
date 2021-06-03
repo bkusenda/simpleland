@@ -32,7 +32,7 @@ class GObject(Base):
         self.visible=True
         self.image_width, self.image_height = 80,80
         self.shape_color = None
-        self._update_position_callback = lambda obj,new_pos: None
+        self._update_position_callback = lambda obj,new_pos, skip_collision_check,callback: None
 
         self.image_id_default = None
         self.image_id_current = None

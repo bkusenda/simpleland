@@ -42,6 +42,23 @@ def get_default_key_map():
     key_map["MOUSE_DOWN_5"] = 32
     return key_map
 DEFAULT_KEYMAP = get_default_key_map()
+key_list = []
+key_list.append(pygame.K_q)
+key_list.append(pygame.K_e)
+key_list.append(pygame.K_f)
+key_list.append(pygame.K_r)
+key_list.append(pygame.K_w)
+key_list.append(pygame.K_q)
+key_list.append(pygame.K_g)
+key_list.append(pygame.K_x)
+key_list.append(pygame.K_z)
+key_list.append(pygame.K_v)
+key_list.append(pygame.K_b)
+key_list.append(pygame.K_c)
+key_list.append(pygame.K_s)
+key_list.append(pygame.K_a)
+key_list.append(pygame.K_d)
+key_list.append(pygame.K_ESCAPE)
 
 import sys
 def get_input_events(player:Player) -> List[Event]:
@@ -50,20 +67,11 @@ def get_input_events(player:Player) -> List[Event]:
 
     events: List[Event] = []
 
-    key_list = []
-    key_list.append(pygame.K_q)
-    key_list.append(pygame.K_e)
-    key_list.append(pygame.K_f)
-    key_list.append(pygame.K_r)
-    key_list.append(pygame.K_w)
-    key_list.append(pygame.K_q)
-    key_list.append(pygame.K_g)
-    key_list.append(pygame.K_s)
-    key_list.append(pygame.K_a)
-    key_list.append(pygame.K_d)
-    key_list.append(pygame.K_ESCAPE)
 
     key_pressed=set()
+
+    key_down = set()
+    key_up = set()
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -76,6 +84,12 @@ def get_input_events(player:Player) -> List[Event]:
             elif event.button == 5:
                 view_event = ViewEvent(player_id, -50, Vector.zero())
                 events.append(view_event)
+        elif event.type == pygame.KEYDOWN:
+            key_down.add(event.key)
+        elif event.type == pygame.KEYUP:
+            key_up.add(event.key)
+
+
 
     keys = pygame.key.get_pressed()
     for key in key_list:
@@ -85,7 +99,9 @@ def get_input_events(player:Player) -> List[Event]:
         event = InputEvent(
             player_id  = player_id, 
             input_data = {
-                'inputs':[DEFAULT_KEYMAP[k] for k in key_pressed], # TAG: BJK1
+                'pressed':[DEFAULT_KEYMAP[k] for k in key_pressed],
+                'keyup':[DEFAULT_KEYMAP[k] for k in key_up],
+                'keydown':[DEFAULT_KEYMAP[k] for k in key_down],
                 'mouse_pos': pygame.mouse.get_pos(),
                 'mouse_rel': pygame.mouse.get_rel(),
                 'focused': pygame.mouse.get_focused()

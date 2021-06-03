@@ -139,7 +139,9 @@ class SimplelandEnv:
                 event = InputEvent(
                     player_id  = client.player.get_id(), 
                     input_data = {
-                        'inputs':[self.content.keymap[action]],
+                        'pressed':[self.content.keymap[action]],
+                        'keydown':[self.content.keymap[action]],
+                        'keyup':[self.content.keymap[action]],
                         'mouse_pos': "",
                         'mouse_rel': "",
                         'focused': ""

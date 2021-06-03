@@ -512,12 +512,16 @@
    "assets/tinyadventurepack/Other/Misc/Tree/wood.png",
    null
   ],
+  "wallx": [
+   "assets/tinyadventurepack/Other/Misc/Tree/wall.png",
+   null
+  ],
   "baby_tree": [
    "assets/tinyadventurepack/Other/Misc/Tree/baby_tree.png",
    null
   ],
   "rock": [
-   "assets/tinyadventurepack/Other/Misc/Rock.png",
+   "assets/tinyadventurepack/Other/Misc/stone.png",
    null
   ],
   "deer": [
@@ -527,8 +531,8 @@
  },
  "sounds": {
   "bleep": ["assets/sounds/bleep.wav",0.1],
-  "hit1": ["assets/sounds/hits/hit33.mp3.ogg",0.02],
-  "walk1":["assets/sounds/impact_sounds/footstep_carpet_004.ogg",0.05],
+  "hit1": ["assets/sounds/hit1.ogg",0.02],
+  "walk1":["assets/sounds/impact_sounds/footstep_grass_000.ogg",0.05],
   "drop1":["assets/sounds/misc/dropLeather.ogg",0.1],
   "grab1":["assets/sounds/misc/bookOpen.ogg",0.1]
   

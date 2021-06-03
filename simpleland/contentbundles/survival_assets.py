@@ -87,6 +87,19 @@ def angle_to_direction(angle):
     return direction
 
 
+def direction_to_angle(direction):
+    angle_num = 0
+    if direction == "down":
+        angle_num = 0
+    elif direction == "left":
+        angle_num = 0.50
+    elif direction == "right":
+        angle_num = -0.5
+    elif direction == "up":
+        angle_num =1
+    return angle_num * math.pi
+
+
 type_tree={
     'physical_object': None,
     'plant': 'physical_object',
@@ -125,9 +138,12 @@ class PhysicalObject(GObject):
         self.breakable = True
         self.pushable = True
         self.collision_type = 1
+
         self.collectable = False
+        self.count_max = 1
+        self.count = 1
         
-        self.__sprites = None
+        self.__model = None
         self.__sounds = None
 
         # Can it be placed in inventory?
@@ -139,23 +155,25 @@ class PhysicalObject(GObject):
         self.disable()
         ShapeFactory.attach_rectangle(self, width=TILE_SIZE, height=TILE_SIZE)
 
+    def get_sprites(self,action,angle):
+        if self.__model is None:
+            self.__model =  gamectx.content.get_object_sprites(self.config_id)
         
-
-    def get_sprites(self):
-        if self.__sprites is None:
-            model = gamectx.content.get_object_sprites(self.config_id)
-            if "body" in model:
-                self.__sprites =  gamectx.content.get_object_sprites(self.config_id)['body']
-            else:
-                self.__sprites = model.get("default",{})
-        return self.__sprites
+        action_sprite = self.__model.get(action)
+        if action_sprite is None:
+            action_sprite = self.__model.get(self.default_action_type)
+            if action_sprite is None:
+                return self.__model.get('default',[self.image_id_default])
+        direction = angle_to_direction(angle)
+        return action_sprite[direction]
 
     def play_sound(self,name):
         if self.__sounds is None:
             self.__sounds = gamectx.content.get_object_sounds(self.config_id)
         sound_id = self.__sounds.get(name)
         if sound_id is not None:
-            gamectx.add_event(SoundEvent(sound_id=sound_id,position=self.get_view_position()))
+            gamectx.add_event(SoundEvent(sound_id=sound_id,
+                position=self.get_view_position()))
 
     def spawn(self,position):
         gamectx.content.add_object(self)
@@ -193,25 +211,18 @@ class PhysicalObject(GObject):
             'start_tick': clock.get_tick_counter(),
             'blocking':False,
             'continuous':True
-
         }
 
     def get_image_id(self, angle=0):
         action = self.get_action()
-        sprites = self.get_sprites().get(action['type'])
-        if sprites is None:
-            sprites = self.get_sprites().get(self.default_action_type)
-        if sprites is None:
-            return self.image_id_default
-
-        direction = angle_to_direction(self.angle)
-
+        sprites = self.get_sprites(action['type'],self.angle)
+        if sprites is None or len(sprites) ==0:
+            return None
         cur_tick = clock.get_tick_counter()
-        # TODO: Need to account for game speed
         action_idx = (cur_tick - action['start_tick'])
-        total_sprite_images = len(sprites[direction])
+        total_sprite_images = len(sprites)
         sprite_idx = int((action_idx/action['ticks']) * total_sprite_images)  % total_sprite_images
-        return sprites[direction][sprite_idx]
+        return sprites[sprite_idx]
 
     def get_view_position(self):
         cur_tick = clock.get_tick_counter()
@@ -247,8 +258,6 @@ class PhysicalObject(GObject):
         self.update_position(new_pos)
         self.play_sound("move")
 
-
-
     def receive_damage(self, attacker_obj, damage):
         self.health -= damage
         self.play_sound("receive_damage")
@@ -260,9 +269,179 @@ class PhysicalObject(GObject):
         self.move(direction,None)
         self.play_sound("receive_push")
 
+    def update(self):
+        if self.breakable and self.health <= 0:
+            self.destroy()
+
     def destroy(self):
         if self.breakable:
             gamectx.content.remove_object(self)
+
+
+class Inventory:
+
+    def __init__(self, owner_obj):
+        self.slots = 10
+        self.items = [owner_obj]
+
+        # Fill
+        for i in range(0,self.slots - len(self.items)):
+            self.items.append(None)
+        
+        self.selected_slot = 0
+
+    def get_selected(self):
+        return self.items[self.selected_slot]
+
+    def select_item(self,prev=False):
+        if prev:
+            if self.selected_slot ==0:
+                self.selected_slot = self.slots -1
+            else:
+                self.selected_slot-=1
+                
+        else:
+            if self.selected_slot == self.slots +1:
+                self.selected_slot=0
+            else:
+                self.selected_slot+=1
+                self.selected_slot = self.selected_slot % self.slots
+
+    def add(self,obj:PhysicalObject):
+        if obj.count_max > 1:
+            for inv_obj in self.items:
+                if inv_obj is not None and inv_obj.config_id == obj.config_id and inv_obj.count < inv_obj.count_max:
+                    inv_obj.count+=1
+                    gamectx.content.remove_object(obj)
+                    print("REMOVING")
+                    return True
+            
+        for i, inv_obj in enumerate(self.items):
+            if inv_obj is None:
+                self.items[i]= obj
+                obj.disable()
+                print("Added")
+                
+                return True
+        return False
+
+    def find(self,config_id):
+        objs = []
+        for inv_obj in self.items:
+            print(inv_obj)
+            if inv_obj is not None and inv_obj.config_id == config_id:
+                objs.append(inv_obj)
+        return objs
+
+    def remove_selected(self,remove_all=False):
+        if self.selected_slot == 0:
+            return None
+        obj = self.items[self.selected_slot]
+        if obj is None:
+            return None
+        else:
+            if not remove_all and obj.count > 1:
+                obj.count-=1
+                return obj
+            else:
+                self.items[self.selected_slot] = None
+                return obj
+
+
+    def as_string(self):
+        inv_info = []
+        for i, obj in enumerate(self.items):
+            if obj is None:
+                if i==self.selected_slot:
+                    inv_info.append(f"[x]")
+                else:
+                    inv_info.append(f" x ")
+            elif i==self.selected_slot:
+                inv_info.append(f"[{obj.config_id}:{obj.count}]")
+            else:
+                inv_info.append(f" {obj.config_id}:{obj.count} ")
+        return ', '.join(inv_info)
+
+class CraftMenu:
+
+    def __init__(self,inventory):
+        self.slots = 10
+        self.items = ["wall1"]
+
+        self.requirements = {
+            'wall1': {'wood1': 1}
+        }
+        
+        self.selected_slot = 0
+        self.inventory = inventory
+
+    def get_selected(self):
+        return self.items[self.selected_slot]
+
+    def select_item(self,prev=False):
+        if prev:
+            if self.selected_slot ==0:
+                self.selected_slot =len(self.items) - 1
+            else:
+                self.selected_slot-=1
+                
+        else:
+            if self.selected_slot ==  len(self.items) -1:
+                self.selected_slot=0
+            else:
+                self.selected_slot+=1
+
+    def craft_selected(self):
+        config_id = self.get_selected()
+        reqs = self.requirements.get(config_id)
+        if reqs is not None:
+            have_reqs = True
+            # Check requirements
+            for req_id, count in reqs.items():
+                objs = self.inventory.find(req_id)
+                if len(objs) == 0:
+                    print("NON FOUND")
+                    break
+                else:
+                    inv_count = sum([o.count for o in objs])
+                    if inv_count < count:
+                        break
+            if not have_reqs:
+                print("Dont have req")
+                return None
+
+            # Remove requirements
+            for req_id, count in reqs.items():
+                objs = self.inventory.find(req_id)
+                
+                for obj in objs:
+                    remainder = count - obj.count
+                    if remainder >= 0:
+                        gamectx.content.remove_object(obj)
+                        count = remainder
+                    else:
+                        obj.count = obj.count - count
+                    if count == 0:
+                        break
+        obj:PhysicalObject = gamectx.content.create_from_config_id(config_id)
+        obj.spawn(position=Vector(0,0))
+        obj.disable()
+        print(obj)
+        self.inventory.add(obj)
+
+
+
+    def as_string(self):
+        info = []
+        for i, craft_type in enumerate(self.items):
+            if i==self.selected_slot:
+                info.append(f"[{craft_type}]")
+            else:
+                info.append(f" {craft_type} ")
+        return " ,".join(info)
+
+
+
 
 
 class AnimateObject(PhysicalObject):
@@ -292,14 +471,32 @@ class AnimateObject(PhysicalObject):
 
         # Visual Range in x and y direction
         self.vision_radius =  self.config.get('vision_radius',2)
-
-        # TODO:
-        self.inventory = {}
-        self.inventory_capacity = 1
-        self.inventory_slots = 1
-        self.selected_item = None
+        
+        self.__inventory = Inventory(self)
+        self.__craftmenu = CraftMenu(self.__inventory)
 
 
+    def inventory(self):
+        return self.__inventory
+
+
+    def select_item(self,prev=False):
+        self.__inventory.select_item(prev)
+
+    def remove_selected_item(self):
+        return self.__inventory.remove_selected()
+
+    def craftmenu(self):
+        return self.__craftmenu
+
+    def craft(self):
+        self.craftmenu().craft_selected()
+        
+
+
+    def select_craft_type(self,prev=False):
+        self.__craftmenu.select_item(prev)
+                
     def spawn(self,position:Vector):
         super().spawn(position)
         self.energy = self.config.get('energy_start',100)
@@ -313,33 +510,13 @@ class AnimateObject(PhysicalObject):
 
     # TODO: not in use
     def get_observation_space(self):
-        x_dim = (gamectx.content.vision_distance * 2 + 1)
-        y_dim = x_dim
-        chans = len(gamectx.content.item_types) + 1
-        return spaces.Box(low=0, high=1, shape=(x_dim, y_dim, chans))
+        pass
 
     # TODO: not in use
     def get_observation(self):
-        obj_coord = gamectx.physics_engine.vec_to_coord(self.get_position())
-        vrad = self.vision_radius
+        pass
+ 
         
-        col_min = obj_coord[0] - vrad
-        col_max = obj_coord[0] + vrad
-        row_min = obj_coord[1] - vrad
-        row_max = obj_coord[1] + vrad
-        results = []
-        for r in range(row_max, row_min-1, -1):
-            row_results = []
-            for c in range(col_min, col_max+1):
-                obj_ids = gamectx.physics_engine.space.get_objs_at((c, r))
-                if len(obj_ids) > 0:
-                    obj_id = obj_ids[0]
-                    obj_seen = gamectx.object_manager.get_by_id(obj_id)
-                    row_results.append(gamectx.content.item_map.get(obj_seen.get_data_value('type')))
-                else:
-                    row_results.append(gamectx.content.default_v)
-            results.append(row_results)
-        return np.array(results)
 
     def set_player(self,player:Player):
         self.player_id = player.get_id()
@@ -370,20 +547,23 @@ class AnimateObject(PhysicalObject):
 
         return obj_list
 
-    def get_item_amount(self, name):
-        return self.inventory.get(name,0)
-
-    def modify_inventory(self, name, count):
-        self.inventory[name] = self.get_item_amount(name) + count
-
     def receive_push(self,*args,**kwargs):
         super().receive_push(*args,**kwargs)
         self.stunned()
 
     def consume_food(self,food_obj:PhysicalObject):
         self.energy += food_obj.energy
-        food_obj.destroy()
         self.play_sound("eat")
+        ticks_in_action = gamectx.content.speed_factor()/0.3
+
+        self._action = \
+            {
+                'type': 'eat',
+                'start_tick': clock.get_tick_counter(),
+                'ticks': ticks_in_action,
+                'step_size': TILE_SIZE/ticks_in_action,
+                'blocking':True
+            } 
 
     def walk(self, direction, new_angle):
         walk_speed = self.walk_speed
@@ -413,18 +593,26 @@ class AnimateObject(PhysicalObject):
 
         ticks_in_action = int(gamectx.content.speed_factor())
 
-        direction = Vector(0, 1).rotated(self.angle).normalized()
-
-        target_pos = self.get_position() + (direction * TILE_SIZE)
-        target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
         grab_successful = False
+
+        target_coord = gamectx.physics_engine.vec_to_coord(self.get_position())
         for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
             target_obj:PhysicalObject = gamectx.object_manager.get_by_id(oid)
-            if target_obj.collectable:
-                gamectx.remove_object(target_obj)
-                self.modify_inventory(target_obj.type, 1)
-                grab_successful = True
+            if target_obj.enabled and target_obj.collectable:
+                grab_successful = self.inventory().add(target_obj)
+                break
+
+        if not grab_successful:
+            direction = Vector(0, 1).rotated(self.angle).normalized()
+            target_pos = self.get_position() + (direction * TILE_SIZE)
+            target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
+            for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
+                target_obj:PhysicalObject = gamectx.object_manager.get_by_id(oid)
+                if target_obj.enabled and target_obj.collectable:
+                    grab_successful = self.inventory().add(target_obj)
+                    break
         if grab_successful:
+            print("Grab success")
             self.play_sound("grab")
 
         self._action = \
@@ -456,10 +644,16 @@ class AnimateObject(PhysicalObject):
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
         oids = gamectx.physics_engine.space.get_objs_at(target_coord)
 
-        if len(oids) == 0 or (len(oids) == 1 and gamectx.object_manager.get_by_id(oids[0]).type == 'grass'):
-            if self.get_item_amount("rock") > 0:
-                Rock().spawn(target_pos)
-                self.modify_inventory("rock", -1)
+        if len(oids) == 0:
+            obj = self.remove_selected_item()
+            if obj is not None:
+                obj.enable()
+                obj.update_position(target_pos)
+                
+            # print("TOOD: Drop")
+            # if self.get_item_amount("wood") > 0:
+            #     Wood().spawn(target_pos)
+            #     self.modify_inventory("wood", -1)
 
         self._action = \
             {
@@ -470,6 +664,15 @@ class AnimateObject(PhysicalObject):
             }
         self.play_sound("drop")
         
+    def use(self):
+        selected_obj:PhysicalObject = self.inventory().get_selected()
+        if self.inventory().selected_slot ==0 or selected_obj is None:
+            self.attack()
+            return
+        if selected_obj.type == "food":
+            self.consume_food(selected_obj)
+            self.inventory().remove_selected()
+       
 
     def attack(self):
         attack_speed = self.attack_speed
@@ -548,9 +751,7 @@ class AnimateObject(PhysicalObject):
             gen_delay = (self.config.get('stamina_gen_period',0) * gamectx.content.speed_factor())
             self.next_stamina_gen = cur_time + gen_delay
 
-        if self.breakable and self.health <= 0:
-            self.destroy()
-        
+        super().update()       
 
     def destroy(self):
         if self.get_player() is not None:
@@ -606,8 +807,6 @@ class Monster(AnimateObject):
         self.health =  40
         self.config_id = "monster1"
 
-    def get_sprites(self):
-        return gamectx.content.get_object_sprites(self.config_id).get('body',{})
 
     def update(self):
         super().update()
@@ -704,7 +903,10 @@ class Tree(PhysicalObject):
         self.pushable = False
         self.top_id = None
         self.trunk_id = None
+        
         self.fruit_ids = []
+        self.__sprites = None
+
 
     def spawn(self,position):
         super().spawn(position=position)
@@ -717,8 +919,9 @@ class Tree(PhysicalObject):
         o = PhysicalObject(depth=1)
         o.type = "part"
         o.pushable = False
+
         o.collision_type = 0
-        o.set_image_id(f"tree_trunk")
+        o.set_image_id('tree_trunk')
         o.spawn(position=self.get_position())
         
         self.trunk_id = o.get_id()
@@ -735,11 +938,10 @@ class Tree(PhysicalObject):
         o.spawn(position=self.get_position())
         self.fruit_ids.append(o.get_id())
 
-
     def add_tree_top(self):
         o = PhysicalObject(depth=3)
         o.type = "part"
-        o.set_image_id(f"tree_top")
+        o.set_image_id('tree_top')
         o.pushable = False
         o.set_image_offset(Vector(0, gamectx.content.tile_size*1.4))
         o.collision_type = 0
@@ -763,7 +965,15 @@ class Tree(PhysicalObject):
             gamectx.content.remove_object_by_id(self.trunk_id)
             gamectx.content.remove_object(self)
             Wood().spawn(self.position)
-            
+
+    # TODO: Add start age, and growth
+    def get_age(self):
+        return clock.get_tick_counter() - self.created_tick 
+
+    # def update(self):
+    #     if self.get_age() > 100:
+    #         print(f"Tree age {self.get_age()}")
+        
         
         
 class Wood(PhysicalObject):
@@ -772,10 +982,12 @@ class Wood(PhysicalObject):
         super().__init__(*args,**kwargs)
         self.depth = 1
         self.type = "wood"
+        self.config_id="wood1"
         self.set_image_id('wood')
         self.collectable = True
-        self.collision = True
+        self.count_max = 5
         self.breakable = True
+        self.collision_type = 0
         self.pushable = False
         self.set_shape_color(color=(200, 200, 50))
 
@@ -791,9 +1003,10 @@ class Food(PhysicalObject):
         self.set_image_id('food')
         self.set_shape_color(color=(100, 130, 100))
         self.energy = gamectx.content.config['food_energy']
-        self.collision = True
         self.collectable = True
         self.breakable = True
+        self.collision_type =0
+        self.count_max = 10
         
     def spawn(self,position):
         super().spawn(position=position)
@@ -804,11 +1017,26 @@ class Rock(PhysicalObject):
         super().__init__(*args,**kwargs)
         self.depth = 1
         self.type =  'rock'
-        self.collectable = True
+        self.collectable = False
+        self.breakable=False
+        self.pushable = True
         self.set_image_id('rock')
         self.set_shape_color(color=(100, 130, 100))
-        self.breakable=False
 
+class Wall(PhysicalObject):
+
+    def __init__(self, *args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.depth = 1
+        self.type =  'wall'
+        self.collectable = True
+        self.breakable=True
+        self.pushable = False
+        self.count_max = 10
+        self.set_image_id('wall')
+        self.set_shape_color(color=(160, 100, 30))  
+
+ 
 
 class Water(PhysicalObject):
 
@@ -818,7 +1046,6 @@ class Water(PhysicalObject):
         self.type =  'water'
         self.set_shape_color(color=(30, 30, 150))
         self.breakable=False
-        self.collision = False
 
 
 
@@ -846,8 +1073,6 @@ class WorldMap:
                         if info.get('type') == "spawn_point":
                             gamectx.content.add_spawn_point(config_id,coord_to_vec(coord))
                         else:
-                            object_config = gamectx.content.game_config['objects'].get(config_id)
-                            cls = gamectx.content.get_class_by_type_name(object_config['obj_class'])
-                            obj:PhysicalObject = cls(config_id=config_id,config=object_config)
+                            obj = gamectx.content.create_from_config_id(config_id)
                             obj.spawn(position=coord_to_vec(coord))
                             
