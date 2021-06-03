@@ -219,7 +219,6 @@ class GameContent(Content):
         #     execution_step_interval=random.randint(10, 16) * self.speed_factor())
         # gamectx.add_event(new_food_event)
 
-        self.spawn_food()
         self.spawn_players()
 
     # TODO: get from player to object
@@ -235,7 +234,7 @@ class GameContent(Content):
 
     # TODO: get from player to object
     def get_observation(self, obj: GObject):
-        if obj is None:
+        if obj is None or not obj.is_enabled():
             return None
         obj_coord = gamectx.physics_engine.vec_to_coord(obj.get_position())
         xvis = self.vision_distance
@@ -336,15 +335,6 @@ class GameContent(Content):
             object_config = gamectx.content.game_config['objects'][config_id]['config']
             Monster(config=object_config).spawn(spawn_points[0])
 
-    def spawn_food(self, limit=None):
-        # Spawn food
-        spawn_count = 0
-        for i, coord in enumerate(self.food_locations):
-            if len(gamectx.physics_engine.space.get_objs_at(coord)) == 0:
-                Food().spawn(coord_to_vec(coord))
-                spawn_count += 1
-                if limit is not None and spawn_count >= limit:
-                    return
 
     def spawn_player(self,player:Player, reset=False):
         if player.get_object_id() is not None:
@@ -488,6 +478,9 @@ class GameContent(Content):
         if 17 in keydown:
             actions_set.add("CRAFT")
 
+        if 33 in keypressed:
+            actions_set.add("JUMP")
+
         if  7 in keypressed:
             actions_set.add("PUSH")
 
@@ -515,6 +508,8 @@ class GameContent(Content):
             obj.select_craft_type(prev=True)
         elif "PUSH" in actions_set:
             obj.push()
+        elif "JUMP" in actions_set:
+            obj.jump()
         elif "WALK" in actions_set:
             # def event_fn(event: DelayedEvent, data):
             #     obj.walk(direction,angle_update)
@@ -545,6 +540,8 @@ class GameContent(Content):
 
     def create_from_config_id(self,config_id):
         object_config = gamectx.content.game_config['objects'].get(config_id)
+        if object_config is None:
+            raise Exception(f"{config_id} not defined in game_config['objects']")
         cls = gamectx.content.get_class_by_type_name(object_config['obj_class'])
         obj:PhysicalObject = cls(config_id=config_id,config=object_config)
         return obj

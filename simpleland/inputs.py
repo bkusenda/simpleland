@@ -40,6 +40,7 @@ def get_default_key_map():
     key_map["MOUSE_DOWN_3"] = 30
     key_map["MOUSE_DOWN_4"] = 31
     key_map["MOUSE_DOWN_5"] = 32
+    key_map[pygame.K_SPACE] = 33
     return key_map
 DEFAULT_KEYMAP = get_default_key_map()
 key_list = []
@@ -59,6 +60,7 @@ key_list.append(pygame.K_s)
 key_list.append(pygame.K_a)
 key_list.append(pygame.K_d)
 key_list.append(pygame.K_ESCAPE)
+key_list.append(pygame.K_SPACE)
 
 import sys
 def get_input_events(player:Player) -> List[Event]:

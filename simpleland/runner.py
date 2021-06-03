@@ -204,7 +204,7 @@ def run(args):
 
         if args.enable_profiler:
             profiler.stop()
-            print(profiler.output_text(unicode=True, color=False))
+            print(profiler.output_text(unicode=True, color=True))
         exit()
     signal.signal(signal.SIGINT, graceful_exit)
 

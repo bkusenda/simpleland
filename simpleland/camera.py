@@ -8,6 +8,7 @@ class Camera(Base):
         self.position_offset = position_offset
         self.view_type =view_type
         self.center = center
+        self.last_center = Vector(0,0)
         
 
     def get_distance(self):
@@ -31,12 +32,13 @@ class Camera(Base):
 
     def get_center(self):
         if self.center is not None:
-            return self.center - self.position_offset
-        obj = self.get_follow_object()
-        if obj:
-            return obj.get_view_position()
+            self.last_center= self.center - self.position_offset
         else:
-            return Vector(0,0)
+            obj = self.get_follow_object()
+            if obj and obj.is_enabled():
+                self.last_center= obj.get_view_position()
+
+        return self.last_center
 
     def get_view_type(self):
         return self.view_type

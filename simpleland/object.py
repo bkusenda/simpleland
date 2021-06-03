@@ -20,7 +20,7 @@ class GObject(Base):
             self.id = gen_id()
         else:
             self.id = id
-        self.position = Vector(0,0)
+        self.position = None
         self.angle = 0
 
         self.shape_group: ShapeGroup = ShapeGroup()
@@ -38,7 +38,7 @@ class GObject(Base):
         self.image_id_current = None
         self.rotate_sprites = False
         self.image_offset = Vector(0,0)
-        self.child_object_ids =[]
+        self.child_object_ids =set()
 
     # This function should be overridden
     def create(self,*args,**kwargs):
@@ -79,6 +79,7 @@ class GObject(Base):
 
     def disable(self):
         self.enabled=False
+        self.update_position(None, skip_collision_check=True)
 
     def enable(self):
         self.enabled=True

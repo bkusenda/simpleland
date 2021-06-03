@@ -121,8 +121,11 @@ class GridPhysicsEngine:
 
     def update_obj_position(self,obj:GObject,new_pos,skip_collision_check=False,callback=None):
         if skip_collision_check:
-            coord =self.vec_to_coord(new_pos)
-            self.space.move_obj_to(coord,obj)
+            if new_pos is not None:
+                coord =self.vec_to_coord(new_pos)
+                self.space.move_obj_to(coord,obj)
+            else:
+                self.space.remove_obj(obj.get_id())
             obj.position = new_pos
             if callback is not None:
                 callback(True)

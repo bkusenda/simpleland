@@ -135,7 +135,7 @@ class PhysicalObject(GObject):
         self.health = 50
         self.created_tick = 0
         self.animated = True
-        self.breakable = True
+        self.remove_on_destroy = True
         self.pushable = True
         self.collision_type = 1
 
@@ -177,6 +177,7 @@ class PhysicalObject(GObject):
 
     def spawn(self,position):
         gamectx.content.add_object(self)
+        self.set_image_offset(Vector(0,0))
 
         self._action = {
             'type': 'spawn',
@@ -268,23 +269,32 @@ class PhysicalObject(GObject):
             return
         self.move(direction,None)
         self.play_sound("receive_push")
+    
+    def receive_grab(self,actor_obj):
+        return self if self.collectable else None
 
     def update(self):
-        if self.breakable and self.health <= 0:
+        if self.health <= 0:
             self.destroy()
 
     def destroy(self):
-        if self.breakable:
+        
+        if self.remove_on_destroy:
+            for child_id in self.child_object_ids:
+                gamectx.content.remove_object_by_id(child_id)
             gamectx.content.remove_object(self)
+        else:
+            self.disable()
+        self.play_sound("destroy")
 
 
-class Inventory:
+class Inventory(PhysicalObject):
 
-    def __init__(self, owner_obj):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
         self.slots = 10
-        self.items = [owner_obj]
+        self.items = []
 
-        # Fill
         for i in range(0,self.slots - len(self.items)):
             self.items.append(None)
         
@@ -317,7 +327,7 @@ class Inventory:
                     return True
             
         for i, inv_obj in enumerate(self.items):
-            if inv_obj is None:
+            if i != 0 and inv_obj is None:
                 self.items[i]= obj
                 obj.disable()
                 print("Added")
@@ -327,35 +337,42 @@ class Inventory:
 
     def find(self,config_id):
         objs = []
-        for inv_obj in self.items:
+        for i, inv_obj in enumerate(self.items):
             print(inv_obj)
             if inv_obj is not None and inv_obj.config_id == config_id:
-                objs.append(inv_obj)
+                objs.append((i,inv_obj))
         return objs
 
     def remove_selected(self,remove_all=False):
-        if self.selected_slot == 0:
+        return self.remove_by_slot(self.selected_slot,remove_all=remove_all)
+
+    def remove_by_slot(self,slot_id, remove_all=False):
+        if slot_id == 0:
             return None
-        obj = self.items[self.selected_slot]
+        obj = self.items[slot_id]
         if obj is None:
             return None
         else:
             if not remove_all and obj.count > 1:
                 obj.count-=1
-                return obj
+                print(f"removing {obj.type}")
+                newobj = gamectx.content.create_from_config_id(obj.config_id)
+                newobj.spawn(position=Vector(0,0))
+                newobj.disable()
+                return newobj
             else:
-                self.items[self.selected_slot] = None
+                self.items[slot_id] = None
                 return obj
-
 
     def as_string(self):
         inv_info = []
         for i, obj in enumerate(self.items):
             if obj is None:
+                item_name = "self" if i is 0 else "x"
                 if i==self.selected_slot:
-                    inv_info.append(f"[x]")
+                    inv_info.append(f"[{item_name}]")
                 else:
-                    inv_info.append(f" x ")
+                    inv_info.append(f" {item_name} ")
             elif i==self.selected_slot:
                 inv_info.append(f"[{obj.config_id}:{obj.count}]")
             else:
@@ -373,7 +390,7 @@ class CraftMenu:
         }
         
         self.selected_slot = 0
-        self.inventory = inventory
+        self.inventory:Inventory = inventory
 
     def get_selected(self):
         return self.items[self.selected_slot]
@@ -403,7 +420,7 @@ class CraftMenu:
                     print("NON FOUND")
                     break
                 else:
-                    inv_count = sum([o.count for o in objs])
+                    inv_count = sum([o.count for _,o in objs])
                     if inv_count < count:
                         break
             if not have_reqs:
@@ -414,9 +431,10 @@ class CraftMenu:
             for req_id, count in reqs.items():
                 objs = self.inventory.find(req_id)
                 
-                for obj in objs:
+                for i, obj in objs:
                     remainder = count - obj.count
                     if remainder >= 0:
+                        self.inventory.remove_by_slot(i)
                         gamectx.content.remove_object(obj)
                         count = remainder
                     else:
@@ -426,10 +444,7 @@ class CraftMenu:
         obj:PhysicalObject = gamectx.content.create_from_config_id(config_id)
         obj.spawn(position=Vector(0,0))
         obj.disable()
-        print(obj)
         self.inventory.add(obj)
-
-
 
     def as_string(self):
         info = []
@@ -472,7 +487,7 @@ class AnimateObject(PhysicalObject):
         # Visual Range in x and y direction
         self.vision_radius =  self.config.get('vision_radius',2)
         
-        self.__inventory = Inventory(self)
+        self.__inventory = Inventory()
         self.__craftmenu = CraftMenu(self.__inventory)
 
 
@@ -516,8 +531,6 @@ class AnimateObject(PhysicalObject):
     def get_observation(self):
         pass
  
-        
-
     def set_player(self,player:Player):
         self.player_id = player.get_id()
         if player is not None:
@@ -542,7 +555,7 @@ class AnimateObject(PhysicalObject):
                 obj_ids = gamectx.physics_engine.space.get_objs_at((c, r))
                 for obj_id in obj_ids:
                     obj_seen = gamectx.object_manager.get_by_id(obj_id)
-                    if obj_seen.is_visible() and obj_seen.is_enabled():
+                    if obj_seen is not None and obj_seen.is_visible() and obj_seen.is_enabled():
                         obj_list.append(obj_seen)
 
         return obj_list
@@ -589,30 +602,54 @@ class AnimateObject(PhysicalObject):
 
         self.update_position(new_pos, callback = lambda suc: self.play_sound('walk') if suc else None )
 
+    def jump(self):
+        
+        direction = Vector(0, 2).rotated(self.angle)
+        target_pos = self.get_position() + (direction * TILE_SIZE)
+        target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
+        oids = gamectx.physics_engine.space.get_objs_at(target_coord)
+
+        if len(oids) == 0:
+            ticks_in_action = gamectx.content.speed_factor()/0.3
+            self._action = \
+                {
+                    'type': 'jump',
+                    'start_tick': clock.get_tick_counter(),
+                    'ticks': ticks_in_action,
+                    'step_size': (2*TILE_SIZE)/ticks_in_action,
+                    'start_position': self.position,
+                    'blocking':True
+                }     
+            self.update_position(target_pos, callback = lambda suc: self.play_sound('walk') if suc else None )
+
+
+
     def grab(self):
 
         ticks_in_action = int(gamectx.content.speed_factor())
 
-        grab_successful = False
+        received_obj = None
 
         target_coord = gamectx.physics_engine.vec_to_coord(self.get_position())
         for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
             target_obj:PhysicalObject = gamectx.object_manager.get_by_id(oid)
-            if target_obj.enabled and target_obj.collectable:
-                grab_successful = self.inventory().add(target_obj)
+            received_obj = target_obj.receive_grab(self)
+            if received_obj is not None:
                 break
 
-        if not grab_successful:
+        if received_obj is None:
             direction = Vector(0, 1).rotated(self.angle).normalized()
             target_pos = self.get_position() + (direction * TILE_SIZE)
             target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
             for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
                 target_obj:PhysicalObject = gamectx.object_manager.get_by_id(oid)
-                if target_obj.enabled and target_obj.collectable:
-                    grab_successful = self.inventory().add(target_obj)
+                received_obj = target_obj.receive_grab(self)
+                if received_obj is not None:
                     break
-        if grab_successful:
+
+        if received_obj is not None:
             print("Grab success")
+            self.inventory().add(received_obj)
             self.play_sound("grab")
 
         self._action = \
@@ -758,7 +795,7 @@ class AnimateObject(PhysicalObject):
             self.disable()
         else:
             super().destroy()
-        self.play_sound("destroy")
+        
 
 
 class Human(AnimateObject):
@@ -901,11 +938,12 @@ class Tree(PhysicalObject):
         self.health =  100
         self.set_visiblity(False)
         self.pushable = False
+        self.remove_on_destroy = True
+
         self.top_id = None
         self.trunk_id = None
         
-        self.fruit_ids = []
-        self.__sprites = None
+        self.__fruit = []
 
 
     def spawn(self,position):
@@ -919,33 +957,33 @@ class Tree(PhysicalObject):
         o = PhysicalObject(depth=1)
         o.type = "part"
         o.pushable = False
-
         o.collision_type = 0
         o.set_image_id('tree_trunk')
         o.spawn(position=self.get_position())
-        
         self.trunk_id = o.get_id()
+        self.child_object_ids.add(self.trunk_id)
 
     def add_fruit(self):
-        o = PhysicalObject(depth=3)
-        o.type = "part"
-        o.pushable = False
+        o = Food(config_id="food1")
+        o.spawn(position=self.get_position())
+        o.depth = 3
         o.collision_type = 0
-        o.set_image_id(f"food")
         y = random.random() * gamectx.content.tile_size*1.8
         x = random.random()* gamectx.content.tile_size - gamectx.content.tile_size/2
         o.set_image_offset(Vector(x,y))
-        o.spawn(position=self.get_position())
-        self.fruit_ids.append(o.get_id())
+        self.__fruit.append(o)
+        self.child_object_ids.add(o.get_id())
 
     def add_tree_top(self):
-        o = PhysicalObject(depth=3)
+        o = PhysicalObject()
+        o.depth=2
         o.type = "part"
         o.set_image_id('tree_top')
         o.pushable = False
-        o.set_image_offset(Vector(0, gamectx.content.tile_size*1.4))
         o.collision_type = 0
         o.spawn(position=self.get_position())        
+        o.set_image_offset(Vector(0, gamectx.content.tile_size*1.4))
+
         self.top_id = o.get_id()
     
     def get_trunk(self)->PhysicalObject:
@@ -958,17 +996,31 @@ class Tree(PhysicalObject):
         super().receive_damage(attacker_obj, damage)
         if self.health <20:
             gamectx.content.remove_object_by_id(self.top_id)
-            for fruit_id in self.fruit_ids:
-                gamectx.content.remove_object_by_id(fruit_id)
-            self.fruit_ids = []
+            for fruit in self.__fruit:
+                self.child_object_ids.discard(fruit.get_id())
+                gamectx.content.remove_object(fruit)
+            self.fruit = []
         if self.health <=0:
             gamectx.content.remove_object_by_id(self.trunk_id)
             gamectx.content.remove_object(self)
             Wood().spawn(self.position)
 
+    def receive_grab(self,actor_obj):
+        print("Receiving grab")
+        if len(self.__fruit) >0:
+            fruit = self.__fruit.pop()
+            self.child_object_ids.remove(fruit.get_id())
+            return fruit
+        else:
+            return None
+
     # TODO: Add start age, and growth
     def get_age(self):
         return clock.get_tick_counter() - self.created_tick 
+
+
+            
+
 
     # def update(self):
     #     if self.get_age() > 100:
@@ -986,7 +1038,7 @@ class Wood(PhysicalObject):
         self.set_image_id('wood')
         self.collectable = True
         self.count_max = 5
-        self.breakable = True
+        self.remove_on_destroy = True
         self.collision_type = 0
         self.pushable = False
         self.set_shape_color(color=(200, 200, 50))
@@ -1004,12 +1056,13 @@ class Food(PhysicalObject):
         self.set_shape_color(color=(100, 130, 100))
         self.energy = gamectx.content.config['food_energy']
         self.collectable = True
-        self.breakable = True
+        self.remove_on_destroy = True
         self.collision_type =0
         self.count_max = 10
         
     def spawn(self,position):
         super().spawn(position=position)
+        self.depth = 1
 
 class Rock(PhysicalObject):
 
@@ -1018,7 +1071,7 @@ class Rock(PhysicalObject):
         self.depth = 1
         self.type =  'rock'
         self.collectable = False
-        self.breakable=False
+        self.remove_on_destroy=False
         self.pushable = True
         self.set_image_id('rock')
         self.set_shape_color(color=(100, 130, 100))
@@ -1030,7 +1083,7 @@ class Wall(PhysicalObject):
         self.depth = 1
         self.type =  'wall'
         self.collectable = True
-        self.breakable=True
+        self.remove_on_destroy=True
         self.pushable = False
         self.count_max = 10
         self.set_image_id('wall')
@@ -1045,7 +1098,7 @@ class Water(PhysicalObject):
         self.depth = 0
         self.type =  'water'
         self.set_shape_color(color=(30, 30, 150))
-        self.breakable=False
+        self.remove_on_destroy=False
 
 
 

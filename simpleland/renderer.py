@@ -136,7 +136,7 @@ class Renderer:
             pygame.mixer.init()
         pygame.init()
 
-        flags =  pygame.DOUBLEBUF # | pygame.RESIZABLE | pygame.SCALED
+        flags =  pygame.DOUBLEBUF  #| pygame.RESIZABLE | pygame.SCALED
         self._display_surf = pygame.display.set_mode(self.resolution,flags)  # ,)
         # self._display_surf = pygame.display.set_mode(self.resolution)  # ,)
         self.load_sounds()
@@ -345,13 +345,14 @@ class Renderer:
         object_list_depth_sorted = [[], [], [], []]
         for k, o in objs.items():
             o:GObject = o
-            if o is not None and not o.is_deleted and o.is_visible():
+            if o is not None and o.is_enabled() and not o.is_deleted and o.is_visible():
                 within_range = o.get_view_position().get_distance(center) < self.view_width
                 if within_range:
                     object_list_depth_sorted[o.depth].append(o)
 
         # TODO: Need to adjust with angle
         center_bottom = center - Vector(0,100)
+        
         for lst in object_list_depth_sorted:
             lst.sort(key=lambda o: o.get_position().get_distance(center_bottom))
         return object_list_depth_sorted
@@ -456,6 +457,8 @@ class Renderer:
             camera.distance = 100
 
         center = camera.get_center()
+        if center is None:
+            center = Vector(self.view_width/2,self.view_height/2)
         angle = camera.get_angle()
                
         # TODO: View Width/Height should only be in camera
