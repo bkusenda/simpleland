@@ -1,4 +1,5 @@
 
+from simpleland.object import GObject
 from typing import Any, Dict, List
 from .utils import gen_id
 from .common import Base, Vector
@@ -140,6 +141,35 @@ class InputEvent(Event):
     def __repr__(self):
         return str(self.input_data)
 
+
+class PositionChangeEvent(Event):
+
+    @classmethod
+    def build_from_dict(cls,dict_data, **kwargs):
+        return cls(
+            id = dict_data['id'],
+            obj_id = dict_data['obj_id'],
+            old_pos = dict_data['old_pos'],
+            new_pos = dict_data['new_pos'],
+            is_player_obj = dict_data['is_player_obj'],
+            **kwargs)
+
+    def __init__(self, 
+                obj_id:str,
+                old_pos: Vector,              
+                new_pos: Vector,
+                is_player_obj = False,              
+                id=None,
+                **kwargs):
+        super().__init__(id,**kwargs)
+        self.obj_id = obj_id
+        self.old_pos = old_pos
+        self.new_pos = new_pos
+        self.is_player_obj = is_player_obj
+
+    def __repr__(self):
+        return f"pos change event for obj{self.obj_id} {self.old_pos} to {self.new_pos}"
+
 class MechanicalEvent(Event):
 
     @classmethod
@@ -159,26 +189,6 @@ class MechanicalEvent(Event):
         self.obj_id = obj_id
         self.direction = direction
         self.orientation_diff = orientation_diff
-
-class PositioningUpdateEvent(Event):
-
-    @classmethod
-    def build_from_dict(cls,dict_data):
-        return cls(obj_id = dict_data['obj_id'],
-            position_update = dict_data['position_update'],
-            angle_update = dict_data['angle_update'],
-            id = dict_data['id'],
-            kwargs = dict_data)
-
-    def __init__(self, obj_id: str,
-                 position_update: Vector ,
-                 angle_update: float = 0.0,
-                 id=None,
-                 **kwargs):
-        super().__init__(id,**kwargs)
-        self.obj_id = obj_id
-        self.position_update = position_update
-        self.angle_update = angle_update
 
 class AdminEvent(Event):
 

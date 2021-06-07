@@ -15,10 +15,10 @@ from .clock import clock
 from .event_manager import EventManager
 from .object_manager import GObjectManager
 from .player_manager import PlayerManager
-from .physics_engine import GridPhysicsEngine, PymunkPhysicsEngine
+from .physics_engine import GridPhysicsEngine
 
 from .event import (Event, MechanicalEvent,
-            PeriodicEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
+            PeriodicEvent, PositionChangeEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
 from .event import RemoveObjectEvent
 import pygame
 import sys
@@ -55,10 +55,13 @@ class GameContext:
 
         self.config = game_def.game_config
         self.physics_config = game_def.physics_config
-        self.object_manager = GObjectManager()
-        self.physics_engine = GridPhysicsEngine(self.physics_config)
-        self.player_manager = PlayerManager()
         self.event_manager = EventManager()
+        self.object_manager = GObjectManager()
+        self.physics_engine = GridPhysicsEngine(
+            self.physics_config,
+            self.event_manager)
+        self.player_manager = PlayerManager()
+        
 
         self.state = "RUNNING"
         self.tick_rate = self.config.tick_rate
@@ -195,6 +198,10 @@ class GameContext:
                 new_events, remove_event = e.run()
                 if remove_event:
                     events_to_remove.append(e)
+            elif type(e) == PositionChangeEvent:
+                e: PositionChangeEvent = e
+                self.content.process_position_change_event(e)
+                events_to_remove.append(e)
 
             # Add to queue to be processed
             for new_e in new_events:

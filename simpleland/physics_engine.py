@@ -12,6 +12,8 @@ from .utils import gen_id
 from .config import PhysicsConfig
 import math
 from .clock import clock
+from .event_manager import EventManager
+from .event import PositionChangeEvent
 
 def get_default_velocity_callback(config):
     def limit_velocity(b, gravity, damping, dt):
@@ -91,12 +93,13 @@ class GridPhysicsEngine:
     Handles physics events and collision
     """
 
-    def __init__(self,config:PhysicsConfig):
+    def __init__(self,config:PhysicsConfig, em:EventManager):
         self.config = config
         self.tile_size = self.config.tile_size
         self.space = GridSpace()
         self.position_updates = {}
         self.collision_callbacks ={}
+        self.em  = em
 
     def vec_to_coord(self,v):
         
@@ -121,6 +124,10 @@ class GridPhysicsEngine:
 
     def update_obj_position(self,obj:GObject,new_pos,skip_collision_check=False,callback=None):
         if skip_collision_check:
+            self.create_change_position_event(
+                    obj,
+                    old_pos = obj.position,
+                    new_pos=new_pos)
             if new_pos is not None:
                 coord =self.vec_to_coord(new_pos)
                 self.space.move_obj_to(coord,obj)
@@ -132,6 +139,11 @@ class GridPhysicsEngine:
         else:
             self.position_updates[obj.get_id()] = (obj,new_pos,callback)
 
+    def create_change_position_event(self,obj:GObject,old_pos,new_pos):
+        e = PositionChangeEvent(
+            obj.get_id(),old_pos=old_pos,new_pos=new_pos,
+            is_player_obj= obj.player_id is not None)
+        self.em.add_event(e)
 
     def remove_object(self,obj):
         self.space.remove_obj(obj.get_id())
@@ -161,59 +173,14 @@ class GridPhysicsEngine:
                     
             if not collision_effect:
                 self.space.move_obj_to(coord,obj)
+                self.create_change_position_event(
+                    obj,
+                    old_pos = obj.position,
+                    new_pos=new_pos)
+
                 obj.position = new_pos
+
                 if callback:
                     callback(True)
 
         self.position_updates = {}
-
-
-
-class PymunkPhysicsEngine:
-    """
-    Handles physics events and collision
-    """
-
-    def __init__(self,config:PhysicsConfig):
-        self.config = config
-        self.space = Space(threaded=True)
-        self.space.threads = 2
-        self.space.idle_speed_threshold = 0.01
-        self.space.sleep_time_threshold = 0.5
-        self.space.damping = self.config.space_dampening
-        self.space.collision_slop = 0.9
-        self.sim_timestep = self.config.sim_timestep
-
-        dt = 0 if self.config.tick_rate == 0 else 1.0/self.config.tick_rate
-        self.steps_per_update = math.ceil(dt/self.sim_timestep)
-        actual_tick_rate = 0 if self.steps_per_update == 0 else 1/ (self.steps_per_update * self.sim_timestep)
-        print("Actual Physics Tick Rate is {}, original {} (change due to enforcing sim_timestep size of {})".format(actual_tick_rate, self.config.tick_rate,self.config.sim_timestep))
-
-        # Called at each step when velocity is updated
-        self.velocity_callback = get_default_velocity_callback(self.config)
-        
-        # Called at each step when position is updated
-        self.position_callback= get_default_position_callback(self.config)
-
-    def set_collision_callback(self, callback, collision_type_a=COLLISION_TYPE['default'], collision_type_b=COLLISION_TYPE['default']):
-        h = self.space.add_collision_handler(collision_type_a, collision_type_b)
-        def callerfun(arbiter, space, data):
-            return callback(arbiter,space,data)
-        # h.begin = begin
-        h.pre_solve = callerfun
-
-    def add_object(self, obj: GObject):
-        body = obj.body
-        body.last_change = clock.get_time()
-        # body.velocity_func = self.velocity_callback 
-        body.position_func = self.position_callback
-        self.space.add(obj.get_body(), obj.get_shapes())
-
-    def remove_object(self,obj):
-        pass
-        # self.space.remove(obj.get_shapes())
-        # self.space.remove(obj.get_body())
-
-    def update(self):
-        for _ in range(self.steps_per_update):
-             self.space.step(self.sim_timestep)

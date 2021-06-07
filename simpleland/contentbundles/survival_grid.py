@@ -8,7 +8,7 @@ from pymunk import contact_point_set
 from pymunk.vec2d import Vec2d
 from ..camera import Camera
 from ..event import (DelayedEvent, Event, InputEvent,
-                     PeriodicEvent, SoundEvent, ViewEvent)
+                     PeriodicEvent, PositionChangeEvent, SoundEvent, ViewEvent)
 from .. import gamectx
 from ..object import GObject
 
@@ -32,20 +32,19 @@ import sys
 import math
 from .survival_assets import *
 from .survival_utils import *
+import pkg_resources
+import json
+import os
 
 ############################
 # COLLISION HANDLING
 ############################
-
-
-def process_water_collision(obj:AnimateObject, water_obj):
-    obj.health =  0
-    return False
-
 def default_collision_callback(obj1: PhysicalObject, obj2: PhysicalObject):
-    if ('animal' in obj1.get_types() and obj2.type == "water") or ('water' in obj1.get_types() and 'animal' in obj2.get_types()):
-        return process_water_collision(obj1, obj2)
-    elif 'animal' in obj1.get_types()  and obj2.collision_type >0:
+    if ('animate' in obj1.get_types() and obj2.type == "liquid"):
+        return obj2.on_collision_with_animate(obj1)
+    elif ('liquid' in obj1.get_types() and 'animate' in obj2.get_types()):
+        return obj1.on_collision_with_animate(obj2)
+    elif 'animate' in obj1.get_types()  and obj2.collision_type >0:
         obj1.default_action()
         return obj2.collision_type
     
@@ -59,9 +58,6 @@ def get_item_map(item_types):
         item_map[k] = v
     return item_map
 
-import pkg_resources
-import json
-import os
 
 def read_json_file(path):
     try:
@@ -81,7 +77,24 @@ def read_game_config(sub_dir, game_config):
         obj_data['config'] = read_json_file(os.path.join(sub_dir,obj_data.get('config',f"{id}_config.json")))
         obj_data['sounds'] = read_json_file(os.path.join(sub_dir,obj_data.get('sounds',f"{id}_sounds.json")))
         obj_data['model'] = read_json_file(os.path.join(sub_dir,obj_data.get('model',f"{id}_model.json")))
+    for id, data in game_config['effects'].items():
+        data['config'] = read_json_file(os.path.join(sub_dir,data.get('config',f"{id}_config.json")))
+        data['sounds'] = read_json_file(os.path.join(sub_dir,data.get('sounds',f"{id}_sounds.json")))
+        data['model'] = read_json_file(os.path.join(sub_dir,data.get('model',f"{id}_model.json")))
     return game_config
+
+
+
+class GameMode:
+
+    def __init__(self):
+        pass
+
+class TagGameMode(GameMode):
+
+    def __init__(self):
+        pass
+
 
 
 class GameContent(Content):
@@ -91,7 +104,7 @@ class GameContent(Content):
         self.config_path = 'survival_grid'
         self.game_config = read_game_config(self.config_path,'game_config.json')
         self.asset_bundle = load_asset_bundle(self.game_config['asset_bundle'])
-
+        self.map_config = self.game_config['maps'][self.game_config['start_map']]
         # TODO, load from game config
         self.default_camera_zoom = config['default_camera_zoom']
         self.tile_size = self.game_config['tile_size']
@@ -111,14 +124,14 @@ class GameContent(Content):
         self.spawn_locations = []
         self.food_locations = []
         self.loaded = False
-        self.tilemap = TileMap()
+        self.gamemap = GameMap(
+            path = self.config_path,
+            map_config=self.map_config)
         self._speed_factor = None
         self.call_counter = 0
-
-
         self.spawn_points = {}
-        self.objs = {}
-        
+        self.obj_classes = [Human, Monster, Food, Animal, Tree, Rock, Liquid, PhysicalObject]
+        self.obj_class_map= {cls.__name__: cls for cls  in self.obj_classes}
 
     def add_spawn_point(self,config_id, pos):
         pos_list = self.get_spawn_points(config_id)
@@ -128,31 +141,14 @@ class GameContent(Content):
     def get_spawn_points(self,config_id):
         return self.spawn_points.get(config_id,[])
 
+    def get_effect_sprites(self,config_id):
+        return self.game_config['effects'].get(config_id,{}).get('model',{})
+
     def get_object_sprites(self,config_id):
         return self.game_config['objects'].get(config_id,{}).get('model',{})
     
     def get_object_sounds(self,config_id):
         return self.game_config['objects'].get(config_id,{}).get('sounds',{})
-
-    def add_object(self,object:PhysicalObject):
-        config_id = object.config_id
-        obj_id_set = self.get_objects_by_config_id(config_id)
-        obj_id_set.add(object.get_id())
-        self.objs[config_id] = obj_id_set
-        gamectx.add_object(object)
-
-    def get_objects_by_config_id(self,config_id):
-        return self.objs.get(config_id,set())
-
-    def remove_object_by_id(self,obj_id):
-        obj:PhysicalObject = gamectx.object_manager.get_by_id(obj_id)
-        if obj is not None:
-            self.remove_object(obj)
-
-    def remove_object(self,obj:PhysicalObject):
-        objs = self.get_objects_by_config_id(obj.config_id)
-        objs.discard(obj.get_id())
-        gamectx.remove_object_by_id(obj.get_id())
 
     #
     def speed_factor(self):
@@ -172,34 +168,13 @@ class GameContent(Content):
         return self.asset_bundle
 
     def get_class_by_type_name(self,name):
-        if name == "Human":
-            return Human
-        elif name == "Monster":
-            return Monster
-        elif name == "Food":
-            return Food
-        elif name == "Deer":
-            return Deer
-        elif name == "Tree":
-            return Tree
-        elif name == "Rock":
-            return Rock
-        elif name == "Wood":
-            return Wood
-        elif name == "Wall":
-            return Wall
-        elif name == "Water":
-            return Water
-        else:
-            return PhysicalObject
+        return self.obj_class_map.get(name,PhysicalObject)
 
     def reset_required(self):
         for player in gamectx.player_manager.players_map.values():
             if not player.get_data_value("reset_required", True):
                 return False
         return True
-
-
 
     #####################
     # RL AGENT METHODS
@@ -209,15 +184,6 @@ class GameContent(Content):
         if not self.loaded:
             self.load()
         gamectx.remove_all_events()
-
-        # def food_event_callback(event: PeriodicEvent, data: Dict[str, Any]):
-        #     self.spawn_food(limit=1)
-        #     return [], True
-
-        # new_food_event = PeriodicEvent(
-        #     food_event_callback, 
-        #     execution_step_interval=random.randint(10, 16) * self.speed_factor())
-        # gamectx.add_event(new_food_event)
 
         self.spawn_players()
 
@@ -292,7 +258,6 @@ class GameContent(Content):
         else:
             info['msg'] = "no player found"
         return observation, reward, done, info
-    
 
     def reset_player(self,player:Player):
         player.set_data_value("lives_used", 0)
@@ -300,7 +265,6 @@ class GameContent(Content):
         player.set_data_value("reset_required", False)
         player.set_data_value("allow_obs", True)
         player.events = []
-
 
     # **********************************
     # NEW PLAYER
@@ -321,34 +285,32 @@ class GameContent(Content):
         self.spawn_player(player,reset=True)        
         return player
 
-
     #########################
     # Loading/Spawning
     #########################
-
     def spawn_objects(self):
         config_id = 'monster1'
-        objs = self.get_objects_by_config_id(config_id)
-        if len(objs) < 5:
+        objs = gamectx.object_manager.get_objects_by_config_id(config_id)
+        if len(objs) < 1:
             print("spawning")
             spawn_points = self.get_spawn_points(config_id)            
             object_config = gamectx.content.game_config['objects'][config_id]['config']
-            Monster(config=object_config).spawn(spawn_points[0])
+            Monster(config_id = config_id, config=object_config).spawn(spawn_points[0])
 
 
     def spawn_player(self,player:Player, reset=False):
         if player.get_object_id() is not None:
             player_object = gamectx.object_manager.get_by_id(player.get_object_id())
         else:
+            # TODO: get playertype from game mode + client config
+
             player_config = self.game_config['player_types']['1']
             config_id = player_config['config_id']
-            object_config = self.game_config['objects'][config_id]['config']
             spawn_points = self.get_spawn_points(config_id)
             player.set_data_value("spawn_point",spawn_points[0])
-            # TODO: get objkey from player_config
-            player_object= Human(
-                config=object_config ,
-                player=player)
+            player_object:PhysicalObject = self.create_from_config_id(config_id)
+            player_object.set_player(player)
+
         if reset:
             self.reset_player(player)
 
@@ -357,12 +319,9 @@ class GameContent(Content):
         player_object.spawn(spawn_point)
         return player_object
 
-
     def spawn_players(self,reset=True):
         for player in gamectx.player_manager.players_map.values():
             self.spawn_player(player,reset)
-
-
         
 
     # **********************************
@@ -371,10 +330,8 @@ class GameContent(Content):
     def load(self, is_client_only=False):
         self.loaded = False
         if not is_client_only:
-            map_config = self.game_config['maps'][self.game_config['start_map']]
-            WorldMap(
-                path = self.config_path,
-                map_config=map_config)
+            self.gamemap.first_load((0,0))
+
 
         gamectx.physics_engine.set_collision_callback(
             default_collision_callback,
@@ -385,7 +342,6 @@ class GameContent(Content):
     ########################
     # GET INPUT
     ########################
-
     def is_valid_input_event(self, input_event:InputEvent):
         # TODO: Switch to filter multiple input events
         
@@ -394,11 +350,21 @@ class GameContent(Content):
         if player is None or not player.get_data_value("allow_input",False) or player.get_data_value("reset_required",False):
             return False
 
-        obj:Human = gamectx.object_manager.get_by_id(player.get_object_id())
+        obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
 
         if obj is not None and obj.get_action().get('blocking',True):
             return False
         return True
+
+    def process_position_change_event(self,e:PositionChangeEvent):
+        if not e.is_player_obj:
+            return            
+        
+        old_scoord = self.gamemap.get_sector_coord_from_pos(e.old_pos)
+        new_scoord = self.gamemap.get_sector_coord_from_pos(e.new_pos)
+        if old_scoord != new_scoord:
+            self.gamemap.load_sectors_near_coord(new_scoord)
+                
 
     def process_input_event(self, input_event:InputEvent):
         events= []
@@ -412,9 +378,9 @@ class GameContent(Content):
             return []
         keypressed = set(input_event.input_data['pressed'])
         keydown = set(input_event.input_data['keydown'])
-        keyup = set(input_event.input_data['keyup'])
+        # keyup = set(input_event.input_data['keyup'])
 
-        obj:Human = gamectx.object_manager.get_by_id(player.get_object_id())
+        obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
 
         if 27 in keydown:
             print("QUITTING")
@@ -522,7 +488,8 @@ class GameContent(Content):
         return events
 
     def update(self):
-        for k, o in gamectx.object_manager.get_objects().items():
+        objs = list(gamectx.object_manager.get_objects().values())
+        for o in objs:
             if o is None or o.is_deleted or not o.enabled:
                 continue
             if o.is_enabled():
@@ -531,19 +498,19 @@ class GameContent(Content):
         
         # TODO: Check if respawns are needed
 
-    def prepare_ac(self):
-        for k, o in gamectx.object_manager.get_objects().items():
-            if o is None or o.is_deleted or not o.enabled:
-                continue
-            if o.is_enabled():
-                o.update()
+    # def prepare_ac(self):
+    #     for k, o in gamectx.object_manager.get_objects().items():
+    #         if o is None or o.is_deleted or not o.enabled:
+    #             continue
+    #         if o.is_enabled():
+    #             o.update()
 
     def create_from_config_id(self,config_id):
         object_config = gamectx.content.game_config['objects'].get(config_id)
         if object_config is None:
             raise Exception(f"{config_id} not defined in game_config['objects']")
         cls = gamectx.content.get_class_by_type_name(object_config['obj_class'])
-        obj:PhysicalObject = cls(config_id=config_id,config=object_config)
+        obj:PhysicalObject = cls(config_id=config_id,config=object_config['config'])
         return obj
 
     def post_process_frame(self, player: Player, renderer: Renderer):

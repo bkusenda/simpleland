@@ -6,8 +6,8 @@ class AssetBundle:
             image_assets, 
             sound_assets, 
             music_assets,
-            tilemaploader):
+            maploader):
         self.image_assets = image_assets
         self.sound_assets = sound_assets
         self.music_assets = music_assets
-        self.tilemaploader = tilemaploader
+        self.maploader = maploader

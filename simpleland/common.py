@@ -302,7 +302,6 @@ class ShapeGroup(Base):
             data[k] = s.get_snapshot()
         dict_data = {}
         dict_data['data'] = data
-        dict_data['_type'] = "SLShapeGroup"
         return dict_data
 
     def load_snapshot(self, dict_data: Dict[str,Dict]):

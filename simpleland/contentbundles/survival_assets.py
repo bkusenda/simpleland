@@ -23,46 +23,15 @@ from ..event import SoundEvent
 import hashlib
 
 
-def rand_int_from_coord(x,y,seed=123):
-    v =  (x + y * seed ) % 12783723
-    h = hashlib.sha1()
-    h.update(str.encode(f"{v}"))
-    return int(h.hexdigest(),16) % 172837
-
-def get_tile_image_id(x,y,seed):
-    v = rand_int_from_coord(x,y,seed) % 3 + 1
-    return f"grass{v}"
-
-
-class TileMap:
-
-    def __init__(self,seed = 123):
-        self.seed = seed
-
-    def get_layers(self):
-        return range(2)
-        
-    def get_by_loc(self,x,y, layer_id):
-        if layer_id == 0:
-            return get_tile_image_id(x,y,self.seed)
-        
-        loc_id = rand_int_from_coord(x,y,self.seed)
-        if x ==0 and y==0:
-            return "baby_tree"
-        if x ==2 and y==3:
-            return "baby_tree"
-        return None
-    
-
-class TileMapLoader:
+class GameMapLoader:
 
     def __init__(self):
-        self.tilemap = None
+        self.gamemap = None
     
-    def get_tilemap(self,name):
-        if self.tilemap is None:
-            self.tilemap = gamectx.content.tilemap
-        return self.tilemap
+    def get(self,name):
+        if self.gamemap is None:
+            self.gamemap = gamectx.content.gamemap
+        return self.gamemap
 
 def load_asset_bundle(asset_bundle):
 
@@ -70,7 +39,7 @@ def load_asset_bundle(asset_bundle):
         image_assets=asset_bundle['images'],
         sound_assets=asset_bundle['sounds'],
         music_assets=asset_bundle['music'],
-        tilemaploader = TileMapLoader())
+        maploader = GameMapLoader())
 
 
 def angle_to_direction(angle):
@@ -105,6 +74,7 @@ type_tree={
     'plant': 'physical_object',
     'tree': 'plant',
     'bush':'plant',
+    'animal':'animate',
     'monster': 'animal',
     'human': 'animal',
     'deer': 'animal',
@@ -123,37 +93,146 @@ def get_types(cur_type):
             cur_type = new_type
     return all_types
 
+
+    # def on_position_update(self,obj1,pos)
+
+# TODO: Add behaviors for non player objects
+
+class Behavior:
+
+    def __init__(self):
+        pass
+
+    def on_update(self,obj):
+        pass
+
+class FollowAnimals(Behavior):
+    
+    def on_update(self,obj):
+        for obj2 in obj.get_visible_objects():
+            if obj.config_id != obj2.config_id and 'animal' in obj2.get_types():
+                orig_direction: Vector = obj2.get_position() - obj.get_position()
+                direction = orig_direction.normalized()
+                updated_x = 0
+                updated_y = 0
+                if abs(direction.x) > abs(direction.y):
+                    updated_y = 0
+                    if direction.x > 0.5:
+                        updated_x = 1.0
+                    elif direction.x < -0.5:
+                        updated_x = -1.0
+                    else:
+                        updated_x = 0
+                else:
+                    updated_x = 0
+                    if direction.y >= 0.5:
+                        updated_y = 1.0
+                    elif direction.y < -0.5:
+                        updated_y = -1.0
+                    else:
+                        updated_y = 0
+                new_angle = Vector(0, 1).get_angle_between(direction)
+                if orig_direction.length <= gamectx.content.tile_size:
+                    direction = Vector(0, 0)
+                else:
+                    direction = Vector(updated_x, updated_y)
+                if orig_direction.length <= gamectx.content.tile_size and new_angle == obj.angle:
+                    obj.attack()
+                else:
+                    obj.walk(direction, new_angle)
+
+class FleeAnimals(Behavior):
+
+    
+    def on_update(self,obj):
+        for obj2 in obj.get_visible_objects():
+            if  obj.config_id != obj2.config_id and 'animal' in obj2.get_types():
+                orig_direction: Vector = obj2.get_position() - obj.get_position()
+                direction = orig_direction.normalized()
+                updated_x = 0
+                updated_y = 0
+                if abs(direction.x) > abs(direction.y):
+                    updated_y = 0
+                    if direction.x > 0.5:
+                        updated_x = 1.0
+                    elif direction.x < -0.5:
+                        updated_x = -1.0
+                    else:
+                        updated_x = 0
+                else:
+                    updated_x = 0
+                    if direction.y >= 0.5:
+                        updated_y = 1.0
+                    elif direction.y < -0.5:
+                        updated_y = -1.0
+                    else:
+                        updated_y = 0
+                new_angle = Vector(0, 1).get_angle_between(direction)
+                direction = Vector(-updated_x, -updated_y)
+                obj.walk(direction, new_angle)   
+
+
+class Action:
+    def __init__(self):
+        pass
+
+# TODO: Effects as objects
+class Effect:
+
+    def __init__(self,obj,config_id,ticks,step_size,angle_step_size):
+        self.config_id = config_id
+        self.ticks = ticks
+        self.step_size = step_size,
+        self.angle_step_size= angle_step_size
+        
 class PhysicalObject(GObject):
 
 
     def __init__(self,config_id="",config={}, *args,**kwargs):
         super().__init__(*args,**kwargs)
         self.config = config
+        self.config_id = config_id
+   
         self.type = "physical_object"
         self._types = None
         self.image_id_default = None
-        self.health = 50
-        self.created_tick = 0
-        self.animated = True
-        self.remove_on_destroy = True
-        self.pushable = True
-        self.collision_type = 1
+        self.health = self.config.get('health_start',100)
+        self.permanent = self.config.get('permanent',False)
+        self.remove_on_destroy = self.config.get('remove_on_destroy',True)
+        self.pushable = self.config.get('pushable',False)
+        self.collision_type = self.config.get('collision_type',1)
+        self.height = self.config.get('height',1)
 
-        self.collectable = False
-        self.count_max = 1
-        self.count = 1
+        self.collectable = self.config.get('collectable',False)
+        self.count_max = self.config.get('count_max',1)
+        self.count = self.config.get('count',1)
         
         self.__model = None
         self.__sounds = None
 
-        # Can it be placed in inventory?
-        self.default_action_type = "idle"
+        self.default_action_type = self.config.get('default_action_type','idle')
         self._action = {}
-        self.config_id = config_id
+        self._effects = {}
 
         self.default_action()
         self.disable()
         ShapeFactory.attach_rectangle(self, width=TILE_SIZE, height=TILE_SIZE)
+
+    def get_effect_sprites(self,effect_config_id):
+        return gamectx.content.get_effect_sprites(effect_config_id).get('default')
+
+    def get_effect_renderables(self):
+        effects = self.get_effects()
+        renderables = []
+        for name, effect in effects.items():
+            sprites = self.get_effect_sprites(effect['config_id'])
+            cur_tick = clock.get_tick_counter()
+            idx = (cur_tick - effect['start_tick'])
+            total_sprite_images = len(sprites)
+            sprite_idx = int((idx/effect['ticks']) * total_sprite_images)  % total_sprite_images
+            angle = effect['angle_step_size'] * idx 
+            renderables.append({'position':Vector(0,0), 'image_id': sprites[sprite_idx], 'angle':angle})
+        return renderables
 
     def get_sprites(self,action,angle):
         if self.__model is None:
@@ -167,6 +246,23 @@ class PhysicalObject(GObject):
         direction = angle_to_direction(angle)
         return action_sprite[direction]
 
+    def get_action_renderables(self, angle=0):
+        action = self.get_action()
+        sprites = self.get_sprites(action['type'],self.angle)
+        if sprites is None or len(sprites) ==0:
+            return None
+        cur_tick = clock.get_tick_counter()
+        action_idx = (cur_tick - action['start_tick'])
+        total_sprite_images = len(sprites)
+        sprite_idx = int((action_idx/action['ticks']) * total_sprite_images)  % total_sprite_images
+        return [{'position':Vector(0,0), 'image_id': sprites[sprite_idx], 'angle':0}]
+
+    def get_renderables(self, angle=0):
+        renderables = []
+        action_renderables = self.get_action_renderables(angle)
+        effect_renderables = self.get_effect_renderables()
+        return action_renderables + effect_renderables
+
     def play_sound(self,name):
         if self.__sounds is None:
             self.__sounds = gamectx.content.get_object_sounds(self.config_id)
@@ -176,9 +272,9 @@ class PhysicalObject(GObject):
                 position=self.get_view_position()))
 
     def spawn(self,position):
-        gamectx.content.add_object(self)
+        gamectx.add_object(self)
         self.set_image_offset(Vector(0,0))
-
+        
         self._action = {
             'type': 'spawn',
             'ticks':1,
@@ -187,7 +283,7 @@ class PhysicalObject(GObject):
             'blocking':True
         }
         self.health = 50
-        self.created_tick = clock.get_tick_counter()
+
         self.enable()
         self.set_position(position=position)
         self.play_sound("spawn")
@@ -203,6 +299,10 @@ class PhysicalObject(GObject):
             self.default_action()
         return self._action
 
+
+    def get_effects(self):
+        return self._effects
+
     def default_action(self):
         ticks_in_action = 3 * gamectx.content.speed_factor()
         self._action = {
@@ -214,23 +314,11 @@ class PhysicalObject(GObject):
             'continuous':True
         }
 
-    def get_image_id(self, angle=0):
-        action = self.get_action()
-        sprites = self.get_sprites(action['type'],self.angle)
-        if sprites is None or len(sprites) ==0:
-            return None
-        cur_tick = clock.get_tick_counter()
-        action_idx = (cur_tick - action['start_tick'])
-        total_sprite_images = len(sprites)
-        sprite_idx = int((action_idx/action['ticks']) * total_sprite_images)  % total_sprite_images
-        return sprites[sprite_idx]
-
     def get_view_position(self):
         cur_tick = clock.get_tick_counter()
         action = self.get_action()
         if action.get('start_position') is not None:
             idx = cur_tick - action['start_tick']
-            # if idx > 0:
             direction = (self.position - action['start_position']).normalized()
             view_position = action['step_size'] * idx * direction + action['start_position']
             return view_position
@@ -260,9 +348,9 @@ class PhysicalObject(GObject):
         self.play_sound("move")
 
     def receive_damage(self, attacker_obj, damage):
-        self.health -= damage
+        if not self.permanent:
+            self.health -= damage
         self.play_sound("receive_damage")
-
 
     def receive_push(self,pusher_obj,power, direction):
         if not self.pushable or not self.collision_type:
@@ -278,11 +366,10 @@ class PhysicalObject(GObject):
             self.destroy()
 
     def destroy(self):
-        
         if self.remove_on_destroy:
             for child_id in self.child_object_ids:
-                gamectx.content.remove_object_by_id(child_id)
-            gamectx.content.remove_object(self)
+                gamectx.remove_object_by_id(child_id)
+            gamectx.remove_object(self)
         else:
             self.disable()
         self.play_sound("destroy")
@@ -290,14 +377,19 @@ class PhysicalObject(GObject):
 
 class Inventory(PhysicalObject):
 
-    def __init__(self,*args,**kwargs):
+    def __init__(self,start_inventory={},*args,**kwargs):
         super().__init__(*args,**kwargs)
         self.slots = 10
         self.items = []
-
         for i in range(0,self.slots - len(self.items)):
             self.items.append(None)
-        
+        for i, (config_id, item_count) in enumerate(start_inventory.items()):
+            obj = gamectx.content.create_from_config_id(config_id)
+            obj.spawn(Vector(0,0))
+            obj.count = item_count
+            obj.disable()
+            self.add(obj)
+
         self.selected_slot = 0
 
     def get_selected(self):
@@ -322,7 +414,7 @@ class Inventory(PhysicalObject):
             for inv_obj in self.items:
                 if inv_obj is not None and inv_obj.config_id == obj.config_id and inv_obj.count < inv_obj.count_max:
                     inv_obj.count+=1
-                    gamectx.content.remove_object(obj)
+                    gamectx.remove_object(obj)
                     print("REMOVING")
                     return True
             
@@ -381,16 +473,13 @@ class Inventory(PhysicalObject):
 
 class CraftMenu:
 
-    def __init__(self,inventory):
+    def __init__(self, items, requirements):
         self.slots = 10
-        self.items = ["wall1"]
+        self.items = items
 
-        self.requirements = {
-            'wall1': {'wood1': 1}
-        }
+        self.requirements = requirements
         
         self.selected_slot = 0
-        self.inventory:Inventory = inventory
 
     def get_selected(self):
         return self.items[self.selected_slot]
@@ -408,14 +497,14 @@ class CraftMenu:
             else:
                 self.selected_slot+=1
 
-    def craft_selected(self):
+    def craft_selected(self,inventory:Inventory):
         config_id = self.get_selected()
         reqs = self.requirements.get(config_id)
         if reqs is not None:
             have_reqs = True
             # Check requirements
             for req_id, count in reqs.items():
-                objs = self.inventory.find(req_id)
+                objs = inventory.find(req_id)
                 if len(objs) == 0:
                     print("NON FOUND")
                     break
@@ -429,13 +518,13 @@ class CraftMenu:
 
             # Remove requirements
             for req_id, count in reqs.items():
-                objs = self.inventory.find(req_id)
+                objs = inventory.find(req_id)
                 
                 for i, obj in objs:
                     remainder = count - obj.count
                     if remainder >= 0:
-                        self.inventory.remove_by_slot(i)
-                        gamectx.content.remove_object(obj)
+                        inventory.remove_by_slot(i)
+                        gamectx.remove_object(obj)
                         count = remainder
                     else:
                         obj.count = obj.count - count
@@ -444,7 +533,7 @@ class CraftMenu:
         obj:PhysicalObject = gamectx.content.create_from_config_id(config_id)
         obj.spawn(position=Vector(0,0))
         obj.disable()
-        self.inventory.add(obj)
+        inventory.add(obj)
 
     def as_string(self):
         info = []
@@ -455,17 +544,12 @@ class CraftMenu:
                 info.append(f" {craft_type} ")
         return " ,".join(info)
 
-
-
-
-
 class AnimateObject(PhysicalObject):
 
 
     def __init__(self,player:Player= None,*args,**kwargs):
         super().__init__(*args,**kwargs)
         self.type = "animate"
-        self.player_id=None
         if player is not None:
             self.set_player(player)
 
@@ -481,14 +565,19 @@ class AnimateObject(PhysicalObject):
         self.next_health_gen = 0
         self.next_stamina_gen = 0
         self.attack_speed = .3
+        self.height = 2
+
+        self.default_behavior = None
 
         self.reward = 0
 
         # Visual Range in x and y direction
         self.vision_radius =  self.config.get('vision_radius',2)
         
-        self.__inventory = Inventory()
-        self.__craftmenu = CraftMenu(self.__inventory)
+        self.__inventory = Inventory(self.config.get('start_inventory',{}))
+        self.__craftmenu = CraftMenu(
+            self.config.get('craft_items',[]),
+            self.config.get('craft_requirements',{}))
 
 
     def inventory(self):
@@ -505,9 +594,7 @@ class AnimateObject(PhysicalObject):
         return self.__craftmenu
 
     def craft(self):
-        self.craftmenu().craft_selected()
-        
-
+        self.craftmenu().craft_selected(self.inventory())
 
     def select_craft_type(self,prev=False):
         self.__craftmenu.select_item(prev)
@@ -515,7 +602,6 @@ class AnimateObject(PhysicalObject):
     def spawn(self,position:Vector):
         super().spawn(position)
         self.energy = self.config.get('energy_start',100)
-        self.health = self.config.get('health_start',100)
         self.stamina = self.config.get('stamina_max',100)
         self.attack_speed = self.config.get('attack_speed',0.3)
         self.walk_speed = self.config.get('walk_speed',0.3)
@@ -604,19 +690,20 @@ class AnimateObject(PhysicalObject):
 
     def jump(self):
         
-        direction = Vector(0, 2).rotated(self.angle)
-        target_pos = self.get_position() + (direction * TILE_SIZE)
+        direction = Vector(0, 1).rotated(self.angle)
+        
+        target_pos = self.get_position() + (direction * TILE_SIZE *2)
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
         oids = gamectx.physics_engine.space.get_objs_at(target_coord)
 
         if len(oids) == 0:
-            ticks_in_action = gamectx.content.speed_factor()/0.3
+            ticks_in_action = gamectx.content.speed_factor()/0.5
             self._action = \
                 {
                     'type': 'jump',
                     'start_tick': clock.get_tick_counter(),
                     'ticks': ticks_in_action,
-                    'step_size': (2*TILE_SIZE)/ticks_in_action,
+                    'step_size': (TILE_SIZE *2)/ticks_in_action,
                     'start_position': self.position,
                     'blocking':True
                 }     
@@ -686,11 +773,7 @@ class AnimateObject(PhysicalObject):
             if obj is not None:
                 obj.enable()
                 obj.update_position(target_pos)
-                
-            # print("TOOD: Drop")
-            # if self.get_item_amount("wood") > 0:
-            #     Wood().spawn(target_pos)
-            #     self.modify_inventory("wood", -1)
+            
 
         self._action = \
             {
@@ -729,7 +812,6 @@ class AnimateObject(PhysicalObject):
             if obj2.collision_type > 0:
                 obj2.receive_damage(self, self.attack_strength)
 
-        gamectx.add_event(SoundEvent(sound_id="hit1"))
 
         self._action =\
             {
@@ -788,6 +870,36 @@ class AnimateObject(PhysicalObject):
             gen_delay = (self.config.get('stamina_gen_period',0) * gamectx.content.speed_factor())
             self.next_stamina_gen = cur_time + gen_delay
 
+        p = self.get_player()
+        
+
+        # Check for death
+        if self.health <= 0:
+
+            self.disable()
+
+            #TODO :move me
+            #player logic
+            if p is not None:
+                lives_used = p.get_data_value("lives_used", 0)
+                lives_used += 1
+                p.set_data_value("lives_used", lives_used)
+                p.set_data_value("allow_input", False)
+
+                def event_fn(event: DelayedEvent, data):
+                    p.set_data_value("reset_required", True)
+                    return []
+                delay = 10*gamectx.content.speed_factor()
+                event = DelayedEvent(event_fn, delay)
+                gamectx.add_event(event)
+                
+
+        else:
+            if p is not None:
+                p.set_data_value("allow_input", True)
+            elif self.default_behavior is not None and not self.get_action().get('blocking',True):
+                self.default_behavior.on_update(self)
+
         super().update()       
 
     def destroy(self):
@@ -795,45 +907,6 @@ class AnimateObject(PhysicalObject):
             self.disable()
         else:
             super().destroy()
-        
-
-
-class Human(AnimateObject):
-
-    def __init__(self, *args,**kwargs):
-        super().__init__(*args,**kwargs)
-        self.type = "human"
-        self.set_image_id("player_idle_down_1")
-        self.next_energy_decay = 10
-        self.next_health_gen = 0
-        self.attack_strength = 10
-        self.health =  40
-        self.config_id = "human1"
-      
-
-    def update(self):
-        super().update()
-
-        p = self.get_player()
-
-        # Check for death
-        if self.health <= 0:
-            lives_used = p.get_data_value("lives_used", 0)
-            lives_used += 1
-            p.set_data_value("lives_used", lives_used)
-            p.set_data_value("allow_input", False)
-            self.disable()
-
-            def event_fn(event: DelayedEvent, data):
-                p.set_data_value("reset_required", True)
-                return []
-            delay = 10*gamectx.content.speed_factor()
-            event = DelayedEvent(event_fn, delay)
-            gamectx.add_event(event)
-
-        else:
-            p.set_data_value("allow_input", True)
-
 
 class Monster(AnimateObject):
 
@@ -842,90 +915,39 @@ class Monster(AnimateObject):
         self.type = "monster"
         self.attack_strength = 10
         self.health =  40
-        self.config_id = "monster1"
+        self.height = 2
+        self.default_behaviour = FollowAnimals()
 
-
-    def update(self):
-        super().update()
-        if self.get_action().get('blocking',True):
-            return
-
-        # TODO: Actions should be processed as event
-        for obj in self.get_visible_objects():
-            if obj.type != self.type and 'animal' in obj.get_types():
-                orig_direction: Vector = obj.get_position() - self.get_position()
-                direction = orig_direction.normalized()
-                updated_x = 0
-                updated_y = 0
-                if abs(direction.x) > abs(direction.y):
-                    updated_y = 0
-                    if direction.x > 0.5:
-                        updated_x = 1.0
-                    elif direction.x < -0.5:
-                        updated_x = -1.0
-                    else:
-                        updated_x = 0
-                else:
-                    updated_x = 0
-                    if direction.y >= 0.5:
-                        updated_y = 1.0
-                    elif direction.y < -0.5:
-                        updated_y = -1.0
-                    else:
-                        updated_y = 0
-                new_angle = Vector(0, 1).get_angle_between(direction)
-                if orig_direction.length <= gamectx.content.tile_size:
-                    direction = Vector(0, 0)
-                else:
-                    direction = Vector(updated_x, updated_y)
-                if orig_direction.length <= gamectx.content.tile_size and new_angle == self.angle:
-                    self.attack()
-                else:
-                    self.walk(direction, new_angle)
-
-
-
-class Deer(AnimateObject):
+class Animal(AnimateObject):
 
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
-        self.type = "deer"
-        self.set_image_id("deer")
-        self.attack_strength = 3
-        self.health =  100
+        self.type = "animal"
+        self.default_behavior = FleeAnimals()
 
+    def receive_damage(self,attacker_obj, damage):
+        super().receive_damage(attacker_obj=attacker_obj,damage=damage)
+        if self.health<=0:
+            drop_on_death = self.config.get("drop_on_death")
+            if drop_on_death is not None:
+                for config_id, count in drop_on_death.items():
+                    obj = gamectx.content.create_from_config_id(config_id)
+                    obj.spawn(self.position)
+
+class Human(Animal):
+
+    def __init__(self, *args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.type = "human"
+        self.next_energy_decay = 10
+        self.next_health_gen = 0
+        self.attack_strength = 10
+        self.health =  40
+        self.height = 2
+    
 
     def update(self):
         super().update()
-        if self.get_action().get('blocking',True):
-            return
-
-        # TODO: Actions should be processed as event
-        for obj in self.get_visible_objects():
-            if  obj.type != self.type and 'animal' in obj.get_types():
-                orig_direction: Vector = obj.get_position() - self.get_position()
-                direction = orig_direction.normalized()
-                updated_x = 0
-                updated_y = 0
-                if abs(direction.x) > abs(direction.y):
-                    updated_y = 0
-                    if direction.x > 0.5:
-                        updated_x = 1.0
-                    elif direction.x < -0.5:
-                        updated_x = -1.0
-                    else:
-                        updated_x = 0
-                else:
-                    updated_x = 0
-                    if direction.y >= 0.5:
-                        updated_y = 1.0
-                    elif direction.y < -0.5:
-                        updated_y = -1.0
-                    else:
-                        updated_y = 0
-                new_angle = Vector(0, 1).get_angle_between(direction)
-                direction = Vector(-updated_x, -updated_y)
-                self.walk(direction, new_angle)
 
 
 class Tree(PhysicalObject):
@@ -939,10 +961,9 @@ class Tree(PhysicalObject):
         self.set_visiblity(False)
         self.pushable = False
         self.remove_on_destroy = True
-
         self.top_id = None
         self.trunk_id = None
-        
+        self.height = 3
         self.__fruit = []
 
 
@@ -964,10 +985,10 @@ class Tree(PhysicalObject):
         self.child_object_ids.add(self.trunk_id)
 
     def add_fruit(self):
-        o = Food(config_id="food1")
+        o = gamectx.content.create_from_config_id('apple1')
         o.spawn(position=self.get_position())
         o.depth = 3
-        o.collision_type = 0
+        o.collectable = 1
         y = random.random() * gamectx.content.tile_size*1.8
         x = random.random()* gamectx.content.tile_size - gamectx.content.tile_size/2
         o.set_image_offset(Vector(x,y))
@@ -983,8 +1004,8 @@ class Tree(PhysicalObject):
         o.collision_type = 0
         o.spawn(position=self.get_position())        
         o.set_image_offset(Vector(0, gamectx.content.tile_size*1.4))
-
         self.top_id = o.get_id()
+        self.child_object_ids.add(self.top_id)
     
     def get_trunk(self)->PhysicalObject:
         return gamectx.object_manager.get_by_id(self.trunk_id)
@@ -994,22 +1015,25 @@ class Tree(PhysicalObject):
 
     def receive_damage(self, attacker_obj, damage):
         super().receive_damage(attacker_obj, damage)
-        if self.health <20:
-            gamectx.content.remove_object_by_id(self.top_id)
+        if self.health <=0:
+            gamectx.remove_object_by_id(self.trunk_id)
+            self.child_object_ids.discard(self.trunk_id)
+            gamectx.remove_object(self)
+            obj = gamectx.content.create_from_config_id('wood1')
+            obj.spawn(self.position)
+        elif self.health <20:
+            gamectx.remove_object_by_id(self.top_id)
+            self.child_object_ids.discard(self.top_id)
             for fruit in self.__fruit:
                 self.child_object_ids.discard(fruit.get_id())
-                gamectx.content.remove_object(fruit)
-            self.fruit = []
-        if self.health <=0:
-            gamectx.content.remove_object_by_id(self.trunk_id)
-            gamectx.content.remove_object(self)
-            Wood().spawn(self.position)
+                gamectx.remove_object(fruit)
+            self.__fruit = []
 
     def receive_grab(self,actor_obj):
         print("Receiving grab")
         if len(self.__fruit) >0:
             fruit = self.__fruit.pop()
-            self.child_object_ids.remove(fruit.get_id())
+            self.child_object_ids.discard(fruit.get_id())
             return fruit
         else:
             return None
@@ -1017,34 +1041,7 @@ class Tree(PhysicalObject):
     # TODO: Add start age, and growth
     def get_age(self):
         return clock.get_tick_counter() - self.created_tick 
-
-
-            
-
-
-    # def update(self):
-    #     if self.get_age() > 100:
-    #         print(f"Tree age {self.get_age()}")
         
-        
-        
-class Wood(PhysicalObject):
-
-    def __init__(self, *args,**kwargs):
-        super().__init__(*args,**kwargs)
-        self.depth = 1
-        self.type = "wood"
-        self.config_id="wood1"
-        self.set_image_id('wood')
-        self.collectable = True
-        self.count_max = 5
-        self.remove_on_destroy = True
-        self.collision_type = 0
-        self.pushable = False
-        self.set_shape_color(color=(200, 200, 50))
-
-    def spawn(self,position):
-        super().spawn(position=position)
 
 class Food(PhysicalObject):
 
@@ -1052,13 +1049,7 @@ class Food(PhysicalObject):
         super().__init__(*args,**kwargs)
         self.depth = 1
         self.type =  'food'
-        self.set_image_id('food')
-        self.set_shape_color(color=(100, 130, 100))
         self.energy = gamectx.content.config['food_energy']
-        self.collectable = True
-        self.remove_on_destroy = True
-        self.collision_type =0
-        self.count_max = 10
         
     def spawn(self,position):
         super().spawn(position=position)
@@ -1070,50 +1061,89 @@ class Rock(PhysicalObject):
         super().__init__(*args,**kwargs)
         self.depth = 1
         self.type =  'rock'
-        self.collectable = False
-        self.remove_on_destroy=False
-        self.pushable = True
-        self.set_image_id('rock')
-        self.set_shape_color(color=(100, 130, 100))
 
-class Wall(PhysicalObject):
 
-    def __init__(self, *args,**kwargs):
-        super().__init__(*args,**kwargs)
-        self.depth = 1
-        self.type =  'wall'
-        self.collectable = True
-        self.remove_on_destroy=True
-        self.pushable = False
-        self.count_max = 10
-        self.set_image_id('wall')
-        self.set_shape_color(color=(160, 100, 30))  
-
- 
-
-class Water(PhysicalObject):
+class Liquid(PhysicalObject):
 
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
         self.depth = 0
-        self.type =  'water'
+        self.type =  'liquid'
+        self.permanent = True
         self.set_shape_color(color=(30, 30, 150))
-        self.remove_on_destroy=False
 
 
+    def on_collision_with_animate(self,obj:AnimateObject):
+        obj.health = 0
+        return 0
 
-class WorldMap:
+def rand_int_from_coord(x,y,seed=123):
+    v =  (x + y * seed ) % 12783723
+    h = hashlib.sha1()
+    h.update(str.encode(f"{v}"))
+    return int(h.hexdigest(),16) % 172837
+
+def get_tile_image_id(x,y,seed):
+    v = rand_int_from_coord(x,y,seed) % 3 + 1
+    return f"grass{v}"
+
+class Sector:
+
+    def __init__(self, scoord, height,width):
+        self.height= height
+        self.width = width
+        self.scoord = scoord
+        self.items = {}
+
+    
+    def add(self,coord, info):
+        local_items = self.items.get(coord,[])
+        local_items.append(info)
+        self.items[coord] = local_items
+
+
+class GameMap:
 
     def __init__(self,path,map_config):
-        full_path = pkg_resources.resource_filename(__name__,path)
-        map_layers = []
+
+        self.seed = 123
+        self.full_path = pkg_resources.resource_filename(__name__,path)
+        self.map_layers = []
         for layer_filename in map_config['layers']:
-            with open(os.path.join(full_path,layer_filename),'r') as f:
+            with open(os.path.join(self.full_path,layer_filename),'r') as f:
                 layer = f.readlines()
-                map_layers.append(layer)            
+                self.map_layers.append(layer)            
+        self.index = map_config['index']
+        self.tile_size = 16
+        self.sector_size = 64
+        self.sectors = {}
+        self.sectors_loaded = set()
+        self.loaded = False
+
+    def get_sector_coord(self,coord):
+        if coord is None:
+            return 0,0
+        return coord[0]//self.sector_size,coord[1]//self.sector_size
+
+    def get_sector_coord_from_pos(self,pos):
+        if pos is None:
+            return 0,0
+        return pos[0]//self.tile_size//self.sector_size,pos[1]//self.tile_size//self.sector_size
+
+    
+    def add(self,coord,info):
+        scoord = self.get_sector_coord(coord)
+        sector:Sector = self.sectors.get(scoord)
+        if sector is None:
+            print(f"Creating sector {scoord}")
+            sector = Sector(scoord,self.sector_size,self.sector_size)
+        sector.add(coord,info)
+        self.sectors[scoord] = sector
+        return sector
         
-        keys = set(map_config['index'].keys())
-        for i, lines in enumerate(map_layers):
+    def load_static_layers(self):
+        keys = set(self.index.keys())
+        for i, lines in enumerate(self.map_layers):
             self.spawn_locations = []
             for ridx, line in enumerate(lines):
                 linel = len(line)
@@ -1121,11 +1151,72 @@ class WorldMap:
                     key = line[cidx:cidx+2]
                     coord = (cidx//2, ridx)
                     if key in keys:
-                        info = map_config['index'].get(key)
-                        config_id = info['obj']
-                        if info.get('type') == "spawn_point":
-                            gamectx.content.add_spawn_point(config_id,coord_to_vec(coord))
-                        else:
-                            obj = gamectx.content.create_from_config_id(config_id)
-                            obj.spawn(position=coord_to_vec(coord))
-                            
+                        info = self.index.get(key)
+                        self.add(coord,info)
+
+    def first_load(self,coord):
+        if not self.loaded:
+            print("Loading Static Layers")
+            self.load_static_layers()
+            self.loaded= True
+        self.load_sectors_near_coord(self.get_sector_coord(coord))
+
+    def get_neigh_coords(self,scoord) -> set:
+        x,y = scoord
+        dirs = {
+            (x,y+1),
+            (x,y-1),
+            (x-1,y),
+            (x+1,y),
+            (x-1,y-1),
+            (x+1,y-1),
+            (x-1,y+1),
+            (x+1,y+1)}
+        return dirs
+
+    def load_sectors_near_coord(self,scoord):
+        nei_scoords = self.get_neigh_coords(scoord)
+        not_loaded_scoords = nei_scoords.difference(self.sectors_loaded)
+        if scoord not in self.sectors_loaded:
+            print(f"Loading Current sector {scoord}")
+            self.load_sector(scoord)
+        for new_scoord in not_loaded_scoords:
+            print(f"Loading sector {new_scoord}")
+            self.load_sector(new_scoord)        
+
+    def load_sector(self,scoord):
+        sector:Sector = self.sectors.get(scoord)
+        if sector is None:
+            print(f"no sector found at {scoord}")
+            # coord = scoord[0] * self.sector_size, scoord[1] * self.sector_size
+            coord = scoord[0] * self.sector_size, scoord[1] * self.sector_size
+            sector = self.add(coord, info = {'type':'obj','obj':'water1'})
+            print(f"Adding obj at in sector: {scoord} at {coord}" )
+        self.sectors_loaded.add(scoord)
+        for coord, item_list in sector.items.items():
+            for info in item_list:
+                self.load_obj_from_info(info,coord)
+     
+
+    def load_obj_from_info(self,info,coord):
+        config_id = info['obj']
+        if info.get('type') == "spawn_point":
+            gamectx.content.add_spawn_point(config_id,coord_to_vec(coord))
+        else:
+            obj = gamectx.content.create_from_config_id(config_id)
+            obj.spawn(position=coord_to_vec(coord))      
+
+
+    def get_layers(self):
+        return range(2)
+        
+    def get_image_by_loc(self,x,y, layer_id):
+        if layer_id == 0:
+            return get_tile_image_id(x,y,self.seed)
+        
+        loc_id = rand_int_from_coord(x,y,self.seed)
+        if x ==0 and y==0:
+            return "baby_tree"
+        if x ==2 and y==3:
+            return "baby_tree"
+        return None

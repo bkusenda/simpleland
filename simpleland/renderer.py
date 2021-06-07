@@ -34,7 +34,6 @@ class Renderer:
         if config.sdl_video_driver:
             os.environ["SDL_VIDEODRIVER"] = config.sdl_video_driver
         self.asset_bundle = asset_bundle
-        self.map_loader = asset_bundle.tilemaploader
         self.config:RendererConfig = config
         self.format = config.format
         self._display_surf = None
@@ -74,7 +73,6 @@ class Renderer:
             for k,sound_data in self.asset_bundle.sound_assets.items():
                 path = sound_data[0]
                 vol = sound_data[1]
-                print(f"Loading ")
                 sound = pygame.mixer.Sound(pkg_resources.resource_filename(__name__,path))
                 sound.set_volume(vol)
                 self.sounds[k] = sound
@@ -197,6 +195,8 @@ class Renderer:
                            size,
                            1)
 
+
+
     def _draw_polygon(self,
                      obj: GObject,
                      shape: Polygon,
@@ -242,8 +242,58 @@ class Renderer:
                 new_verts,
                 0)
 
+    def _draw_object(self, center, obj:GObject, screen_angle, screen_factor, screen_view_center, color=None):
 
-    def _draw_object(self, center, obj:GObject, angle, screen_factor, screen_view_center, color=None):
+        renderables = obj.get_renderables(screen_angle)
+        for renderable in renderables:
+            position = renderable['position']
+            image_id = renderable['image_id']
+            angle = renderable['angle']
+            pos = obj.get_view_position() - position - obj.image_offset
+            self._draw_image(pos,center,image_id,angle,screen_factor, screen_view_center)
+            if False:
+                self._draw_shape( pos, center, image_id, angle, screen_factor, screen_view_center, color=None)
+   
+
+    def _draw_image(self, pos, center, image_id, angle, screen_factor, screen_view_center, color=(255,0,0)):
+        image = self.get_scaled_image_by_id(image_id,screen_factor[0],screen_factor[1])
+        image_loc = scale(screen_factor, pos- center)  + screen_view_center
+        if image is not None:
+            if angle!=0:  
+                    image = pygame.transform.rotate(image,((angle) * 57.2957795)%360)
+            rect = image.get_rect()
+            rect.center = image_loc
+            self._display_surf.blit(image,rect)
+        else:
+            rect=pygame.Rect(0, 0, 60, 60)
+            rect.center = image_loc
+            pygame.draw.rect(self._display_surf,color, rect)
+        
+            
+    def _draw_poly(self,
+                     pos,
+                     angle,
+                     shape: Polygon,
+                     color,
+                     screen_factor,
+                     screen_view_center,
+                     screen_angle,
+                     center):
+
+        verts = shape.get_vertices()
+        new_verts = []
+        for v in verts:
+            obj_location = (pos + v.rotated(angle) - center)
+            obj_location = obj_location.rotated(-screen_angle)
+            p = scale(screen_factor,obj_location ) + screen_view_center
+            new_verts.append(p)
+        pygame.draw.polygon(self._display_surf,
+                color,
+                new_verts,
+                0)
+
+
+    def _draw_object_old(self, center, obj:GObject, angle, screen_factor, screen_view_center, color=None):
 
         image_id= obj.get_image_id(angle)
         rotate = obj.rotate_sprites
@@ -399,7 +449,7 @@ class Renderer:
                 if not need_update:
                     return self.background
             
-        tilemap = self.asset_bundle.tilemaploader.get_tilemap("")
+        gamemap = self.asset_bundle.maploader.get("")
         
         # Center tile for tile image id lookup
         sur_center_x = surface_width/2 - center.x
@@ -408,12 +458,12 @@ class Renderer:
         sur_center_tile_y =sur_center_y // self.config.tile_size
 
         tmp_surface = pygame.Surface((surface_width, surface_height))
-        for z in tilemap.get_layers():
+        for z in gamemap.get_layers():
             for tile_x in range(surface_width//self.config.tile_size):
                 ltile_x = (tile_x - sur_center_tile_x) 
                 for tile_y in range(surface_height//self.config.tile_size):
                     ltile_y = (tile_y - sur_center_tile_y) 
-                    background_image_id = tilemap.get_by_loc(ltile_x,ltile_y,z)
+                    background_image_id = gamemap.get_image_by_loc(ltile_x,ltile_y,z)
                     if background_image_id is not None:
                         tile_image = self.get_image_by_id(background_image_id)
 

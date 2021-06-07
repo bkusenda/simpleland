@@ -9,6 +9,22 @@ from .common import get_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingCon
 from .common import COLLISION_TYPE
 from .clock import clock
 import copy
+
+# class RenderAble:
+
+#     def __init__(self)
+
+class RenderAble:
+
+    def __init__(self, position:Vector, angle, depth = 2):
+        self.position = position
+        self.angle = angle
+        self.depth = depth
+        self.image_offset = Vector(0,0)
+        self.visible=True
+        self.image_id_default = None
+        self.shape = None
+
 class GObject(Base):
 
         
@@ -22,6 +38,9 @@ class GObject(Base):
             self.id = id
         self.position = None
         self.angle = 0
+        self.config_id = None
+        self.created_tick = clock.get_tick_counter()
+        self.player_id = None
 
         self.shape_group: ShapeGroup = ShapeGroup()
         self.data = {} if data is None else data
@@ -35,14 +54,10 @@ class GObject(Base):
         self._update_position_callback = lambda obj,new_pos, skip_collision_check,callback: None
 
         self.image_id_default = None
-        self.image_id_current = None
         self.rotate_sprites = False
         self.image_offset = Vector(0,0)
         self.child_object_ids =set()
 
-    # This function should be overridden
-    def create(self,*args,**kwargs):
-        pass
 
     def get_types(self):
         return set()     
@@ -148,62 +163,5 @@ class GObject(Base):
         data['data']['data'] = self.data
         return data
 
-
     def load_snapshot(self, data,exclude_keys=set()):
         load_dict_snapshot(self, data, exclude_keys=exclude_keys)
-
-
-
-# def build_interpolated_object(obj_1:GObject,obj_2:GObject,fraction=0.5):
-#     print("INTERPOLAT")
-    
-#     b1 = obj_1.get_body()
-#     b2 = obj_2.get_body()
-
-#     pos_x = (b2.position.x - b1.position.x) * fraction + b1.position.x
-#     pos_y = (b2.position.y - b1.position.y) * fraction + b1.position.y
-#     b_new = Body()
-#     b_new.last_change = b1.last_change
-
-#     b_new.position = Vector(pos_x,pos_y)
-
-#     force_x = (b2.force.x - b1.force.x) * fraction + b1.force.x
-#     force_y = (b2.force.y - b1.force.y) * fraction + b1.force.y
-#     b_new.force = Vector(force_x,force_y)
-
-#     b_new.angle = (b2.angle - b1.angle) * fraction + b1.angle
-
-#     b_new.velocity.x = (b2.velocity.x - b1.velocity.x) * fraction + b1.velocity.x
-#     b_new.velocity.y = (b2.velocity.y - b1.velocity.y) * fraction + b1.velocity.y
-
-#     b_new.angular_velocity = (b2.angular_velocity - b1.angular_velocity) * fraction + b1.angular_velocity
-
-#     obj = GObject(body=b_new, id=obj_1.get_id(),data=obj_1.data)
-#     obj.is_deleted = obj_1.is_deleted
-#     obj.last_change = obj_1.last_change
-#     obj.set_image_dims(obj_1.image_width, obj_1.image_height)
-
-#     for shape in obj_1.shape_group.get_shapes():
-#         obj.add_shape(get_shape_from_dict(b_new,shape.get_snapshot()))
-
-#     return obj
-
-# #TODO: no longer used
-# class ExtendedGObject(TimeLoggingContainer):
-
-#     def add(self,timestamp, obj:GObject):
-#         super().add(timestamp,obj)
-  
-#     def get_interpolated(self, timestamp):
-#         prev_obj, prev_timestamp, next_obj, next_timestamp = self.get_pair_by_timestamp(timestamp)
-#         if prev_obj is None:
-#             return next_obj
-#         if next_obj is None:
-#             return prev_obj
-
-#         if next_timestamp-prev_timestamp  ==0:
-#             return prev_obj
-#         return next_obj
-
-#         # fraction = (timestamp - prev_timestamp)/(next_timestamp-prev_timestamp)
-#         # return build_interpolated_object(prev_obj, next_obj, fraction)

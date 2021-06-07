@@ -13,7 +13,7 @@
         "main": {
             "format": "txt",
             "layers": [
-                "map_layer_1.txt"
+                "map_layer_1_test.txt"
             ],
             "index": {
                 "s0": {
@@ -24,13 +24,21 @@
                     "type": "spawn_point",
                     "obj": "monster1"
                 },
+                "s1": {
+                    "type": "obj",
+                    "obj": "human1"
+                },
                 "m1": {
                     "type": "obj",
                     "obj": "monster1"
                 },
                 "f1": {
                     "type": "obj",
-                    "obj": "food1"
+                    "obj": "apple1"
+                },
+                "f2": {
+                    "type": "obj",
+                    "obj": "cooked_meat1"
                 },
                 "t1": {
                     "type": "obj",
@@ -48,12 +56,23 @@
                     "type": "obj",
                     "obj": "rock1"
                 },
+                "r2": {
+                    "type": "obj",
+                    "obj": "perm_stone1"
+                },
                 "ww": {
                     "type": "obj",
                     "obj": "wall1"
                 }
             }
         }
+    },
+    "effects": {
+        "blue":{
+            
+
+        }
+
     },
     "objects": {
         "human1": {
@@ -62,26 +81,32 @@
         "monster1": {
             "obj_class": "Monster"
         },
-        "food1": {
+        "apple1": {
+            "obj_class": "Food"
+        },
+        "cooked_meat1": {
             "obj_class": "Food"
         },
         "tree1": {
             "obj_class": "Tree"
         },
         "water1": {
-            "obj_class": "Water"
+            "obj_class": "Liquid"
         },
         "deer1": {
-            "obj_class": "Deer"
+            "obj_class": "Animal"
         },
         "rock1": {
             "obj_class": "Rock"
         },
+        "perm_stone1": {
+            "obj_class": "Rock"
+        },
         "wood1": {
-            "obj_class": "Wood"
+            "obj_class": "PhysicalObject"
         },
         "wall1": {
-            "obj_class": "Wall"
+            "obj_class": "PhysicalObject"
         }
     }
 }
