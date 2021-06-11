@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 from .utils import gen_id
-from .common import Base, Vector
+from .common import Base, Vector2
 
 from .event import Event, InputEvent, build_event_from_dict
 

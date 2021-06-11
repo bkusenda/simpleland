@@ -17,13 +17,13 @@ from .object_manager import GObjectManager
 from .player_manager import PlayerManager
 from .physics_engine import GridPhysicsEngine
 
-from .event import (Event, MechanicalEvent,
+from .event import (ContentEvent, Event,
             PeriodicEvent, PositionChangeEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
 from .event import RemoveObjectEvent
 import pygame
 import sys
 from .content import Content
-from .common import Shape, Vector, load_dict_snapshot, get_shape_from_dict
+from .common import Shape, Vector2, load_dict_snapshot, get_shape_from_dict, register_base_cls, get_base_cls_by_name, Base
 
 class GameContext:
 
@@ -103,10 +103,13 @@ class GameContext:
     def change_game_state(self, new_state):
         self.state = new_state
 
+    def register_base_class(self,cls):
+        register_base_cls(cls)
+
     def create_snapshot_for_client(self,client):
         from .client import RemoteClient
         client:RemoteClient = client
-        snapshot_timestamp = clock.get_time()
+        snapshot_timestamp = clock.get_tick_counter()
         om_snapshot = self.object_manager.get_snapshot_update(client.last_snapshot_time_ms)
         # om_snapshot = self.object_manager.get_snapshot_full()
         pm_snapshot = self.player_manager.get_snapshot() # TODO, updates since
@@ -118,49 +121,25 @@ class GameContext:
             'timestamp':snapshot_timestamp,
             }
 
-    def build_object_from_dict(self,dict_data)->GObject:
-        
-        data = dict_data['data']
     
-        obj_type = self.content.get_class_by_type_name(dict_data['_type'])
-        obj = obj_type(id=data['id'])
-        load_dict_snapshot(obj, dict_data, exclude_keys={""})       
-
-        for k,v in data['shape_group']['data'].items():
-            obj.add_shape(get_shape_from_dict(v))
-        
-        if "data" in data:
-            obj.data = data['data']
-
-        return obj
-    
-    def load_object_snapshot(self, data, client_obj_ids=set()):
-        client_obj_snapshots = {}
+    def load_object_snapshot(self, data):
         for odata in data:
             obj_id = odata['data']['id']
             current_obj = self.object_manager.get_by_id(obj_id)    
             if current_obj is None:
-                obj = self.build_object_from_dict(odata)
+                obj = Base.create_from_snapshot(odata)
                 self.add_object(obj)
-                obj.sync_position()
             else:
-                if obj_id in client_obj_ids:
-                    client_obj_snapshots[obj_id] = odata
-                else:
-                    current_obj.load_snapshot(odata)
-                    current_obj.sync_position()
-        return client_obj_snapshots
+                current_obj.load_snapshot(odata)
 
 
-    def load_snapshot(self,snapshot,client_obj_ids=set()):
-        client_obj_snapshots = {}
+    def load_snapshot(self,snapshot):
         if 'om' in snapshot:
-            client_obj_snapshots = self.load_object_snapshot(snapshot['om'],client_obj_ids)
+            self.load_object_snapshot(snapshot['om'])
         if 'pm' in snapshot:
             self.player_manager.load_snapshot(snapshot['pm'])
         if 'em' in snapshot:
             self.event_manager.load_snapshot(snapshot['em'])
-        return client_obj_snapshots
 
     def run_pre_event_processing(self):
         """
@@ -177,10 +156,12 @@ class GameContext:
         events_set = set(self.event_manager.get_events())
         while len(events_set)>0:
             e = events_set.pop()
-        
             new_events = []
             if type(e) == InputEvent:
                 new_events = self.content.process_input_event(e)
+                events_to_remove.append(e)
+            elif type(e) ==ContentEvent :
+                new_events = self.content.process_event(e)
                 events_to_remove.append(e)
             elif type(e) == ViewEvent:
                 new_events = self._process_view_event(e)
@@ -250,6 +231,9 @@ class GameContext:
 
     def remove_all_events(self):
         self.event_manager.clear()
+
+    def get_object_by_id(self,obj_id):
+        return self.object_manager.get_by_id(obj_id)
     
     def cleanup(self):
         for o in list(self.object_manager.get_objects().values()):
@@ -284,7 +268,8 @@ class GameContext:
             self.physics_engine.remove_object(obj)
             self.object_manager.remove_by_id(obj.get_id())
         else:
-            print(f"Object not found, not deleting {e.object_id}")
+            # TODO: Caused by multiple actions on same tick issue            
+            print(f"****Object not found, not deleting {clock.get_tick_counter()} {e.object_id}")
         
         return True
 
@@ -314,8 +299,8 @@ class GameContext:
 
     def run_step(self):
         self.run_event_processing()
-        self.run_physics_processing()
         if not self.config.client_only_mode:
+            self.run_physics_processing()
             self.run_update()
 
         self.tick()

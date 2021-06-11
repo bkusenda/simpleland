@@ -4,10 +4,9 @@ from ..config import GameDef
 
 TILE_SIZE = 16
 
-############
+#############
 # Game Defs #
 #############
-
 
 def game_def(content_overrides={}):
 

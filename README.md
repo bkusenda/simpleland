@@ -8,7 +8,6 @@ This is a simple 2d game engine written completely in python with client/server 
 ![Game Screenshot](https://raw.githubusercontent.com/bkusenda/simpleland/master/assets/game_screen1.png "Game screenshot")
 
 ## Features
-- 2d Physics and collision detection using pymunk
 - Realtime client server networking support for multiple agents/players
 - Very simple demo game provided with agent perspective viewing (as oppose to environment perspective)
 - Openai gym interface
@@ -26,7 +25,6 @@ This is a simple 2d game engine written completely in python with client/server 
 - Only tested on Linux
 - python 3.7
 - pygame (rendering)
-- pymunk (physics)
 - l4z (network compression)
 - pyinstrument (performance profiling)
 - gym (usage of OpenAI Gym spaces and env interface)
@@ -37,7 +35,7 @@ This is a simple 2d game engine written completely in python with client/server 
 1. Download Repo:  ```git clone https://github.com/bkusenda/simpleland```
 1. enter repo directory: ```cd simpleland```
 1. (Optional) if using Anaconda, create conda environment: ```conda create -n simpleland python=3.7```
-1. Install requirements via pip: ```pip install pygame pymunk pyinstrument``` (...may be others too: TODO)
+1. Install requirements via pip: ```pip install pygame pyinstrument``` (...may be others too: TODO)
 1. Update path: ```export PYTHONPATH=${PYTHONPATH}:./```
 1. See below for usage
 

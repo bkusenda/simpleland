@@ -23,7 +23,7 @@ from .camera import Camera
 from .object import GObject
 from .config import ClientConfig, GameConfig
 from .content import Content
-from .common import StateDecoder, StateEncoder
+from .common import StateDecoder, StateEncoder, Base
 from .player import Player
 from .inputs import get_input_events
 from .renderer import Renderer
@@ -127,13 +127,12 @@ class ClientConnector:
         self.last_latency_ms = None
         self.last_latency_ticks = None
         self.request_counter = 0
-        self.server_tick = None
         self.ticks_per_second = 20
 
         self.connection_clock = StepClock(self.ticks_per_second)
-
+        self.tick_counter = TickPerSecCounter(2)
         self.last_received_snapshots = []
-        self.sync_freq = 2
+        self.sync_freq = 0
         self.last_sync = 0
 
         self.report_freq = .5
@@ -190,11 +189,12 @@ class ClientConnector:
             self.last_received_snapshots = [response_info['snapshot_timestamp']]
 
             # set clock
+            # TODO: also sync fps/clock from server
             if (time.time() - self.last_sync )>= self.sync_freq:
-                server_game_time = response_info['server_time'] - self.last_latency/2
-                if abs(server_game_time - clock.get_game_time()) > 0.1:
+                server_game_time = response_info['server_time'] - 0.03
+                # server_game_time = response_info['server_time'] + self.last_latency/2
+                if abs(server_game_time - clock.get_game_time()) > 0.02:
                     clock.set_start_time(time.time() - server_game_time)
-
                 self.last_sync = time.time()
 
             self.client_id = response_info['client_id']
@@ -202,8 +202,10 @@ class ClientConnector:
                 self.incomming_buffer.put(response)
             self.request_counter += 1
         self.connection_clock.tick()
+        self.tick_counter.tick()
 
         if (time.time() - self.last_report) > self.report_freq:
+            print(f"NET Tick rate {self.tick_counter.avg()}")
             self.last_report = time.time()
 
     def start_connection(self, callback=None):
@@ -220,16 +222,18 @@ class GameClient:
 
         self.config = config
         self.content:Content = gamectx.content
-        self.render_delay_in_ms = renderer.config.render_delay_in_ms  # tick gap + latency
+        self.render_delay_in_ms = 0#renderer.config.render_delay_in_ms  # tick gap + latency
         self.frames_per_second = config.frames_per_second
         self.frame_limit = False# self.frames_per_second != gamectx.config.tick_rate
 
         self.server_info_history = TimeLoggingContainer(100)
+        self.snapshot_history = TimeLoggingContainer(500)
         self.player: Player = None  # TODO: move to history data managed for rendering consistency
         self.step_counter = 0
         self.renderer:Renderer = renderer
         self.tick_counter = TickPerSecCounter(2)
         self.last_obj_sync = 0
+        
         if self.config.is_human:            
             self.renderer.initialize()
 
@@ -248,14 +252,13 @@ class GameClient:
                 is_human=self.config.is_human)
 
     def send_local_events(self):
-        if self.connector is None:
-            return
         event_snapshot = gamectx.event_manager.get_client_snapshot()
         if len(event_snapshot) >0:
             if self.connector.outgoing_buffer.qsize() < 300:
                 self.connector.outgoing_buffer.put(event_snapshot)
             else:
                 print("Queue is large")
+            gamectx.event_manager.clear()
         
 
     def sync_with_remote_state(self):
@@ -272,61 +275,61 @@ class GameClient:
                 done = True
                 break
             else:
-                client_obj_ids = set()
-                if self.player is not None:
-                    player_obj_id = self.player.get_object_id()
-                    client_obj_ids.add(player_obj_id)
-                client_obj_snapshots = gamectx.load_snapshot(
-                    incomming_data['snapshot'],
-                    client_obj_ids = client_obj_ids)
-
+                self.snapshot_history.add(
+                    incomming_data['info']['snapshot_timestamp'],
+                    incomming_data['snapshot'])
                 self.server_info_history.add(
                     incomming_data['info']['snapshot_timestamp'],
                     incomming_data['info'])
 
 
-                sync_required = ((clock.get_exact_time() - self.last_obj_sync) >=100 )
-                are_insync = True
-                for obj_id, data in client_obj_snapshots.items():
-                    local_obj:GObject = gamectx.object_manager.get_by_id(obj_id)
-                    obj:GObject = gamectx.build_object_from_dict(data)
-                    
-                    if sync_required or obj.get_position() == local_obj.get_position():
-                        local_obj.load_snapshot(data)
-                        local_obj.sync_position()
-                    elif obj.get_position() != local_obj.get_position() :                        
-                        local_obj.load_snapshot(data,{'position','_action'})
-                        are_insync = False
-                            
-                if are_insync:        
-                    self.last_obj_sync = clock.get_exact_time()
+
+    def load_snapshot(self):
+
+        
+        snap1,snap1_timestamp,snap2,snap2_timestamp = self.snapshot_history.get_pair_by_timestamp(clock.get_tick_counter())
+        
+        snap = snap1
+        if snap is None:
+            snap = snap2
+
+        if snap is not None:
+            gamectx.load_snapshot(snap)
+
+            if snap1 is not None and snap2 is not None:
+                fraction = (clock.get_tick_counter()-snap1_timestamp)/(snap2_timestamp-snap1_timestamp)
+                for odata in snap2['om']:
+                    obj2 = Base.create_from_snapshot(odata)
+                    obj1 = gamectx.get_object_by_id(obj2.get_id())
+                    if obj1 is not None:
+                        p1 = obj1.get_view_position()
+                        p2 = obj2.get_view_position()
+                        if p1 is not None and p2 is not None:
+                            obj1.view_position = (p2 - p1) * fraction  + p1
   
 
     def update_player_info(self):
-        if self.connector is None:
-            return
         server_info_timestamp, server_info = self.server_info_history.get_latest_with_timestamp()
         if server_info is not None and server_info.get('player_id',"") != "":
             self.player = gamectx.player_manager.get_player(str(server_info['player_id']))
 
 
     def run_step(self):
-     
         if self.player is not None:
             input_events = self.player.pull_input_events()
             if self.config.is_human:
                 input_events.extend(get_input_events(self.player))
             
             for event in input_events:
-                if self.content.is_valid_input_event(event):
-                    gamectx.event_manager.add_event(event)
+                gamectx.event_manager.add_event(event)
         
         # Send events
-        self.send_local_events()
-
         # Get Game Snapshot
-        self.sync_with_remote_state()
-        self.update_player_info()
+        if self.connector is not None:
+            self.send_local_events()
+            self.sync_with_remote_state()
+            self.load_snapshot()
+            self.update_player_info()
         self.tick_counter.tick()
         self.step_counter += 1
     

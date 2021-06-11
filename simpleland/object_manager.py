@@ -1,9 +1,7 @@
 from typing import Any, Dict, List, Tuple
 
-from pymunk import Vec2d
 
 from .object import GObject
-from .utils import gen_id
 
 
 class GObjectManager:
@@ -30,10 +28,7 @@ class GObjectManager:
         return [self.objects[oid] for oid in self.configs_id_index.get(config_id,set())]
 
     def get_by_id(self, obj_id) -> GObject:
-        obj = self.objects.get(obj_id, None)
-        if obj is None:
-            print(f"ERROR looking up object with id {obj_id}, with type {self.obj_history.get(obj_id)}")
-        return obj
+        return self.objects.get(obj_id, None)
 
     def remove_by_id(self, obj_id):
         obj = self.objects[obj_id]

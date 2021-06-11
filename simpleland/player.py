@@ -1,13 +1,6 @@
-import time
 from typing import List, Dict
-
-import numpy as np
-import pygame
-
-
-from .common import (get_dict_snapshot, load_dict_snapshot, Base)
+from .common import (create_dict_snapshot, load_dict_snapshot, Base)
 from .camera import Camera
-from .utils import gen_id
 
 from .object import GObject
 from .event import Event
@@ -67,11 +60,11 @@ class Player(Base):
         return events
 
     def get_snapshot(self):
-        data =  get_dict_snapshot(self, exclude_keys={'events'})
+        data =  create_dict_snapshot(self, exclude_keys={'events'})
         return data
 
     def load_snapshot(self, data):
-        load_dict_snapshot(self, data, exclude_keys={"events"})
+        load_dict_snapshot(self, data, exclude_keys={"events","camera"})
 
     def get_camera(self) -> Camera:
         return self.camera

@@ -64,15 +64,15 @@ class Content:
         raise NotImplementedError()
 
     @abstractmethod
-    def post_process_frame(self, render_time,  player: Player, renderer):
+    def post_process_frame(self, player: Player, renderer):
         """
         Additional rendering. TODO: make primary rendering override instead
         """
         raise NotImplementedError()
 
 
-    def get_class_by_type_name(self,name):
-        return GObject
+    # def get_class_by_type_name(self,name):
+    #     return GObject
 
 
 

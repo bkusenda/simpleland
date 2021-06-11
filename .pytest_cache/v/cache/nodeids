@@ -1,1 +1,6 @@
-[]
+[
+  "tests/test_runner.py::test_answer",
+  "tests/test_env_runner.py::test_answer",
+  "tests/test_env_runner.py::test_env",
+  "tests/test_serialization.py::test_env"
+]

@@ -1,5 +1,4 @@
 
-import argparse
 import json
 import logging
 import math
@@ -8,19 +7,10 @@ import struct
 import threading
 
 import lz4.frame
-from pyinstrument import Profiler
-from simpleland.client import GameClient
 
-from simpleland.config import GameDef, PlayerDefinition, ServerConfig
-from simpleland.content import Content
+from simpleland.config import  ServerConfig
 from simpleland.common import StateDecoder, StateEncoder
 
-
-from simpleland.registry import load_game_content, load_game_def
-from simpleland.renderer import Renderer
-from simpleland.utils import gen_id
-import traceback
-import time
 from simpleland import gamectx
 from .clock import clock
 
@@ -78,6 +68,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
         client.unconfirmed_messages.add(snapshot_timestamp)
 
         # Build response data
+
         response_data = {}
         response_data['info'] = {
             'server_tick': clock.get_tick_counter(),

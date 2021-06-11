@@ -1,5 +1,4 @@
 import time
-import uuid
 import copy
 
 uid = 0
@@ -7,11 +6,6 @@ def gen_id():
     global uid
     uid+=1
     return uid
-
-
-# def gen_id() -> str:
-#     return str(uuid.uuid1())
-
 class TickPerSecCounter:
 
     def __init__(self,size=2):

@@ -1,5 +1,5 @@
 
-from ..common import Vector
+from ..common import Vector2
 from .. import gamectx
 
 def vec_to_coord(v):
@@ -9,4 +9,4 @@ def vec_to_coord(v):
 
 def coord_to_vec(coord):
     tile_size = gamectx.content.config['tile_size']
-    return Vector(float(coord[0] * tile_size), float(coord[1] * tile_size))
+    return Vector2(float(coord[0] * tile_size), float(coord[1] * tile_size))

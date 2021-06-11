@@ -102,6 +102,9 @@
         "perm_stone1": {
             "obj_class": "Rock"
         },
+        "tag_tool": {
+            "obj_class": "Tool"
+        },
         "wood1": {
             "obj_class": "PhysicalObject"
         },

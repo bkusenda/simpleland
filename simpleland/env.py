@@ -1,4 +1,5 @@
 
+import logging
 from simpleland.registry import load_game_content, GameDef
 import gym
 from gym import spaces
@@ -33,7 +34,6 @@ class SimplelandEnv:
             dry_run=False,
             agent_map={'1':{},'2':{}},
             tick_rate = 0,
-            sim_timestep = 0.01,
             enable_server = False,
             view_type=0,
             render_shapes=False,
@@ -45,8 +45,7 @@ class SimplelandEnv:
             enable_server=enable_server, 
             port=port,
             remote_client=False,
-            tick_rate = tick_rate,
-            sim_timestep=sim_timestep)
+            tick_rate = tick_rate)
 
         game_def.content_config = merged_dict(
             game_def.content_config,
@@ -126,7 +125,7 @@ class SimplelandEnv:
             server_thread = threading.Thread(target=self.server.serve_forever)
             server_thread.daemon = True
             server_thread.start()
-            print("Server started at {} port {}".format(game_def.server_config.hostname, game_def.server_config.port))
+            logging.info("Server started at {} port {}".format(game_def.server_config.hostname, game_def.server_config.port))
 
     def step(self, actions):
 
@@ -213,7 +212,7 @@ class SimplelandEnvSingle(gym.Env):
             player_type=1,
             view_type=1,
             tick_rate=10000):
-        print("Starting SL v21")
+        logging.info("Starting SL v21")
         self.agent_id = "1"
         self.env_main = SimplelandEnv(
             agent_map={self.agent_id:{}},
@@ -287,16 +286,16 @@ if __name__ == "__main__":
             for id, ob in obs.items():
                 if render:
                     env.render(player_id=id)  
-                print(f"Player: {id}")
-                print(obs[id])
+                logging.info(f"Player: {id}")
+                logging.info(obs[id])
                 if len(rewards)> 0:
-                    print(rewards[id])
-                    print(dones[id])
-                    print(infos[id])
-                print(f"Episode {episode_count} Game Step:{clock.get_time()}")
-                print("----------")
+                    logging.info(rewards[id])
+                    logging.info(dones[id])
+                    logging.info(infos[id])
+                logging.info(f"Episode {episode_count} Game Step:{clock.get_time()}")
+                logging.info("----------")
                 action = env.action_spaces[id].sample() #input()
-                print(action)
+                logging.info(action)
                 # time.sleep(.1)
                 try:
                     action = int(action)
@@ -309,17 +308,17 @@ if __name__ == "__main__":
             actions = {agent_id:env.action_spaces[agent_id].sample() for agent_id in env.obs.keys()}
         if mem_profile and (env.step_counter % 10000 == 0):
             current, peak = tracemalloc.get_traced_memory()
-            print(f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
+            logging.info(f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
 
     if mem_profile:
         current, peak = tracemalloc.get_traced_memory()
-        print(f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
+        logging.info(f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
         tracemalloc.stop()    
     steps_per_sec = max_steps/(time.time()-start_time)
-    print(f"steps_per_sec {steps_per_sec}")
+    logging.info(f"steps_per_sec {steps_per_sec}")
     if time_profile:
         profiler.stop()
-        print(profiler.output_text(unicode=True, color=True,show_all=True))
+        logging.info(profiler.output_text(unicode=True, color=True,show_all=True))
 
 
 

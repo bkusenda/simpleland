@@ -3,31 +3,27 @@ from .utils import gen_id
 from typing import Callable, List, Dict
 import time
 
-from .common import Shape, Vector, load_dict_snapshot, Base, dict_to_state, get_shape_from_dict
-from .camera import Camera
-from .common import get_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingContainer
+from .common import Shape, Vector2, load_dict_snapshot, Base,get_shape_from_dict
+from .common import create_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingContainer
 from .common import COLLISION_TYPE
 from .clock import clock
 import copy
 
-# class RenderAble:
-
-#     def __init__(self)
 
 class RenderAble:
 
-    def __init__(self, position:Vector, angle, depth = 2):
+    def __init__(self, position:Vector2, angle, depth = 2):
         self.position = position
         self.angle = angle
         self.depth = depth
-        self.image_offset = Vector(0,0)
+        self.image_offset = Vector2(0,0)
         self.visible=True
         self.image_id_default = None
         self.shape = None
 
 class GObject(Base):
 
-        
+
     def __init__(self,
                  id= None,
                  data = None,
@@ -37,6 +33,7 @@ class GObject(Base):
         else:
             self.id = id
         self.position = None
+        self.view_position = None
         self.angle = 0
         self.config_id = None
         self.created_tick = clock.get_tick_counter()
@@ -55,7 +52,7 @@ class GObject(Base):
 
         self.image_id_default = None
         self.rotate_sprites = False
-        self.image_offset = Vector(0,0)
+        self.image_offset = Vector2(0,0)
         self.child_object_ids =set()
 
 
@@ -66,7 +63,10 @@ class GObject(Base):
         pass
 
     def get_view_position(self):
-        return self.position
+        if self.view_position is None:
+            return self.position
+        else:
+            return self.view_position
 
     def get_image_id(self, angle):
         return self.image_id_default
@@ -121,7 +121,7 @@ class GObject(Base):
     def set_image_dims(self,height,width):
         self.image_width, self.image_height = (height,width)
 
-    def update_position(self, position: Vector,skip_collision_check=False,callback=None):
+    def update_position(self, position: Vector2,skip_collision_check=False,callback=None):
         self._update_position_callback(
             self,
             position,
@@ -131,8 +131,10 @@ class GObject(Base):
     def sync_position(self):
         self.update_position(self.position,True)
 
-    def set_position(self, position: Vector):
-        self.update_position(position,True)
+    def set_position(self, position: Vector2):
+        self.position = position
+        self.set_last_change(clock.get_time())
+        # self.update_position(position,True)
 
     def get_position(self):
         return self.position
@@ -140,12 +142,11 @@ class GObject(Base):
     def __repr__(self) -> str:
         return f"{super().__repr__()}, id:{self.id}, data:{self.data}, dict_data:{self.__dict__}"
 
-    def add_shape(self,shape:Shape, collision_type=1,label=None):
+    def add_shape(self,shape:Shape, collision_type=1):
         shape.set_object_id(self.get_id())
         shape.collision_type = collision_type
         if collision_type == COLLISION_TYPE['sensor']:
             shape.sensor = True
-        shape.set_label(label)
         self.shape_group.add(shape)
 
     def get_shapes(self):
@@ -154,14 +155,31 @@ class GObject(Base):
     def set_last_change(self,timestamp):
         self.last_change = timestamp
 
+    def mark_updated(self):
+        self.set_last_change(clock.get_tick_counter())
+
     def get_last_change(self):
         return self.last_change
 
     def get_snapshot(self):
-        data = get_dict_snapshot(self, exclude_keys={'on_change_func'})
+        data = create_dict_snapshot(self, exclude_keys={'on_change_func'})
         data['data']['last_change']= self.get_last_change()
         data['data']['data'] = self.data
         return data
 
-    def load_snapshot(self, data,exclude_keys=set()):
-        load_dict_snapshot(self, data, exclude_keys=exclude_keys)
+    def load_snapshot(self, data_dict,exclude_keys=set()):
+        load_dict_snapshot(self, data_dict, exclude_keys={'shape_group'}.union(exclude_keys))
+        data = data_dict['data']
+        
+        # TODO: using word "data" too much!! rename somethings
+        for k,v in data['shape_group']['data'].items():
+            self.add_shape(get_shape_from_dict(v))
+        
+        if "data" in data:
+            self.data = data['data']
+
+    
+def update_view_position(obj1:GObject,obj2:GObject,fraction=0.5):
+    p1 = obj1.get_view_position()
+    p2 = obj2.get_view_position()
+    obj1.view_position = (p2 - p1) * fraction  + p1

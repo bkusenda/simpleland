@@ -2,7 +2,7 @@
 from simpleland.object import GObject
 from typing import Any, Dict, List
 from .utils import gen_id
-from .common import Base, Vector
+from .common import Base, Vector2
 from .clock import clock
 
 def build_event_from_dict(data_dict):
@@ -27,6 +27,22 @@ class Event(Base):
 
     def get_id(self):
         return self.id
+
+
+class ContentEvent(Event):
+
+    def __init__(self,
+                id=None,
+                data={},
+                is_client_event=False,
+                **kwargs):
+
+        super().__init__(id,is_client_event=is_client_event,**kwargs)
+        self.data=data
+
+    def get_id(self):
+        return self.id
+
 
 class PeriodicEvent(Event):
 
@@ -156,8 +172,8 @@ class PositionChangeEvent(Event):
 
     def __init__(self, 
                 obj_id:str,
-                old_pos: Vector,              
-                new_pos: Vector,
+                old_pos: Vector2,              
+                new_pos: Vector2,
                 is_player_obj = False,              
                 id=None,
                 **kwargs):
@@ -170,25 +186,6 @@ class PositionChangeEvent(Event):
     def __repr__(self):
         return f"pos change event for obj{self.obj_id} {self.old_pos} to {self.new_pos}"
 
-class MechanicalEvent(Event):
-
-    @classmethod
-    def build_from_dict(cls,dict_data):
-        return cls(obj_id = dict_data['obj_id'],
-            direction = dict_data['direction'],
-            orientation_diff = dict_data['orientation_diff'],
-            id = dict_data['id'],
-            kwargs = dict_data)
-
-    def __init__(self, obj_id: str,
-                 direction: Vector ,
-                 orientation_diff: float = 0.0,
-                 id=None,
-                 **kwargs):
-        super().__init__(id,**kwargs)
-        self.obj_id = obj_id
-        self.direction = direction
-        self.orientation_diff = orientation_diff
 
 class AdminEvent(Event):
 
@@ -200,7 +197,7 @@ class ViewEvent(Event):
 
     def __init__(self, player_id: str,
                  distance_diff: float = 0,
-                 center_diff: Vector = None,
+                 center_diff: Vector2 = None,
                  orientation_diff: float = 0.0, 
                  id=None,
                  **kwargs):

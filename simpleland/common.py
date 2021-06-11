@@ -1,20 +1,23 @@
-import pymunk
-import pygame
 from .utils import gen_id
 from typing import List, Dict
-import time
 import json
 OBJ_TYPES = ['default','sensor']
 COLLISION_TYPE = {v:i for i, v in enumerate(OBJ_TYPES)}
-from pymunk import Vec2d
-# from pygame import Vector2
-Vector = Vec2d
+from pygame import Vector2
+
+base_class_registry = {}
+
+def register_base_cls(cls):
+    base_class_registry[cls.__name__]=cls
+
+def get_base_cls_by_name(name):
+    return base_class_registry.get(name)
 
 class StateEncoder(json.JSONEncoder):
     def default(self, obj): # pylint: disable=E0202
-        if isinstance(obj,(Vec2d,Vector)):
+        if isinstance(obj,(Vector2)):
             return {
-                "_type": "Vec2d",
+                "_type": "Vector2",
                 "x":obj.x,
                 "y":obj.y}
         return json.JSONEncoder.default(self, obj)
@@ -28,21 +31,20 @@ class StateDecoder(json.JSONDecoder):
         if '_type' not in obj:
             return obj
         type = obj['_type']
-        if type == 'Vec2d' or type == 'Vector':
-            return Vector(obj['x'],obj['y'])
+        if type == 'Vector2':
+            return Vector2(obj['x'],obj['y'])
         return obj
 
-
-#BJK HERE
-def get_dict_snapshot(obj, exclude_keys = {}):
+def create_dict_snapshot(obj, exclude_keys = {}):
     _type = type(obj).__name__
+
     data = {}
     for k, v in obj.__dict__.items():
-        if k in exclude_keys or k.startswith("__"):
+        if k in exclude_keys or k.startswith("_l_"):
             continue
         if issubclass(type(v), Base):
             data[k] = v.get_snapshot()
-        elif v is None or isinstance(v, (int, float, str, Vector, Vec2d)):
+        elif v is None or isinstance(v, (int, float, str, Vector2)):
             data[k] = v
         elif isinstance(v, tuple):
             data[k] = {'_type':"tuple", 'value':v}
@@ -50,15 +52,14 @@ def get_dict_snapshot(obj, exclude_keys = {}):
             data[k] = {}
             for kk,vv in v.items():
                 if hasattr(vv,"__dict__"):
-                    data[k][kk] = get_dict_snapshot(vv)
+                    data[k][kk] = create_dict_snapshot(vv)
                 else:
                     data[k][kk]= vv
-        
         elif isinstance(v,list):
             data[k] = []
             for vv in v:
                 if hasattr(vv,"__dict__"):
-                    data[k].append(get_dict_snapshot(vv))
+                    data[k].append(create_dict_snapshot(vv))
                 else:
                     data[k].append(vv)
         else:
@@ -67,49 +68,56 @@ def get_dict_snapshot(obj, exclude_keys = {}):
     return {"_type":_type,"data": data}
 
 
-def load_dict_snapshot(obj, dict_data, exclude_keys={}):
+def parse_inner_val(v):
+    result = None
+    if v is None or isinstance(v, (int, float, str, Vector2, tuple)):
+        result = v
+    elif (isinstance(v, dict) and v.get("_type") == "tuple"):
+        result = tuple(v.get("value",None))
+    elif v is None or (isinstance(v, dict) and ("_type" not in v)):
+        result = {}
+        for kk,vv in v.items():
+            result[kk] = parse_inner_val(vv)
+    elif v is None or (isinstance(v, dict) and ("_type" in v)):
+        cls = get_base_cls_by_name(v['_type'])
+        o = cls()
+        o.load_snapshot(v)
+        result = o
+    elif v is None or (isinstance(v, list)):
+        result = v
+    else:
+        raise TypeError("")
+    return result
 
+def load_dict_snapshot(obj, dict_data, exclude_keys={}):
     for k, v in dict_data['data'].items():
-        if k in exclude_keys or k.startswith("__"):
+        if k in exclude_keys or k.startswith("_l_"):
             continue
-        if issubclass(type(v), Base):
-            obj.__dict__[k] = v.load_snapshot(obj.__dict__[k], v)
-        elif v is None or isinstance(v, (int, float, str, Vector, tuple, Vec2d)):
-            obj.__dict__[k] = v
-        elif (isinstance(v, dict) and v.get("_type") == "tuple"):
-            obj.__dict__[k] = tuple(v.get("value",None))
-        elif v is None or (isinstance(v, dict) and ("_type" not in v)):
-            obj.__dict__[k] = v
-        else:
+        try:
+            obj.__dict__[k] = parse_inner_val(v)
+        except TypeError as e:
             pass
-            # obj.__dict__[k] = v
 
 def get_shape_from_dict(dict_data):
-    if dict_data['_type'] == 'SLLine':
-        shape = Line(**dict_data['params'])
-    else:
-        cls = globals()[dict_data['_type']]
-        shape = cls( **dict_data['params'])
-    
+    cls = globals()[dict_data['_type']]
+    shape:Shape = cls(**dict_data['params'])
     shape.load_snapshot(dict_data)
     return shape
 
-# source: https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
-class Singleton(type):
-    _instances = {}
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
-
 class Base:
 
+    @staticmethod
+    def create_from_snapshot(snapshot):
+        cls = get_base_cls_by_name(snapshot['_type'])
+        o = cls()
+        o.load_snapshot(snapshot)
+        return o
+
     def get_snapshot(self):
-        return get_dict_snapshot(self)
+        return create_dict_snapshot(self)
 
     def load_snapshot(self, data):
         load_dict_snapshot(self, data)
-
 
 class PlayerConfig(Base):
 
@@ -136,15 +144,14 @@ def dict_to_state(data):
 class Shape(Base):
 
     def __init__(self):
-        self.object_id= None
-        self.id = gen_id()
-        self.label = None
-    
-    def get_id(self):
-        return self.id
+        self.label = "default"
+        self.object_id= None        
 
     def set_label(self,label):
         self.label = label
+
+    def get_label(self):
+        return self.label
 
     def set_object_id(self, object_id):
         self.object_id = object_id
@@ -153,11 +160,12 @@ class Shape(Base):
         return self.object_id
 
     def get_common_info(self):
-        return get_dict_snapshot(self, exclude_keys={"_body"})
+        return create_dict_snapshot(self, exclude_keys={})
 
 class Line(Shape):
 
-    def __init__(self,a,b,radius):
+    def __init__(self,a,b,radius,*args,**kwargs):
+        super().__init__(*args,**kwargs)
         self.a = a
         self.b = b
         self.radius =radius
@@ -172,8 +180,8 @@ class Line(Shape):
         
 class Polygon(Shape):
 
-    def __init__(self, vertices):
-        super().__init__()
+    def __init__(self,vertices,*args,**kwargs):
+        super().__init__(*args,**kwargs)
         self.vertices =vertices
 
     def get_vertices(self):
@@ -189,14 +197,14 @@ class Polygon(Shape):
 
 class Rectangle(Polygon):
 
-    def __init__(self, center,width,height):
-        super().__init__()
+    def __init__(self, center,width,height,*args,**kwargs):
+        super().__init__(*args,**kwargs)
         w =width/2
         h = height/2
-        v1 = Vector(center.x - w,center.y + h)
-        v2 = Vector(center.x + w,center.y + h)
-        v3 = Vector(center.x + w,center.y - h)
-        v4 = Vector(center.x - w,center.y - h)
+        v1 = Vector2(center.x - w,center.y + h)
+        v2 = Vector2(center.x + w,center.y + h)
+        v3 = Vector2(center.x + w,center.y - h)
+        v4 = Vector2(center.x - w,center.y - h)
         vertices=[v1,v2,v3,v4]
         super(vertices)
     
@@ -209,8 +217,8 @@ class Rectangle(Polygon):
 
 class Circle(Shape):
 
-    def __init__(self,radius):
-        super().__init__()
+    def __init__(self,radius,*args,**kwargs):
+        super().__init__(*args,**kwargs)
         self.radius = radius
 
     def get_snapshot(self):
@@ -290,8 +298,8 @@ class ShapeGroup(Base):
     def __init__(self):
         self._shapes:Dict[str,Shape]={}
 
-    def add(self,shape):
-        self._shapes[shape.get_id()] = shape
+    def add(self,shape:Shape):
+        self._shapes[shape.get_label()] = shape
     
     def get_shapes(self)->List[Shape]:
         return self._shapes.values()

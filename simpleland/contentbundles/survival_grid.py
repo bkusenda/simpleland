@@ -3,9 +3,6 @@ from simpleland import physics_engine
 import random
 from typing import Dict, Any, Tuple
 
-import pymunk
-from pymunk import contact_point_set
-from pymunk.vec2d import Vec2d
 from ..camera import Camera
 from ..event import (DelayedEvent, Event, InputEvent,
                      PeriodicEvent, PositionChangeEvent, SoundEvent, ViewEvent)
@@ -24,7 +21,7 @@ from ..clock import clock
 from typing import List,Dict,Any
 from ..event import InputEvent, Event, ViewEvent, DelayedEvent
 from .. import gamectx
-from ..common import  Vector
+from ..common import  Vector2, get_base_cls_by_name
 import pygame
 from ..clock import clock
 from gym import spaces
@@ -65,7 +62,6 @@ def read_json_file(path):
         with open(full_path,'r') as f:
             return json.load(f)
     except Exception as e:
-        print(e)
         return {}
 
 
@@ -130,7 +126,14 @@ class GameContent(Content):
         self._speed_factor = None
         self.call_counter = 0
         self.spawn_points = {}
-        self.obj_classes = [Human, Monster, Food, Animal, Tree, Rock, Liquid, PhysicalObject]
+
+        # All classes should be registered
+        self.obj_classes = [Effect, Human, Monster, Inventory,
+            Food,Tool, Animal, Tree, Rock, 
+            Liquid, PhysicalObject]
+        for cls in self.obj_classes:
+            gamectx.register_base_class(cls)
+
         self.obj_class_map= {cls.__name__: cls for cls  in self.obj_classes}
 
     def add_spawn_point(self,config_id, pos):
@@ -150,7 +153,6 @@ class GameContent(Content):
     def get_object_sounds(self,config_id):
         return self.game_config['objects'].get(config_id,{}).get('sounds',{})
 
-    #
     def speed_factor(self):
         if self._speed_factor is not None:
             return self._speed_factor
@@ -167,8 +169,8 @@ class GameContent(Content):
     def get_asset_bundle(self):
         return self.asset_bundle
 
-    def get_class_by_type_name(self,name):
-        return self.obj_class_map.get(name,PhysicalObject)
+    # def get_class_by_type_name(self,name):
+    #     return self.obj_class_map.get(name,PhysicalObject)
 
     def reset_required(self):
         for player in gamectx.player_manager.players_map.values():
@@ -289,11 +291,11 @@ class GameContent(Content):
     # Loading/Spawning
     #########################
     def spawn_objects(self):
+        #TOOD: make configurable
         config_id = 'monster1'
         objs = gamectx.object_manager.get_objects_by_config_id(config_id)
-        if len(objs) < 1:
-            print("spawning")
-            spawn_points = self.get_spawn_points(config_id)            
+        spawn_points = self.get_spawn_points(config_id)
+        if len(objs) < 1 and len(spawn_points)>0:
             object_config = gamectx.content.game_config['objects'][config_id]['config']
             Monster(config_id = config_id, config=object_config).spawn(spawn_points[0])
 
@@ -342,19 +344,6 @@ class GameContent(Content):
     ########################
     # GET INPUT
     ########################
-    def is_valid_input_event(self, input_event:InputEvent):
-        # TODO: Switch to filter multiple input events
-        
-        player = gamectx.player_manager.get_player(input_event.player_id)
-        
-        if player is None or not player.get_data_value("allow_input",False) or player.get_data_value("reset_required",False):
-            return False
-
-        obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
-
-        if obj is not None and obj.get_action().get('blocking',True):
-            return False
-        return True
 
     def process_position_change_event(self,e:PositionChangeEvent):
         if not e.is_player_obj:
@@ -382,9 +371,14 @@ class GameContent(Content):
 
         obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
 
+        # Client Events
         if 27 in keydown:
             print("QUITTING")
             gamectx.change_game_state("STOPPED")
+            return events
+
+        # If client, dont' process any other events
+        if gamectx.config.client_only_mode:
             return events
 
         if obj is None or not obj.enabled:
@@ -394,28 +388,37 @@ class GameContent(Content):
             print("Episode is over. Reset required")
             return events
 
+        player = gamectx.player_manager.get_player(input_event.player_id)
+        
+        if player is None or not player.get_data_value("allow_input",False) or player.get_data_value("reset_required",False):
+            return events
+
+        obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
+
+        if obj is not None and obj.get_action().get('blocking',True):
+            return events
 
         # Object Movement
         actions_set = set()
-        direction = Vector.zero()
+        direction = Vector2(0,0)
         angle_update = None
         if 23 in keypressed:
-            direction = Vector(0, -1)
+            direction = Vector2(0, -1)
             angle_update = math.pi
             actions_set.add("WALK")
 
         if 19 in keypressed:
-            direction = Vector(0, 1)
+            direction = Vector2(0, 1)
             angle_update = 0
             actions_set.add("WALK")
 
         if 4 in keypressed:
-            direction = Vector(1, 0)
+            direction = Vector2(1, 0)
             angle_update = -math.pi/2
             actions_set.add("WALK")
             
         if 1 in keypressed:
-            direction = Vector(-1, 0)
+            direction = Vector2(-1, 0)
             angle_update = math.pi/2
             actions_set.add("WALK")
 
@@ -453,8 +456,14 @@ class GameContent(Content):
         if 0 in keypressed:
             actions_set.add("NA")
 
-        if 31 in keydown:
-            events.append(ViewEvent(player.get_id(), 100))
+
+
+        # def event_fn(event: DelayedEvent, data):
+        #         obj.walk(direction,angle_update)
+        #         return []
+        #     delay = 0
+        #     event = DelayedEvent(event_fn, delay,)
+        #     events.append(event)
 
         if "GRAB" in actions_set:
             obj.grab()
@@ -477,12 +486,6 @@ class GameContent(Content):
         elif "JUMP" in actions_set:
             obj.jump()
         elif "WALK" in actions_set:
-            # def event_fn(event: DelayedEvent, data):
-            #     obj.walk(direction,angle_update)
-            #     return []
-            # delay = 0
-            # event = DelayedEvent(event_fn, delay)
-            # events.append(event)
             obj.walk(direction,angle_update)
 
         return events
@@ -509,7 +512,8 @@ class GameContent(Content):
         object_config = gamectx.content.game_config['objects'].get(config_id)
         if object_config is None:
             raise Exception(f"{config_id} not defined in game_config['objects']")
-        cls = gamectx.content.get_class_by_type_name(object_config['obj_class'])
+        cls = get_base_cls_by_name(object_config['obj_class'])
+        # cls = gamectx.content.get_class_by_type_name(object_config['obj_class'])
         obj:PhysicalObject = cls(config_id=config_id,config=object_config['config'])
         return obj
 
@@ -535,59 +539,3 @@ class GameContent(Content):
                 renderer.render_to_console(lines, x=5, y=5)
                 if obj_health <= 0:
                     renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)
-
-# def input_event_callback_fpv(input_event: InputEvent, player) -> List[Event]:
-
-#     events= []
-#     tile_size = gamectx.physics_engine.config.tile_size
-#     keys = set(input_event.input_data['inputs'])
-
-#     obj = gamectx.object_manager.get_by_id(player.get_object_id())
-#     if obj is None:
-#         return events
-#     gamectx.content.get_observation(obj)
-
-#     rotation_multiplier = obj.get_data_value('rotation_multiplier')
-#     velocity_multiplier = obj.get_data_value('velocity_multiplier')
-
-#     obj_orientation_diff = 0
-#     if 1 in keys:
-#         obj_orientation_diff = math.pi/2
-
-#     if 4 in keys:
-#         obj_orientation_diff = -math.pi/2
-
-#     # Object Movement
-#     direction:Vector = Vector.zero()
-
-#     if 23 in keys:
-#         direction = Vector(0, 1)
-
-#     if 19 in keys:
-#         direction = Vector(0, -1)
-
-#     if 31 in keys:
-#         events.append(ViewEvent(player.get_id(), 100))
-
-#     if 10 in keys:
-#         print("Adding admin_event ...TODO!!")
-
-#     def move_event_fn(event: DelayedEvent, data: Dict[str, Any]):
-#         direction = data['direction']
-#         orientation_diff = obj_orientation_diff * rotation_multiplier
-#         direction = direction * velocity_multiplier
-#         body:Body = obj.get_body()
-#         angle = body.angle
-#         direction = direction.rotated(angle)
-#         new_pos = tile_size * direction + body.position
-#         obj.update_position(new_pos)
-#         body.angle = angle + orientation_diff
-#         return []
-
-#     movement_event = False
-#     if movement_event:
-
-#         event = DelayedEvent(move_event_fn, execution_step=0, data={'direction':direction})
-#         events.append(event)
-
-#     return events

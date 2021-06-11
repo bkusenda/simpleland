@@ -1,16 +1,4 @@
-          s1
-                    r2w1   
-t1      ww  s0    w1w1w1r2
-                  w1w1r2    
-r2          d1  
-
-    
-
-m0
+    r2  s0
 
 
 
-
-
-
-t1

@@ -1,9 +1,8 @@
 import pygame
 from typing import List, Dict
 from .event import (Event, ViewEvent,InputEvent)
-from .event_manager import EventManager
 
-from .common import (Vector)
+from .common import Vector2
 from simpleland.player import Player
 
 def get_default_key_map():
@@ -81,10 +80,10 @@ def get_input_events(player:Player) -> List[Event]:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             key_pressed.add("MOUSE_DOWN_{}".format(event.button))
             if event.button == 4:
-                view_event = ViewEvent(player_id, 50, Vector.zero())
+                view_event = ViewEvent(player_id, 50, Vector2(0,0))
                 events.append(view_event)
             elif event.button == 5:
-                view_event = ViewEvent(player_id, -50, Vector.zero())
+                view_event = ViewEvent(player_id, -50, Vector2(0,0))
                 events.append(view_event)
         elif event.type == pygame.KEYDOWN:
             key_down.add(event.key)

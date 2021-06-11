@@ -4,16 +4,9 @@ from typing import Dict, Any
 
 class PhysicsConfig(Base):
     def __init__(self):
-        self.engine = "pymunk"
-        self.velocity_multiplier = 200.0
-        self.default_max_velocity = 500
-        self.default_min_velocity = 10
-        self.orientation_multiplier = 4
-        self.space_dampening = .5
+        self.engine = "grid"
         self.steps_per_second = 60
         self.clock_multiplier = 1
-        self.sim_timestep=0.02
-        self.player_angular_vel_max = 3
         self.tile_size = 16
 
 class RendererConfig(Base):

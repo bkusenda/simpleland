@@ -29,7 +29,6 @@ def get_game_def(
         remote_client,
         port,
         tick_rate=None,
-        sim_timestep=None,
         content_overrides={}
 ) -> GameDef:
     game_def = load_game_def(game_id, content_overrides)
@@ -40,7 +39,6 @@ def get_game_def(
 
     # Game
     game_def.game_config.tick_rate = tick_rate
-    game_def.physics_config.sim_timestep = sim_timestep
 
     game_def.game_config.client_only_mode = not enable_server and remote_client
     return game_def
@@ -104,7 +102,7 @@ def get_arguments(override_args=None):
     parser.add_argument("--player_type", default=0, type=int, help="Player type (0=default, 10=observer_only)")
     parser.add_argument("--view_type", default=0, type=int, help="NOT USED at moment: View type (0=perspective, 1=world)")
     parser.add_argument("--tile_size", default=16, type=int, help="not = no grid")
-    parser.add_argument("--debug_render_bodies", action="store_true", help="pymunk render")
+    parser.add_argument("--debug_render_bodies", action="store_true", help=" render")
     parser.add_argument("--disable_sound", action="store_true", help="disable_sound")
     parser.add_argument("--draw_grid", action="store_true", help="draw_grid")
 
@@ -113,7 +111,6 @@ def get_arguments(override_args=None):
 
     # Game Options
     parser.add_argument("--enable_profiler", action="store_true", help="Enable Performance profiler")
-    parser.add_argument("--sim_timestep", default=0.01, type=float, help="sim_timestep, lower (eg 0.01) = more accurate, higher (eg 0.1) = less accurate but faster")
     parser.add_argument("--tick_rate", default=60, type=int, help="tick_rate")
 
     parser.add_argument("--game_id", default="space_grid1", help="id of game")
@@ -144,7 +141,6 @@ def run(args):
         remote_client=args.remote_client,
         port=args.port,
         tick_rate=args.tick_rate,
-        sim_timestep=args.sim_timestep,
         content_overrides = json.loads(args.content_overrides)
     )
 

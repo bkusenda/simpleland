@@ -2,10 +2,8 @@ from typing import Any, Dict, List
 
 import numpy
 import pygame
-import pymunk
-from pymunk import Vec2d, Body
 from .common import (Circle,  Line,
-                     Polygon, Vector,  COLLISION_TYPE)
+                     Polygon, Vector2,  COLLISION_TYPE)
 from .object import GObject
 # from .player import Player
 from .utils import gen_id
@@ -14,30 +12,6 @@ import math
 from .clock import clock
 from .event_manager import EventManager
 from .event import PositionChangeEvent
-
-def get_default_velocity_callback(config):
-    def limit_velocity(b, gravity, damping, dt):
-        max_velocity = config.default_max_velocity
-        if b.velocity.length < config.default_min_velocity:
-            b.velocity = Vector(0.0,0.0)
-        # if abs(b.angular_velocity) < 0.05:
-        #     b.angular_velocity = 0 
-        pymunk.Body.update_velocity(b, gravity, damping, dt)
-        l = b.velocity.length
-        scale = 1
-        if l > max_velocity:
-            scale = max_velocity / l
-        b.velocity = b.velocity * scale
-    return limit_velocity
-
-def get_default_position_callback(config):
-    def position_callback(body:Body, dt):
-        init_p = body.position
-        pymunk.Body.update_position(body,dt)
-        new_p = body.position
-        if init_p != new_p:
-            body.last_change = clock.get_time()
-    return position_callback
 
 class GridSpace:
 
@@ -106,7 +80,7 @@ class GridPhysicsEngine:
         return (round(v.x / self.tile_size),round(v.y / self.tile_size))#(round(v.x / self.tile_size),round(v.y / self.tile_size))
 
     def coord_to_vec(self,coord):
-        return Vector(coord[0] * self.tile_size, coord[1] * self.tile_size)
+        return Vector2(coord[0] * self.tile_size, coord[1] * self.tile_size)
 
     def set_collision_callback(self, 
             callback, 
@@ -133,7 +107,7 @@ class GridPhysicsEngine:
                 self.space.move_obj_to(coord,obj)
             else:
                 self.space.remove_obj(obj.get_id())
-            obj.position = new_pos
+            obj.set_position(new_pos)
             if callback is not None:
                 callback(True)
         else:
@@ -154,7 +128,7 @@ class GridPhysicsEngine:
         for obj,new_pos,callback in self.position_updates.values():
             if not obj.enabled:
                 continue
-            new_pos = Vector(round(new_pos.x),round(new_pos.y))
+            new_pos = Vector2(round(new_pos.x),round(new_pos.y))
             coord =self.vec_to_coord(new_pos)
             coll_objs_ids = self.space.get_objs_at(coord)
             collision_effect = False
@@ -178,9 +152,9 @@ class GridPhysicsEngine:
                     old_pos = obj.position,
                     new_pos=new_pos)
 
-                obj.position = new_pos
+                obj.set_position(new_pos)
 
-                if callback:
+                if callback is not None:
                     callback(True)
 
         self.position_updates = {}

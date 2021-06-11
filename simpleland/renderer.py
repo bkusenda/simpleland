@@ -1,10 +1,9 @@
-from pymunk.vec2d import Vec2d
 from simpleland.utils import TickPerSecCounter
 from typing import Dict, Any
 
 import pygame
 from .object import GObject
-from .common import Vector, Line, Circle, Polygon, Rectangle
+from .common import Vector2, Line, Circle, Polygon, Rectangle
 from .object_manager import GObjectManager
 from PIL import Image
 import numpy as np
@@ -23,7 +22,7 @@ from .spritesheet import Spritesheet
 from .content import Content
 
 def scale(vec,vec2):
-    return Vector(vec.x * vec2.x, vec.y* vec2.y)
+    return Vector2(vec.x * vec2.x, vec.y* vec2.y)
 
 
 class Renderer:
@@ -162,12 +161,12 @@ class Renderer:
                   angle,
                   center):
         obj_pos = obj.get_view_position()
-        obj_location1 = (obj_pos + line.a.rotated(obj.angle) - center)
-        obj_location1 = obj_location1.rotated(-angle)
+        obj_location1 = (obj_pos + line.a.rotate_rad(obj.angle) - center)
+        obj_location1 = obj_location1.rotate_rad(-angle)
         p1 = scale(screen_factor,(obj_location1 + screen_view_center))
 
-        obj_location2 = (obj_pos + line.b.rotated(obj.angle) - center)
-        obj_location2 = obj_location2.rotated(-angle)
+        obj_location2 = (obj_pos + line.b.rotate_rad(obj.angle) - center)
+        obj_location2 = obj_location2.rotate_rad(-angle)
         p2 = scale(screen_factor, (obj_location2 + screen_view_center))
 
         pygame.draw.line(self._display_surf,
@@ -186,7 +185,7 @@ class Renderer:
                     center):
         obj_pos = obj.get_view_position() + circle.offset # TODO: Doesn't work with offset
         obj_location = (obj_pos - center)
-        obj_location = obj_location.rotated(-angle)
+        obj_location = obj_location.rotate_rad(-angle)
         p = scale(screen_factor,obj_location ) + screen_view_center
         size = int(circle.radius * screen_factor[0])
         pygame.draw.circle(self._display_surf,
@@ -210,8 +209,8 @@ class Renderer:
         verts = shape.get_vertices()
         new_verts = []
         for v in verts:
-            obj_location = (obj_pos + v.rotated(obj.angle) - center)
-            obj_location = obj_location.rotated(-angle)
+            obj_location = (obj_pos + v.rotate_rad(obj.angle) - center)
+            obj_location = obj_location.rotate_rad(-angle)
             p = scale(screen_factor,obj_location ) + screen_view_center
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
@@ -233,8 +232,8 @@ class Renderer:
         verts = shape.get_vertices()
         new_verts = []
         for v in verts:
-            obj_location = (obj_pos + v.rotated(body_angle) - center)
-            obj_location = obj_location.rotated(-angle)
+            obj_location = (obj_pos + v.rotate_rad(body_angle) - center)
+            obj_location = obj_location.rotate_rad(-angle)
             p = scale(screen_factor,obj_location) +screen_view_center
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
@@ -283,8 +282,8 @@ class Renderer:
         verts = shape.get_vertices()
         new_verts = []
         for v in verts:
-            obj_location = (pos + v.rotated(angle) - center)
-            obj_location = obj_location.rotated(-screen_angle)
+            obj_location = (pos + v.rotate_rad(angle) - center)
+            obj_location = obj_location.rotate_rad(-screen_angle)
             p = scale(screen_factor,obj_location ) + screen_view_center
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
@@ -293,13 +292,13 @@ class Renderer:
                 0)
 
 
-    def _draw_object_old(self, center, obj:GObject, angle, screen_factor, screen_view_center, color=None):
+    def _draw_object_old(self,center, obj:GObject, angle, screen_factor, screen_view_center, color=None):
 
         image_id= obj.get_image_id(angle)
         rotate = obj.rotate_sprites
         image_used = image_id is not None and not self.config.disable_textures
         if image_used:
-            obj_pos:Vector = obj.get_view_position()
+            obj_pos:Vector2 = obj.get_view_position()
             
             body_angle = obj.angle
 
@@ -310,7 +309,7 @@ class Renderer:
                     image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
                 rect = image.get_rect()
 
-                # image_loc = scale(screen_factor, ((obj_pos- center - obj.image_offset).rotated(-angle)  + screen_view_center))
+                # image_loc = scale(screen_factor, ((obj_pos- center - obj.image_offset).rotate_rad(-angle)  + screen_view_center))
                 image_loc = scale(screen_factor, obj_pos- center - obj.image_offset)  + screen_view_center
 
                 rect.center = image_loc
@@ -329,7 +328,8 @@ class Renderer:
                         color = (255, 50, 50)
 
                 if type(shape) == Line:
-                    self._draw_line(obj,
+                    self._draw_line(
+                        obj,
                                 shape,
                                 color,
                                 screen_factor,
@@ -337,7 +337,8 @@ class Renderer:
                                 angle = angle,
                                 center = center)
                 elif type(shape) == Circle:
-                    self._draw_circle(obj,
+                    self._draw_circle(
+                        obj,
                                     shape,
                                     color,
                                     screen_factor,
@@ -345,7 +346,8 @@ class Renderer:
                                     angle = angle,
                                     center = center)
                 elif type(shape) == Polygon:
-                    self._draw_polygon(obj,
+                    self._draw_polygon(
+                        obj,
                                     shape,
                                     color,
                                     screen_factor,
@@ -355,11 +357,11 @@ class Renderer:
 
 
     def draw_grid_line(self,p1,p2,angle,center,screen_view_center,color,screen_factor):
-        p1 = (p1 - center).rotated(angle)
+        p1 = (p1 - center).rotate_rad(angle)
         p1 = scale(screen_factor, (p1 )) + screen_view_center
         p1 = p1
 
-        p2 = (p2 - center).rotated(angle)
+        p2 = (p2 - center).rotate_rad(angle)
         p2 = scale(screen_factor, (p2)) + screen_view_center
         pygame.draw.line(self._display_surf,
                 color,
@@ -375,36 +377,38 @@ class Renderer:
         y = int(center.y/size) * size  - size/2
 
         y_start = -(y - size * line_num)
-        y_center = Vector(center.x,-center.y)
+        y_center = Vector2(center.x,-center.y)
         for line in range(line_num *2):
             y_pos = y_start - size * line
-            p1 = Vector(x-self.view_width,y_pos)
-            p2 = Vector(x+self.view_width,y_pos)
+            p1 = Vector2(x-self.view_width,y_pos)
+            p2 = Vector2(x+self.view_width,y_pos)
             self.draw_grid_line(p1,p2,angle,y_center,screen_view_center,color,screen_factor)
 
         x_start = x - size * line_num 
         for line in range(line_num *2):
             x_pos = x_start + size * line
-            p1 = Vector(x_pos,y-self.view_height)
-            p2 = Vector(x_pos,y+self.view_height)
+            p1 = Vector2(x_pos,y-self.view_height)
+            p2 = Vector2(x_pos,y+self.view_height)
             self.draw_grid_line(p1,p2,angle,center,screen_view_center,color,screen_factor)
 
 
     def filter_objects_for_rendering(self,objs,camera:Camera):
         center = camera.get_center()
         object_list_depth_sorted = [[], [], [], []]
+        if center is None:
+            return []
         for k, o in objs.items():
             o:GObject = o
             if o is not None and o.is_enabled() and not o.is_deleted and o.is_visible():
-                within_range = o.get_view_position().get_distance(center) < self.view_width
+                within_range = o.get_view_position().distance_to(center) < self.view_width
                 if within_range:
                     object_list_depth_sorted[o.depth].append(o)
 
         # TODO: Need to adjust with angle
-        center_bottom = center - Vector(0,100)
+        center_bottom = center - Vector2(0,100)
         
         for lst in object_list_depth_sorted:
-            lst.sort(key=lambda o: o.get_position().get_distance(center_bottom))
+            lst.sort(key=lambda o: o.get_position().distance_to(center_bottom))
         return object_list_depth_sorted
 
     def ta(self,val):
@@ -414,7 +418,7 @@ class Renderer:
 
         rect = image.get_rect()
         image_loc = scale(
-            Vector(self.background_center[0] - center.x, 
+            Vector2(self.background_center[0] - center.x, 
                 self.background_center[1]  - center.y),
              screen_factor) + screen_view_center
         rect.center = image_loc
@@ -428,7 +432,7 @@ class Renderer:
     def get_background_image(self,center,screen_factor):
 
         # Align with tile coords
-        center = Vector(self.ta(center.x),self.ta(center.y))
+        center = Vector2(self.ta(center.x),self.ta(center.y))
 
         # Align and make sure odd number of tiles so center can be a single tile
         surface_width = self.ta(self.view_width/2) * 5 + self.config.tile_size
@@ -495,11 +499,11 @@ class Renderer:
 
         angle = 0
         camera:Camera = None
-        center:Vector = None
+        center:Vector2 = None
         if player:
             camera = player.get_camera()
         else:
-            camera = Camera(center=Vector(self.view_width/2,self.view_height/2))
+            camera = Camera(center=Vector2(self.view_width/2,self.view_height/2))
 
         if camera.distance > 1000:
             camera.distance = 1000
@@ -508,15 +512,16 @@ class Renderer:
 
         center = camera.get_center()
         if center is None:
-            center = Vector(self.view_width/2,self.view_height/2)
+            center = Vector2(self.view_width/2,self.view_height/2)
         angle = camera.get_angle()
+
                
         # TODO: View Width/Height should only be in camera
         self.update_view(camera.get_distance())
         
         center = center - camera.position_offset
-        screen_factor = Vector(self.width / self.view_width, self.height / self.view_height)
-        screen_view_center = scale(screen_factor,Vector(self.view_width, self.view_height) / 2.0)
+        screen_factor = Vector2(self.width / self.view_width, self.height / self.view_height)
+        screen_view_center = scale(screen_factor,Vector2(self.view_width, self.view_height) / 2.0)
 
 
         background = self.get_background_image(center,screen_factor)
@@ -534,7 +539,7 @@ class Renderer:
         
         
         obj_list_sorted_by_depth= self.filter_objects_for_rendering(gamectx.object_manager.get_objects(),camera)
-        
+
         for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
             obj:GObject
             for obj in render_obj_dict:
