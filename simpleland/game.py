@@ -23,7 +23,7 @@ from .event import RemoveObjectEvent
 import pygame
 import sys
 from .content import Content
-from .common import Shape, Vector2, load_dict_snapshot, get_shape_from_dict, register_base_cls, get_base_cls_by_name, Base
+from .common import register_base_cls, Base
 
 class GameContext:
 
@@ -62,7 +62,6 @@ class GameContext:
             self.event_manager)
         self.player_manager = PlayerManager()
         
-
         self.state = "RUNNING"
         self.tick_rate = self.config.tick_rate
         clock.set_tick_rate(self.tick_rate)
@@ -89,6 +88,47 @@ class GameContext:
             self.remote_clients[client.id] = client
         return client
 
+    def change_game_state(self, new_state):
+        self.state = new_state
+
+    def register_base_class(self,cls):
+        register_base_cls(cls)
+
+    # Snapshot Methods
+    def create_snapshot_for_client(self,client):
+        from .client import RemoteClient
+        client:RemoteClient = client
+        snapshot_timestamp = clock.get_tick_counter()
+        om_snapshot = self.object_manager.get_snapshot_update(client.last_snapshot_time_ms)
+        # om_snapshot = self.object_manager.get_snapshot_full()
+        pm_snapshot = self.player_manager.get_snapshot() # TODO: Only send relevent Players
+        eventsnapshot = client.pull_events_snapshot()
+        return snapshot_timestamp, {
+            'om':om_snapshot,
+            'pm':pm_snapshot,
+            'em': eventsnapshot,
+            'timestamp':snapshot_timestamp,
+            }
+
+    def load_object_snapshot(self, data):
+        for odata in data:
+            obj_id = odata['data']['id']
+            current_obj = self.object_manager.get_by_id(obj_id)    
+            if current_obj is None:
+                obj = Base.create_from_snapshot(odata)
+                self.add_object(obj)
+            else:
+                current_obj.load_snapshot(odata)
+
+    def load_snapshot(self,snapshot):
+        if 'om' in snapshot:
+            self.load_object_snapshot(snapshot['om'])
+        if 'pm' in snapshot:
+            self.player_manager.load_snapshot(snapshot['pm'])
+        if 'em' in snapshot:
+            self.event_manager.load_snapshot(snapshot['em'])
+           
+    # Player Methods
     def get_player(self, client, player_type,is_human):
         """
         Get existing player or create new one
@@ -100,56 +140,83 @@ class GameContext:
             player = self.player_manager.get_player(client.player_id)
         return player
 
-    def change_game_state(self, new_state):
-        self.state = new_state
+    def add_player(self, player):
+        self.player_manager.add_player(player) 
 
-    def register_base_class(self,cls):
-        register_base_cls(cls)
+    # Object Methods
+    def add_object(self,obj:GObject):
+        obj.set_last_change(clock.get_time())
+        self.object_manager.add(obj)
+        self.physics_engine.add_object(obj)                
 
-    def create_snapshot_for_client(self,client):
-        from .client import RemoteClient
-        client:RemoteClient = client
-        snapshot_timestamp = clock.get_tick_counter()
-        om_snapshot = self.object_manager.get_snapshot_update(client.last_snapshot_time_ms)
-        # om_snapshot = self.object_manager.get_snapshot_full()
-        pm_snapshot = self.player_manager.get_snapshot() # TODO, updates since
-        eventsnapshot = client.pull_events_snapshot()
-        return snapshot_timestamp, {
-            'om':om_snapshot,
-            'pm':pm_snapshot,
-            'em': eventsnapshot,
-            'timestamp':snapshot_timestamp,
-            }
+    def remove_object(self,obj:GObject):
+        self.remove_object_by_id(obj.get_id())
+        
+    def remove_object_by_id(self,obj_id):
+        event = RemoveObjectEvent(object_id =obj_id)
+        self.add_event(event)
 
+    def remove_all_objects(self):
+        for o in list(self.object_manager.get_objects().values()):
+            if not o.is_deleted:
+                self.remove_object(o)
+
+    def get_object_by_id(self,obj_id):
+        return self.object_manager.get_by_id(obj_id)
     
-    def load_object_snapshot(self, data):
-        for odata in data:
-            obj_id = odata['data']['id']
-            current_obj = self.object_manager.get_by_id(obj_id)    
-            if current_obj is None:
-                obj = Base.create_from_snapshot(odata)
-                self.add_object(obj)
-            else:
-                current_obj.load_snapshot(odata)
+    def cleanup(self):
+        for o in list(self.object_manager.get_objects().values()):
+            if o.is_deleted:
+                self.object_manager.remove_by_id(o.get_id())
 
+    # Event Methods
+    def add_event(self,e:Event):
+        self.event_manager.add_event(e)
+        if e.is_client_event:
+            for client_id, client in self.remote_clients.items():
+                client.add_event(e)
 
-    def load_snapshot(self,snapshot):
-        if 'om' in snapshot:
-            self.load_object_snapshot(snapshot['om'])
-        if 'pm' in snapshot:
-            self.player_manager.load_snapshot(snapshot['pm'])
-        if 'em' in snapshot:
-            self.event_manager.load_snapshot(snapshot['em'])
+    def remove_all_events(self):
+        self.event_manager.clear()
+
+    def get_sound_events(self):
+        events_to_remove = []
+        sound_ids = []
+        for e in self.event_manager.get_events():
+            if type(e) == SoundEvent:
+                e:SoundEvent = e
+                sound_ids.append(e.sound_id)
+                events_to_remove.append(e)
+        
+        for e in events_to_remove:
+            self.event_manager.remove_event_by_id(e.get_id())
+        return sound_ids
+
+    def _process_view_event(self, e):
+        player = self.player_manager.get_player(e.player_id)
+        player.get_camera().distance += e.distance_diff
+        return []
+
+    def _process_remove_object_event(self,e:RemoveObjectEvent):
+        obj = self.object_manager.get_by_id(e.object_id)
+        if obj is not None:
+            obj.delete()
+            obj.set_last_change(clock.get_time())
+            self.physics_engine.remove_object(obj)
+            self.object_manager.remove_by_id(obj.get_id())
+        else:
+            # TODO: Caused by multiple actions on same tick issue            
+            print(f"****Object not found, not deleting {clock.get_tick_counter()} {e.object_id}")
+        
+        return True
 
     def run_pre_event_processing(self):
-        """
-        TODO: redo callbacks, use function overrides instead
-        """
         if self.pre_event_callback is not None:
             events = self.pre_event_callback()
             self.event_manager.add_events(events)
 
     def run_event_processing(self):
+        # Main Event Processing Bus
         
         all_new_events = []
         events_to_remove = []
@@ -184,95 +251,16 @@ class GameContext:
                 self.content.process_position_change_event(e)
                 events_to_remove.append(e)
 
-            # Add to queue to be processed
             for new_e in new_events:
                 events_set.add(new_e)
             all_new_events.extend(new_events)
 
-        # Add new events
         self.event_manager.add_events(all_new_events)
 
-        # Remove completed events        
         for e in events_to_remove:
             self.event_manager.remove_event_by_id(e.get_id())
-       
 
-    def run_physics_processing(self): 
-        self.physics_engine.update()
-
-    def run_update(self):
-        self.content.update()
-
-    def add_player(self, player):
-        self.player_manager.add_player(player) 
-
-    def add_object(self,obj:GObject):
-        obj.set_last_change(clock.get_time())
-        self.object_manager.add(obj)
-        self.physics_engine.add_object(obj)
-
-    def add_event(self,e:Event):
-        self.event_manager.add_event(e)
-        if e.is_client_event:
-            for client_id, client in self.remote_clients.items():
-                client.add_event(e)
-                
-    def remove_object(self,obj:GObject):
-        self.remove_object_by_id(obj.get_id())
-        
-    def remove_object_by_id(self,obj_id):
-        event = RemoveObjectEvent(object_id =obj_id)
-        self.add_event(event)
-
-    def remove_all_objects(self):
-        for o in list(self.object_manager.get_objects().values()):
-            if not o.is_deleted:
-                self.remove_object(o)
-
-    def remove_all_events(self):
-        self.event_manager.clear()
-
-    def get_object_by_id(self,obj_id):
-        return self.object_manager.get_by_id(obj_id)
-    
-    def cleanup(self):
-        for o in list(self.object_manager.get_objects().values()):
-            if o.is_deleted:
-                self.object_manager.remove_by_id(o.get_id())
-
-    def get_sound_events(self):
-        events_to_remove = []
-        sound_ids = []
-        for e in self.event_manager.get_events():
-            if type(e) == SoundEvent:
-                e:SoundEvent = e
-                sound_ids.append(e.sound_id)
-                events_to_remove.append(e)
-        
-        for e in events_to_remove:
-            self.event_manager.remove_event_by_id(e.get_id())
-        return sound_ids
-    
-
-    def _process_view_event(self, e):
-        # TODO: use callback instead
-        player = self.player_manager.get_player(e.player_id)
-        player.get_camera().distance += e.distance_diff
-        return []
-
-    def _process_remove_object_event(self,e:RemoveObjectEvent):
-        obj = self.object_manager.get_by_id(e.object_id)
-        if obj is not None:
-            obj.delete()
-            obj.set_last_change(clock.get_time())
-            self.physics_engine.remove_object(obj)
-            self.object_manager.remove_by_id(obj.get_id())
-        else:
-            # TODO: Caused by multiple actions on same tick issue            
-            print(f"****Object not found, not deleting {clock.get_tick_counter()} {e.object_id}")
-        
-        return True
-
+    # Client Steps
     def process_client_step(self):
         for client in self.local_clients:
             client.run_step()
@@ -281,6 +269,8 @@ class GameContext:
         for client in self.local_clients:
             client.render()
 
+
+    # Game Loop Methods
     def wait_for_input(self):
 
         wait=True
@@ -297,6 +287,12 @@ class GameContext:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 wait = False
 
+    def run_physics_processing(self): 
+        self.physics_engine.update()
+
+    def run_update(self):
+        self.content.update()
+
     def run_step(self):
         self.run_event_processing()
         if not self.config.client_only_mode:
@@ -306,14 +302,14 @@ class GameContext:
         self.tick()
         self.step_counter +=1
   
-
+    
     def run(self):
         done = True
         while self.state == "RUNNING":
             if done:
                 if not self.config.client_only_mode:
                     self.content.reset()
-                print("RESETTING")
+                    print("RESETTING")
             self.process_client_step()
             self.run_step()
             self.render_client_step()

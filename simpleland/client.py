@@ -33,6 +33,7 @@ from .utils import TickPerSecCounter
 from . import gamectx
 from .clock import clock,StepClock
 import gym
+import sys
 
 HEADER_SIZE = 16
 LATENCY_LOG_SIZE = 10000
@@ -43,12 +44,14 @@ def receive_data(sock):
     while not done:
         sock.settimeout(1.0)
         data, server = sock.recvfrom(4096)
+        # TODO: Use qq for windows!!, not sure why
         chunk_num, chunks = struct.unpack('ll', data[:HEADER_SIZE])
         all_data += data[HEADER_SIZE:]
         if chunk_num == chunks:
             done = True
+    bytes_in = sys.getsizeof(all_data)
     all_data = lz4.frame.decompress(all_data)
-    return all_data.decode("utf-8")
+    return all_data.decode("utf-8"),bytes_in
 
 
 def send_request(request_data, server_address):
@@ -58,17 +61,16 @@ def send_request(request_data, server_address):
         data_st = json.dumps(request_data, cls=StateEncoder)
         # Send data
         data_bytes = bytes(data_st, 'utf-8')
-        # print(f"bytes:{len(data_bytes)}")
         data_bytes = lz4.frame.compress(data_bytes)
+        bytes_out = sys.getsizeof(data_bytes)
         sent = sock.sendto(data_bytes,
                            server_address)
-        data = receive_data(sock)
-    except Exception as e:
-        print(e)
-        return None
+        data,bytes_in = receive_data(sock)
+        if data is None:
+            raise Exception("No data found")
     finally:
         sock.close()
-    return json.loads(data, cls=StateDecoder)
+    return json.loads(data, cls=StateDecoder), bytes_out, bytes_in
 
 class RemoteClient:
     """
@@ -84,6 +86,7 @@ class RemoteClient:
         self.request_counter = 0
         self.unconfirmed_messages = set()
         self.outgoing_events:List[Event] = []
+
 
     def add_event(self,e:Event):
         self.outgoing_events.append(e)
@@ -122,6 +125,9 @@ class ClientConnector:
         self.outgoing_buffer: Queue = Queue()  # state buffer
         self.running = True
         self.client_id = self.config.client_id
+        self.total_bytes_out=0
+        self.total_bytes_in=0
+        self.total_tx = 0
 
         self.latency_log = [None for i in range(LATENCY_LOG_SIZE)]
         self.last_latency_ms = None
@@ -135,7 +141,7 @@ class ClientConnector:
         self.sync_freq = 0
         self.last_sync = 0
 
-        self.report_freq = .5
+        self.report_freq = 2
         self.last_report = 0
 
     def add_network_info(self, latency: int, success: bool):
@@ -173,10 +179,18 @@ class ClientConnector:
                 outgoing_items.append(outgoing_item)
 
         start_time = time.time()
-        response = send_request({
-            'info': request_info,
-            'items': outgoing_items},
-            server_address = (self.config.server_hostname,self.config.server_port))
+        try:
+            response,bytes_out,bytes_in = send_request({
+                'info': request_info,
+                'items': outgoing_items},
+                server_address = (self.config.server_hostname,self.config.server_port))
+        except Exception as e:
+            print(f"Error communicating with server [{e}]. \tRetrying...")
+            return
+
+        self.total_bytes_in += bytes_in
+        self.total_bytes_out += bytes_out
+        self.total_tx +=1
         self.last_latency = time.time() - start_time
 
         if response is None:
@@ -205,7 +219,10 @@ class ClientConnector:
         self.tick_counter.tick()
 
         if (time.time() - self.last_report) > self.report_freq:
-            print(f"NET Tick rate {self.tick_counter.avg()}")
+            kbytes_out_summary = self.total_bytes_out/self.total_tx * self.ticks_per_second/1024
+            kbytes_in_summary = self.total_bytes_in/self.total_tx * self.ticks_per_second/1024
+            print(f"NET Tick rate {self.tick_counter.avg()},  out:{kbytes_out_summary}kB, in:{kbytes_in_summary}kB")
+            
             self.last_report = time.time()
 
     def start_connection(self, callback=None):

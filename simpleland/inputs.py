@@ -67,8 +67,6 @@ def get_input_events(player:Player) -> List[Event]:
     player_id = player.get_id()
 
     events: List[Event] = []
-
-
     key_pressed=set()
 
     key_down = set()
@@ -89,8 +87,6 @@ def get_input_events(player:Player) -> List[Event]:
             key_down.add(event.key)
         elif event.type == pygame.KEYUP:
             key_up.add(event.key)
-
-
 
     keys = pygame.key.get_pressed()
     for key in key_list:

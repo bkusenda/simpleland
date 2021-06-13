@@ -69,6 +69,9 @@ def read_game_config(sub_dir, game_config):
     game_config = read_json_file(os.path.join(sub_dir,game_config))
     game_config['asset_bundle'] = read_json_file(
             os.path.join(sub_dir,game_config['asset_bundle']))
+    for id, obj_data in game_config['controllers'].items():
+        if "config" not in obj_data:
+            obj_data['config'] = read_json_file(os.path.join(sub_dir,obj_data.get('config',f"{id}_config.json")))
     for id, obj_data in game_config['objects'].items():
         obj_data['config'] = read_json_file(os.path.join(sub_dir,obj_data.get('config',f"{id}_config.json")))
         obj_data['sounds'] = read_json_file(os.path.join(sub_dir,obj_data.get('sounds',f"{id}_sounds.json")))
@@ -80,19 +83,6 @@ def read_game_config(sub_dir, game_config):
     return game_config
 
 
-
-class GameMode:
-
-    def __init__(self):
-        pass
-
-class TagGameMode(GameMode):
-
-    def __init__(self):
-        pass
-
-
-
 class GameContent(Content):
 
     def __init__(self, config):
@@ -100,11 +90,11 @@ class GameContent(Content):
         self.config_path = 'survival_grid'
         self.game_config = read_game_config(self.config_path,'game_config.json')
         self.asset_bundle = load_asset_bundle(self.game_config['asset_bundle'])
+        self.active_controllers:List[str] = self.game_config['active_controllers']
         self.map_config = self.game_config['maps'][self.game_config['start_map']]
         # TODO, load from game config
         self.default_camera_zoom = config['default_camera_zoom']
         self.tile_size = self.game_config['tile_size']
-        
 
         self.item_types = ['tree', 'food', 'rock', 'player', 'wood']
         self.item_map = get_item_map(self.item_types)
@@ -127,14 +117,30 @@ class GameContent(Content):
         self.call_counter = 0
         self.spawn_points = {}
 
-        # All classes should be registered
-        self.obj_classes = [Effect, Human, Monster, Inventory,
+        # All loadable classes should be registered
+        self.classes = [
+            Effect, Human, Monster, Inventory,
             Food,Tool, Animal, Tree, Rock, 
-            Liquid, PhysicalObject]
-        for cls in self.obj_classes:
+            Liquid, PhysicalObject, TagController]
+
+        for cls in self.classes:
             gamectx.register_base_class(cls)
 
-        self.obj_class_map= {cls.__name__: cls for cls  in self.obj_classes}
+        self.obj_class_map= {cls.__name__: cls for cls  in self.classes}
+        self.controllers:Dict[str,StateController] = {}
+
+    def load_controllers(self):
+        self.controllers = {}
+        for config_id in self.active_controllers:
+            self.controllers[config_id] = self.create_controller_from_config_id(config_id)
+
+    def reset_controllers(self):
+        for config_id in self.active_controllers:
+            self.controllers[config_id].reset()
+
+    def update_controllers(self):
+        for config_id in self.active_controllers:
+            self.controllers[config_id].update()
 
     def add_spawn_point(self,config_id, pos):
         pos_list = self.get_spawn_points(config_id)
@@ -169,8 +175,6 @@ class GameContent(Content):
     def get_asset_bundle(self):
         return self.asset_bundle
 
-    # def get_class_by_type_name(self,name):
-    #     return self.obj_class_map.get(name,PhysicalObject)
 
     def reset_required(self):
         for player in gamectx.player_manager.players_map.values():
@@ -178,17 +182,33 @@ class GameContent(Content):
                 return False
         return True
 
-    #####################
-    # RL AGENT METHODS
-    #####################
+    # **********************************
+    # GAME LOAD
+    # **********************************
+    def load(self, is_client_only=False):
+        self.loaded = False
+        if not is_client_only:
+            self.gamemap.initialize((0,0))
+            self.load_controllers()
+
+        gamectx.physics_engine.set_collision_callback(
+            default_collision_callback,
+            COLLISION_TYPE['default'],
+            COLLISION_TYPE['default'])
+        self.loaded = True
 
     def reset(self):
         if not self.loaded:
             self.load()
+
         gamectx.remove_all_events()
-
         self.spawn_players()
+        self.reset_controllers()
 
+
+    #####################
+    # RL AGENT METHODS
+    #####################
     # TODO: get from player to object
     def get_observation_space(self):
         x_dim = (self.vision_distance * 2 + 1)
@@ -310,7 +330,7 @@ class GameContent(Content):
             config_id = player_config['config_id']
             spawn_points = self.get_spawn_points(config_id)
             player.set_data_value("spawn_point",spawn_points[0])
-            player_object:PhysicalObject = self.create_from_config_id(config_id)
+            player_object:PhysicalObject = self.create_object_from_config_id(config_id)
             player_object.set_player(player)
 
         if reset:
@@ -324,22 +344,6 @@ class GameContent(Content):
     def spawn_players(self,reset=True):
         for player in gamectx.player_manager.players_map.values():
             self.spawn_player(player,reset)
-        
-
-    # **********************************
-    # GAME LOAD
-    # **********************************
-    def load(self, is_client_only=False):
-        self.loaded = False
-        if not is_client_only:
-            self.gamemap.first_load((0,0))
-
-
-        gamectx.physics_engine.set_collision_callback(
-            default_collision_callback,
-            COLLISION_TYPE['default'],
-            COLLISION_TYPE['default'])
-        self.loaded = True
 
     ########################
     # GET INPUT
@@ -456,15 +460,6 @@ class GameContent(Content):
         if 0 in keypressed:
             actions_set.add("NA")
 
-
-
-        # def event_fn(event: DelayedEvent, data):
-        #         obj.walk(direction,angle_update)
-        #         return []
-        #     delay = 0
-        #     event = DelayedEvent(event_fn, delay,)
-        #     events.append(event)
-
         if "GRAB" in actions_set:
             obj.grab()
         elif "DROP" in actions_set:
@@ -498,23 +493,23 @@ class GameContent(Content):
             if o.is_enabled():
                 o.update()
         self.spawn_objects()
-        
-        # TODO: Check if respawns are needed
+        self.update_controllers()
 
-    # def prepare_ac(self):
-    #     for k, o in gamectx.object_manager.get_objects().items():
-    #         if o is None or o.is_deleted or not o.enabled:
-    #             continue
-    #         if o.is_enabled():
-    #             o.update()
 
-    def create_from_config_id(self,config_id):
-        object_config = gamectx.content.game_config['objects'].get(config_id)
-        if object_config is None:
+    def create_controller_from_config_id(self,config_id):
+        info = gamectx.content.game_config['controllers'].get(config_id)
+        if info is None:
             raise Exception(f"{config_id} not defined in game_config['objects']")
-        cls = get_base_cls_by_name(object_config['obj_class'])
-        # cls = gamectx.content.get_class_by_type_name(object_config['obj_class'])
-        obj:PhysicalObject = cls(config_id=config_id,config=object_config['config'])
+        cls = get_base_cls_by_name(info['class'])
+        controller:StateController = cls(config_id=config_id,config=info['config'])
+        return controller
+
+    def create_object_from_config_id(self,config_id):
+        info = gamectx.content.game_config['objects'].get(config_id)
+        if info is None:
+            raise Exception(f"{config_id} not defined in game_config['objects']")
+        cls = get_base_cls_by_name(info['class'])
+        obj:PhysicalObject = cls(config_id=config_id,config=info['config'])
         return obj
 
     def post_process_frame(self, player: Player, renderer: Renderer):
@@ -532,8 +527,6 @@ class GameContent(Content):
                 lines.append(f"H:{obj_health}, E:{obj_energy}, S:{obj_stamina}")
                 lines.append(f"Inventory: {obj.inventory().as_string()}")
                 lines.append(f"Craft Menu: {obj.craftmenu().as_string()}")
-                
-   
 
             if renderer.config.show_console:
                 renderer.render_to_console(lines, x=5, y=5)

@@ -94,7 +94,7 @@ def get_arguments(override_args=None):
     parser.add_argument("--remote_client",   action="store_true", help="client uses server")
 
     parser.add_argument("--resolution", default="1280x720", help="resolution eg, [f,640x480]")
-    parser.add_argument("--hostname", default=None, help="hostname or ip, default is localhost")
+    parser.add_argument("--hostname", default="localhost", help="hostname or ip, default is localhost")
     parser.add_argument("--client_id", default=gen_id(), help="user id, default is random")
     parser.add_argument("--render_shapes", action='store_true', help="render actual shapes")
     parser.add_argument("--disable_textures", action='store_true', help="don't show images")

@@ -94,11 +94,6 @@ def get_types(cur_type):
             cur_type = new_type
     return all_types
 
-
-    # def on_position_update(self,obj1,pos)
-
-# TODO: Add behaviors for non player objects
-
 class Behavior:
 
     def __init__(self):
@@ -132,15 +127,17 @@ class FollowAnimals(Behavior):
                         updated_y = -1.0
                     else:
                         updated_y = 0
-                new_angle = Vector2(0, 1).get_angle_between(direction)
-                if orig_direction.length <= gamectx.content.tile_size:
+                new_angle = math.radians(Vector2(0, 1).angle_to(direction))
+                mag = orig_direction.magnitude()
+                if mag <= gamectx.content.tile_size:
                     direction = Vector2(0, 0)
                 else:
                     direction = Vector2(updated_x, updated_y)
-                if orig_direction.length <= gamectx.content.tile_size and new_angle == obj.angle:
-                    obj.attack()
+                if mag <= gamectx.content.tile_size and new_angle == obj.angle:
+                    obj.use()
                 else:
                     obj.walk(direction, new_angle)
+
 class FleeAnimals(Behavior):
     
     def on_update(self,obj):
@@ -166,23 +163,9 @@ class FleeAnimals(Behavior):
                         updated_y = -1.0
                     else:
                         updated_y = 0
-                new_angle = Vector2(0, 1).get_angle_between(direction)
+                new_angle = math.radians(Vector2(0, 1).angle_to(direction))
                 direction = Vector2(-updated_x, -updated_y)
                 obj.walk(direction, new_angle)   
-
-
-class Objective:
-
-    def __init__(self):
-        pass
-
-
-class PlayTag(Objective):
-
-    def on_update(self,obj):
-        pass
-
-
 
 
 class Action:
@@ -197,9 +180,78 @@ class Effect(Base):
         self.ticks = ticks
         self.step_size = step_size
         self.start_tick = clock.get_tick_counter()
-
         self.angle_step_size= angle_step_size
-        
+
+class StateController(Base):
+
+    def __init__(self,config_id="",config={},*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.config_id = config_id
+        self.config = config
+
+    def reset(self):
+        pass
+
+    def update(self):
+        pass
+
+
+# class PlayerSpawnController(StateController):
+
+
+#     def reset(self):
+#         pass
+
+
+#     def spawn_player(self,player:Player, reset=False):
+#         if player.get_object_id() is not None:
+#             player_object = gamectx.object_manager.get_by_id(player.get_object_id())
+#         else:
+#             # TODO: get playertype from game mode + client config
+
+#             player_config = self.game_config['player_types']['1']
+#             config_id = player_config['config_id']
+#             spawn_points = self.get_spawn_points(config_id)
+#             player.set_data_value("spawn_point",spawn_points[0])
+#             player_object:PhysicalObject = self.create_object_from_config_id(config_id)
+#             player_object.set_player(player)
+
+#         if reset:
+#             self.reset_player(player)
+
+#         spawn_point = player.get_data_value("spawn_point")
+
+#         player_object.spawn(spawn_point)
+#         return player_object
+
+#     def spawn_players(self,reset=True):
+#         for player in gamectx.player_manager.players_map.values():
+#             self.spawn_player(player,reset)
+
+
+class TagController(StateController):
+
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        print("Tag Controller Created")
+
+    def reset(self):
+        player_objs:List[AnimateObject] = []
+        for player in gamectx.player_manager.players_map.values():
+            p_obj = gamectx.object_manager.get_by_id(player.get_object_id())
+            if p_obj is not None:
+                player_objs.append(p_obj)
+        # "tag_tool":1
+        obj = player_objs[0]
+        tag_tool:Tool = gamectx.content.create_object_from_config_id("tag_tool")
+        tag_tool.spawn(Vector2(0,0))
+        tag_tool.disable()
+        obj.inventory().add(tag_tool)
+        print("Adding tag tool")
+    
+    def update(self):
+        pass
+
 class PhysicalObject(GObject):
 
 
@@ -354,7 +406,9 @@ class PhysicalObject(GObject):
         action = self.get_action()
         if cur_tick >= action['start_tick'] and action.get('start_position') is not None and self.position is not None:
             idx = cur_tick - action['start_tick']
-            direction = (self.position - action['start_position']).normalize()
+            direction = (self.position - action['start_position'])
+            if direction.magnitude() != 0:
+                direction = direction.normalize()
             new_view_position = action['step_size'] * idx * direction + action['start_position']
         else:
             new_view_position = self.get_position()
@@ -419,8 +473,6 @@ class PhysicalObject(GObject):
         self.play_sound("destroy")
 
 
-
-
 class Inventory(PhysicalObject):
 
     def __init__(self,start_inventory={},*args,**kwargs):
@@ -430,7 +482,7 @@ class Inventory(PhysicalObject):
         for i in range(0,self.slots - len(self.items)):
             self.items.append(None)
         for i, (config_id, item_count) in enumerate(start_inventory.items()):
-            obj:PhysicalObject = gamectx.content.create_from_config_id(config_id)
+            obj:PhysicalObject = gamectx.content.create_object_from_config_id(config_id)
             obj.spawn(Vector2(0,0))
             obj.count = item_count
             obj.disable()
@@ -463,7 +515,6 @@ class Inventory(PhysicalObject):
         return objs
 
     def add(self,obj:PhysicalObject):
-        
         if obj.count_max > 1:
             for inv_obj_id in self.items:
                 if inv_obj_id is not None:
@@ -503,7 +554,7 @@ class Inventory(PhysicalObject):
             obj:PhysicalObject = gamectx.get_object_by_id(obj_id)
             if obj is not None and not remove_all and obj.count > 1:
                 obj.count-=1
-                newobj = gamectx.content.create_from_config_id(obj.config_id)
+                newobj = gamectx.content.create_object_from_config_id(obj.config_id)
                 newobj.spawn(position=Vector2(0,0))
                 newobj.disable()
                 return newobj
@@ -585,7 +636,7 @@ class CraftMenu:
                         obj.count = obj.count - count
                     if count == 0:
                         break
-        obj:PhysicalObject = gamectx.content.create_from_config_id(config_id)
+        obj:PhysicalObject = gamectx.content.create_object_from_config_id(config_id)
         obj.spawn(position=Vector2(0,0))
         obj.disable()
         inventory.add(obj)
@@ -627,7 +678,6 @@ class AnimateObject(PhysicalObject):
 
         self.default_behavior = None
 
-        self.objective = PlayTag()
 
         self.reward = 0
 
@@ -937,7 +987,6 @@ class AnimateObject(PhysicalObject):
             self.next_stamina_gen = cur_time + gen_delay
 
         p = self.get_player()
-        
 
         # Check for death
         if self.health <= 0:
@@ -1022,7 +1071,8 @@ class Monster(AnimateObject):
         self.attack_strength = 10
         self.health =  40
         self.height = 2
-        self.default_behaviour = FollowAnimals()
+        self.default_behavior = FollowAnimals()
+        
 
 class Animal(AnimateObject):
 
@@ -1037,7 +1087,7 @@ class Animal(AnimateObject):
             drop_on_death = self.config.get("drop_on_death")
             if drop_on_death is not None:
                 for config_id, count in drop_on_death.items():
-                    obj = gamectx.content.create_from_config_id(config_id)
+                    obj = gamectx.content.create_object_from_config_id(config_id)
                     obj.spawn(self.position)
 
 class Human(Animal):
@@ -1091,7 +1141,7 @@ class Tree(PhysicalObject):
         self.child_object_ids.add(self.trunk_id)
 
     def add_fruit(self):
-        o = gamectx.content.create_from_config_id('apple1')
+        o = gamectx.content.create_object_from_config_id('apple1')
         o.spawn(position=self.get_position())
         o.depth = 3
         o.collectable = 1
@@ -1125,7 +1175,7 @@ class Tree(PhysicalObject):
             gamectx.remove_object_by_id(self.trunk_id)
             self.child_object_ids.discard(self.trunk_id)
             gamectx.remove_object(self)
-            obj = gamectx.content.create_from_config_id('wood1')
+            obj = gamectx.content.create_object_from_config_id('wood1')
             obj.spawn(self.position)
         elif self.health <20:
             gamectx.remove_object_by_id(self.top_id)
@@ -1260,7 +1310,7 @@ class GameMap:
                         info = self.index.get(key)
                         self.add(coord,info)
 
-    def first_load(self,coord):
+    def initialize(self,coord):
         if not self.loaded:
             print("Loading Static Layers")
             self.load_static_layers()
@@ -1307,7 +1357,7 @@ class GameMap:
         if info.get('type') == "spawn_point":
             gamectx.content.add_spawn_point(config_id,coord_to_vec(coord))
         else:
-            obj = gamectx.content.create_from_config_id(config_id)
+            obj = gamectx.content.create_object_from_config_id(config_id)
             obj.spawn(position=coord_to_vec(coord))      
 
 

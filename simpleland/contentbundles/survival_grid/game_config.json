@@ -9,6 +9,16 @@
             "config_id": "human1"
         }
     },
+    "active_controllers":["tag1"],
+    "controllers":{
+        "tag1":{
+            "class":"TagController",
+            "config":{
+
+            }
+        }
+
+    },
     "maps": {
         "main": {
             "format": "txt",
@@ -67,49 +77,47 @@
             }
         }
     },
+
     "effects": {
         "blue":{
-            
-
         }
-
     },
     "objects": {
         "human1": {
-            "obj_class": "Human"
+            "class": "Human"
         },
         "monster1": {
-            "obj_class": "Monster"
+            "class": "Monster"
         },
         "apple1": {
-            "obj_class": "Food"
+            "class": "Food"
         },
         "cooked_meat1": {
-            "obj_class": "Food"
+            "class": "Food"
         },
         "tree1": {
-            "obj_class": "Tree"
+            "class": "Tree"
         },
         "water1": {
-            "obj_class": "Liquid"
+            "class": "Liquid"
         },
         "deer1": {
-            "obj_class": "Animal"
+            "class": "Animal"
         },
         "rock1": {
-            "obj_class": "Rock"
+            "class": "Rock"
         },
         "perm_stone1": {
-            "obj_class": "Rock"
+            "class": "Rock"
         },
         "tag_tool": {
-            "obj_class": "Tool"
+            "class": "Tool"
         },
         "wood1": {
-            "obj_class": "PhysicalObject"
+            "class": "PhysicalObject"
         },
         "wall1": {
-            "obj_class": "PhysicalObject"
+            "class": "PhysicalObject"
         }
     }
 }
