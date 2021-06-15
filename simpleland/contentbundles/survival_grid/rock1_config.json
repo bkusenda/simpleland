@@ -1,6 +1,6 @@
 {
     "collectable": false,
-    "pushable": true,
+    "pushable": false,
     "count_max": 1,
     "permanent": true,
     "health":100,

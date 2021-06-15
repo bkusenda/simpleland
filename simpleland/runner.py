@@ -22,6 +22,9 @@ from simpleland.utils import gen_id
 import traceback
 from simpleland import gamectx
 from simpleland.server import GameUDPServer, UDPHandler 
+import signal
+import sys
+
 
 def get_game_def(
         game_id,
@@ -120,6 +123,7 @@ def get_arguments(override_args=None):
 
 
 def run(args):
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     print(args.__dict__)
 
     if not args.enable_server and not args.enable_client and not args.remote_client:
@@ -190,8 +194,7 @@ def run(args):
         gamectx.add_local_client(client)
 
     server = None
-    import signal
-    import sys
+
     def graceful_exit(signum=None, frame=None):
         print("Shutting down")
         if game_def.server_config.enabled:

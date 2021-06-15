@@ -7,7 +7,7 @@ import logging
 from simpleland.runner import get_game_def, get_player_def, UDPHandler, GameUDPServer
 from simpleland.event import InputEvent
 import threading
-
+import sys
 from simpleland.player import  Player
 from simpleland.renderer import Renderer
 from simpleland.utils import gen_id
@@ -248,9 +248,13 @@ if __name__ == "__main__":
 
     parser.add_argument("--render", action="store_true", help="Render")
     parser.add_argument("--mem_profile", action="store_true")
+    parser.add_argument("--max_steps", default=10000, type=int)
     parser.add_argument("--time_profile", action="store_true")
     parser.add_argument("--agent_count", default=1, type=int, help="Number test of agents")
+    logging.getLogger().setLevel(logging.DEBUG)
 
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+    
     args =  parser.parse_args()
 
     agent_map = {str(i):{} for i in range(args.agent_count)}
@@ -264,7 +268,7 @@ if __name__ == "__main__":
     env = SimplelandEnv(agent_map=agent_map,dry_run=False)
     done_agents = set()
     start_time = time.time()
-    max_steps = 20000
+    max_steps = args.max_steps
     profiler = None
     if time_profile:
         profiler = Profiler()
@@ -306,7 +310,7 @@ if __name__ == "__main__":
             if render:
                 env.render()  
             actions = {agent_id:env.action_spaces[agent_id].sample() for agent_id in env.obs.keys()}
-        if mem_profile and (env.step_counter % 10000 == 0):
+        if mem_profile and (env.step_counter % 1000 == 0):
             current, peak = tracemalloc.get_traced_memory()
             logging.info(f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
 

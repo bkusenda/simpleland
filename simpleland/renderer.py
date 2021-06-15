@@ -161,12 +161,12 @@ class Renderer:
                   angle,
                   center):
         obj_pos = obj.get_view_position()
-        obj_location1 = (obj_pos + line.a.rotate_rad(obj.angle) - center)
-        obj_location1 = obj_location1.rotate_rad(-angle)
+        obj_location1 = (obj_pos + line.a.rotate(obj.angle) - center)
+        obj_location1 = obj_location1.rotate(-angle)
         p1 = scale(screen_factor,(obj_location1 + screen_view_center))
 
-        obj_location2 = (obj_pos + line.b.rotate_rad(obj.angle) - center)
-        obj_location2 = obj_location2.rotate_rad(-angle)
+        obj_location2 = (obj_pos + line.b.rotate(obj.angle) - center)
+        obj_location2 = obj_location2.rotate(-angle)
         p2 = scale(screen_factor, (obj_location2 + screen_view_center))
 
         pygame.draw.line(self._display_surf,
@@ -185,7 +185,7 @@ class Renderer:
                     center):
         obj_pos = obj.get_view_position() + circle.offset # TODO: Doesn't work with offset
         obj_location = (obj_pos - center)
-        obj_location = obj_location.rotate_rad(-angle)
+        obj_location = obj_location.rotate(-angle)
         p = scale(screen_factor,obj_location ) + screen_view_center
         size = int(circle.radius * screen_factor[0])
         pygame.draw.circle(self._display_surf,
@@ -209,8 +209,8 @@ class Renderer:
         verts = shape.get_vertices()
         new_verts = []
         for v in verts:
-            obj_location = (obj_pos + v.rotate_rad(obj.angle) - center)
-            obj_location = obj_location.rotate_rad(-angle)
+            obj_location = (obj_pos + v.rotate(obj.angle) - center)
+            obj_location = obj_location.rotate(-angle)
             p = scale(screen_factor,obj_location ) + screen_view_center
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
@@ -232,8 +232,8 @@ class Renderer:
         verts = shape.get_vertices()
         new_verts = []
         for v in verts:
-            obj_location = (obj_pos + v.rotate_rad(body_angle) - center)
-            obj_location = obj_location.rotate_rad(-angle)
+            obj_location = (obj_pos + v.rotate(body_angle) - center)
+            obj_location = obj_location.rotate(-angle)
             p = scale(screen_factor,obj_location) +screen_view_center
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
@@ -259,7 +259,7 @@ class Renderer:
         image_loc = scale(screen_factor, pos- center)  + screen_view_center
         if image is not None:
             if angle!=0:  
-                    image = pygame.transform.rotate(image,((angle) * 57.2957795)%360)
+                    image = pygame.transform.rotate(image,angle %360)
             rect = image.get_rect()
             rect.center = image_loc
             self._display_surf.blit(image,rect)
@@ -282,8 +282,8 @@ class Renderer:
         verts = shape.get_vertices()
         new_verts = []
         for v in verts:
-            obj_location = (pos + v.rotate_rad(angle) - center)
-            obj_location = obj_location.rotate_rad(-screen_angle)
+            obj_location = (pos + v.rotate(angle) - center)
+            obj_location = obj_location.rotate(-screen_angle)
             p = scale(screen_factor,obj_location ) + screen_view_center
             new_verts.append(p)
         pygame.draw.polygon(self._display_surf,
@@ -300,16 +300,13 @@ class Renderer:
         if image_used:
             obj_pos:Vector2 = obj.get_view_position()
             
-            body_angle = obj.angle
-
             image = self.get_scaled_image_by_id(image_id,screen_factor[0],screen_factor[1])
             
             if image is not None:
-                if rotate:  
-                    image = pygame.transform.rotate(image,((body_angle-angle) * 57.2957795)%360)
+               
                 rect = image.get_rect()
 
-                # image_loc = scale(screen_factor, ((obj_pos- center - obj.image_offset).rotate_rad(-angle)  + screen_view_center))
+                # image_loc = scale(screen_factor, ((obj_pos- center - obj.image_offset).rotate(-angle)  + screen_view_center))
                 image_loc = scale(screen_factor, obj_pos- center - obj.image_offset)  + screen_view_center
 
                 rect.center = image_loc
@@ -357,11 +354,11 @@ class Renderer:
 
 
     def draw_grid_line(self,p1,p2,angle,center,screen_view_center,color,screen_factor):
-        p1 = (p1 - center).rotate_rad(angle)
+        p1 = (p1 - center).rotate(angle)
         p1 = scale(screen_factor, (p1 )) + screen_view_center
         p1 = p1
 
-        p2 = (p2 - center).rotate_rad(angle)
+        p2 = (p2 - center).rotate(angle)
         p2 = scale(screen_factor, (p2)) + screen_view_center
         pygame.draw.line(self._display_surf,
                 color,

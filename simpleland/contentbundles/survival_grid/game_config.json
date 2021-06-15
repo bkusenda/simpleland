@@ -111,7 +111,7 @@
             "class": "Rock"
         },
         "tag_tool": {
-            "class": "Tool"
+            "class": "TagTool"
         },
         "wood1": {
             "class": "PhysicalObject"

@@ -1,18 +1,17 @@
 import math
+from simpleland.contentbundles.survival_behaviors import FleeAnimals, FollowAnimals, PlayingTag
 from simpleland import physics_engine
 import random
 from typing import Dict, Any, Tuple
 
 from ..camera import Camera
-from ..event import (DelayedEvent, Event, InputEvent,
+from ..event import (DelayedEvent, Event, InputEvent, ObjectEvent,
                      PeriodicEvent, PositionChangeEvent, SoundEvent, ViewEvent)
-from .. import gamectx
 from ..object import GObject
 
 from ..player import Player
 from ..renderer import Renderer
 from ..utils import gen_id
-from ..content import Content
 
 from ..asset_bundle import AssetBundle
 from ..common import COLLISION_TYPE
@@ -27,11 +26,15 @@ from ..clock import clock
 from gym import spaces
 import sys
 import math
-from .survival_assets import *
-from .survival_utils import *
+
 import pkg_resources
 import json
 import os
+from .survival_assets import load_asset_bundle
+from .survival_map import GameMap
+from .survival_controllers import TagController
+from .survival_objects import *
+
 
 ############################
 # COLLISION HANDLING
@@ -42,7 +45,7 @@ def default_collision_callback(obj1: PhysicalObject, obj2: PhysicalObject):
     elif ('liquid' in obj1.get_types() and 'animate' in obj2.get_types()):
         return obj1.on_collision_with_animate(obj2)
     elif 'animate' in obj1.get_types()  and obj2.collision_type >0:
-        obj1.default_action()
+        obj1.on_collection_default(obj2)
         return obj2.collision_type
     
     return obj1.collision_type >0 and obj1.collision_type == obj2.collision_type
@@ -83,7 +86,7 @@ def read_game_config(sub_dir, game_config):
     return game_config
 
 
-class GameContent(Content):
+class GameContent(SurvivalContent):
 
     def __init__(self, config):
         super().__init__(config)
@@ -121,34 +124,34 @@ class GameContent(Content):
         self.classes = [
             Effect, Human, Monster, Inventory,
             Food,Tool, Animal, Tree, Rock, 
-            Liquid, PhysicalObject, TagController]
+            Liquid, PhysicalObject, TagController, TagTool]
 
         for cls in self.classes:
             gamectx.register_base_class(cls)
-
         self.obj_class_map= {cls.__name__: cls for cls  in self.classes}
         self.controllers:Dict[str,StateController] = {}
 
+        self.behavior_classes = [FleeAnimals,FollowAnimals,PlayingTag]
+        self.bevavior_class_map:Dict[str,Behavior] = {cls.__name__: cls for cls  in self.behavior_classes}
+
+    def get_game_config(self):
+        return self.game_config
+
     def load_controllers(self):
         self.controllers = {}
-        for config_id in self.active_controllers:
-            self.controllers[config_id] = self.create_controller_from_config_id(config_id)
+        for cid in self.active_controllers:
+            self.controllers[cid] = self.create_controller(cid)
 
     def reset_controllers(self):
-        for config_id in self.active_controllers:
-            self.controllers[config_id].reset()
+        for cid in self.active_controllers:
+            self.controllers[cid].reset()
 
     def update_controllers(self):
-        for config_id in self.active_controllers:
-            self.controllers[config_id].update()
+        for cid in self.active_controllers:
+            self.controllers[cid].update()
 
-    def add_spawn_point(self,config_id, pos):
-        pos_list = self.get_spawn_points(config_id)
-        pos_list.append(pos)
-        self.spawn_points[config_id] = pos_list
-
-    def get_spawn_points(self,config_id):
-        return self.spawn_points.get(config_id,[])
+    def get_controller_by_id(self, cid):
+        return self.controllers.get(cid)
 
     def get_effect_sprites(self,config_id):
         return self.game_config['effects'].get(config_id,{}).get('model',{})
@@ -159,10 +162,29 @@ class GameContent(Content):
     def get_object_sounds(self,config_id):
         return self.game_config['objects'].get(config_id,{}).get('sounds',{})
 
+    # Factory Methods
+    def create_behavior(self,name,*args,**kwargs):
+        return self.bevavior_class_map[name](*args,**kwargs)
+
+    def create_controller(self,cid):
+        info = self.game_config['controllers'].get(cid)
+        if info is None:
+            raise Exception(f"{cid} not in game_config['controllers']")
+        cls = get_base_cls_by_name(info['class'])
+        controller:StateController = cls(cid=cid,config=info['config'])
+        return controller
+
+    def create_object_from_config_id(self,config_id):
+        info = self.game_config['objects'].get(config_id)
+        if info is None:
+            raise Exception(f"{config_id} not defined in game_config['objects']")
+        cls = get_base_cls_by_name(info['class'])
+        obj:PhysicalObject = cls(config_id=config_id,config=info['config'])
+        return obj
+
     def speed_factor(self):
         if self._speed_factor is not None:
             return self._speed_factor
-        
         """
         Step size in ticks
         """
@@ -174,7 +196,6 @@ class GameContent(Content):
 
     def get_asset_bundle(self):
         return self.asset_bundle
-
 
     def reset_required(self):
         for player in gamectx.player_manager.players_map.values():
@@ -242,7 +263,7 @@ class GameContent(Content):
                     if obj_seen is None:
                         print("ERROR cannot find object {}".format(obj_seen))
                     else:   
-                        row_results.append(gamectx.content.item_map.get(obj_seen.type))
+                        row_results.append(self.item_map.get(obj_seen.type))
                 else:
                     row_results.append(self.default_v)
             results.append(row_results)
@@ -314,9 +335,9 @@ class GameContent(Content):
         #TOOD: make configurable
         config_id = 'monster1'
         objs = gamectx.object_manager.get_objects_by_config_id(config_id)
-        spawn_points = self.get_spawn_points(config_id)
+        spawn_points = self.gamemap.get_spawn_points(config_id)
         if len(objs) < 1 and len(spawn_points)>0:
-            object_config = gamectx.content.game_config['objects'][config_id]['config']
+            object_config = self.game_config['objects'][config_id]['config']
             Monster(config_id = config_id, config=object_config).spawn(spawn_points[0])
 
 
@@ -328,7 +349,7 @@ class GameContent(Content):
 
             player_config = self.game_config['player_types']['1']
             config_id = player_config['config_id']
-            spawn_points = self.get_spawn_points(config_id)
+            spawn_points = self.gamemap.get_spawn_points(config_id)
             player.set_data_value("spawn_point",spawn_points[0])
             player_object:PhysicalObject = self.create_object_from_config_id(config_id)
             player_object.set_player(player)
@@ -361,8 +382,6 @@ class GameContent(Content):
 
     def process_input_event(self, input_event:InputEvent):
         events= []
-
-
         player = gamectx.player_manager.get_player(input_event.player_id)
         if player is None:
             print("PLAYER IS NON")
@@ -407,57 +426,61 @@ class GameContent(Content):
         direction = Vector2(0,0)
         angle_update = None
         if 23 in keypressed:
+            # W UP
             direction = Vector2(0, -1)
-            angle_update = math.pi
+            angle_update = 180
             actions_set.add("WALK")
 
         if 19 in keypressed:
+            # S DOWN
             direction = Vector2(0, 1)
             angle_update = 0
             actions_set.add("WALK")
 
         if 4 in keypressed:
+            # D RIGHT
             direction = Vector2(1, 0)
-            angle_update = -math.pi/2
+            angle_update = 270
             actions_set.add("WALK")
             
         if 1 in keypressed:
+            # A LEFT
             direction = Vector2(-1, 0)
-            angle_update = math.pi/2
+            angle_update = 90
             actions_set.add("WALK")
 
         # TODO: Establish action presidence
         if 5 in keypressed:
             actions_set.add("GRAB")
 
-        if 6 in keypressed:
+        elif 6 in keypressed:
             actions_set.add("DROP")
 
-        if 18 in keypressed:
+        elif 18 in keypressed:
             actions_set.add("USE")
 
-        if 26 in keydown:
+        elif 26 in keydown:
             actions_set.add("PREV_ITEM")
 
-        if 3 in keydown:
+        elif 3 in keydown:
             actions_set.add("NEXT_ITEM")
 
-        if 2 in keydown:
+        elif 2 in keydown:
             actions_set.add("NEXT_CRAFT_TYPE")
 
-        if 22 in keydown:
+        elif 22 in keydown:
             actions_set.add("PREV_CRAFT_TYPE")
         
-        if 17 in keydown:
+        elif 17 in keydown:
             actions_set.add("CRAFT")
 
-        if 33 in keypressed:
+        elif 33 in keypressed:
             actions_set.add("JUMP")
 
-        if  7 in keypressed:
+        elif  7 in keypressed:
             actions_set.add("PUSH")
 
-        if 0 in keypressed:
+        elif 0 in keypressed:
             actions_set.add("NA")
 
         if "GRAB" in actions_set:
@@ -482,6 +505,11 @@ class GameContent(Content):
             obj.jump()
         elif "WALK" in actions_set:
             obj.walk(direction,angle_update)
+            # events.append(ObjectEvent(
+            #     obj.get_id(),
+            #     "walk",
+            #     direction,
+            #     angle_update))
 
         return events
 
@@ -496,21 +524,6 @@ class GameContent(Content):
         self.update_controllers()
 
 
-    def create_controller_from_config_id(self,config_id):
-        info = gamectx.content.game_config['controllers'].get(config_id)
-        if info is None:
-            raise Exception(f"{config_id} not defined in game_config['objects']")
-        cls = get_base_cls_by_name(info['class'])
-        controller:StateController = cls(config_id=config_id,config=info['config'])
-        return controller
-
-    def create_object_from_config_id(self,config_id):
-        info = gamectx.content.game_config['objects'].get(config_id)
-        if info is None:
-            raise Exception(f"{config_id} not defined in game_config['objects']")
-        cls = get_base_cls_by_name(info['class'])
-        obj:PhysicalObject = cls(config_id=config_id,config=info['config'])
-        return obj
 
     def post_process_frame(self, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:

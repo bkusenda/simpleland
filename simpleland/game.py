@@ -17,7 +17,7 @@ from .object_manager import GObjectManager
 from .player_manager import PlayerManager
 from .physics_engine import GridPhysicsEngine
 
-from .event import (ContentEvent, Event,
+from .event import (ContentEvent, Event, ObjectEvent,
             PeriodicEvent, PositionChangeEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
 from .event import RemoveObjectEvent
 import pygame
@@ -250,7 +250,13 @@ class GameContext:
                 e: PositionChangeEvent = e
                 self.content.process_position_change_event(e)
                 events_to_remove.append(e)
-
+            elif type(e) == ObjectEvent:
+                e:ObjectEvent = e
+                obj = self.get_object_by_id(e.obj_id)
+                func = getattr(obj, e.obj_method_name)
+                # TODO: Add listeners
+                new_events = func(*e.args,**e.kwargs)
+                events_to_remove.append(e)
             for new_e in new_events:
                 events_set.add(new_e)
             all_new_events.extend(new_events)

@@ -1,5 +1,12 @@
 # simpleland
 
+## TODO:
+Better design would be:
+- create references for objects during serialization and reassign during deserialization.
+- only send updated data
+- use event listners
+- object event listender
+
 ## Overview
 This is a simple 2d game engine written completely in python with client/server multiplayer support. It's primary purpose is to provide a flexilble test-bed for development of **reinforcement learning agents**.
 

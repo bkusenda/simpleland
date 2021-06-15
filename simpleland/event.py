@@ -43,6 +43,23 @@ class ContentEvent(Event):
     def get_id(self):
         return self.id
 
+class ObjectEvent(Event):
+
+    def __init__(self,
+                obj_id,
+                obj_method_name,
+                *args,
+                **kwargs):
+
+        super().__init__()
+        self.obj_id =obj_id
+        self.obj_method_name = obj_method_name
+        self.args=args
+        self.kwargs=kwargs
+
+    def get_id(self):
+        return self.id
+
 
 class PeriodicEvent(Event):
 
