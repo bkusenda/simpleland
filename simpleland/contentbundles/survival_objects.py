@@ -2,6 +2,7 @@
 from ..asset_bundle import AssetBundle
 import math
 import random
+import logging
 
 from typing import List, Dict, Any
 from .. import gamectx
@@ -21,7 +22,7 @@ from gym import spaces
 
 from ..event import SoundEvent
 from ..common import Base
-from .survival_utils import angle_to_sprite_direction
+from .survival_utils import angle_to_sprite_direction, ints_to_multi_hot
 from .survival_common import SurvivalContent, StateController,Behavior
 
 type_tree={
@@ -79,6 +80,7 @@ class PhysicalObject(GObject):
         self.pushable = self.config.get('pushable',False)
         self.collision_type = self.config.get('collision_type',1)
         self.height = self.config.get('height',1)
+        self.tags = set(self.config.get('tags',[]))
 
         self.collectable = self.config.get('collectable',False)
         self.count_max = self.config.get('count_max',1)
@@ -502,6 +504,8 @@ class AnimateObject(PhysicalObject):
         self.attack_speed = .3
         self.height = 2
         self.pushable = True
+        self.valid_actions = {"walk","attach"}
+
 
         self.default_behavior:Behavior = None
 
@@ -521,18 +525,26 @@ class AnimateObject(PhysicalObject):
         return self._inventory
 
     def select_item(self,prev=False):
+        if "select_item" not in self.valid_actions:
+            return
         self._inventory.select_item(prev)
 
     def remove_selected_item(self):
+        if "remove_selected_item" not in self.valid_actions:
+            return
         return self._inventory.remove_selected()
 
     def craftmenu(self):
         return self._l_craftmenu
 
     def craft(self):
+        if "craft" not in self.valid_actions:
+            return
         self.craftmenu().craft_selected(self.inventory())
 
     def select_craft_type(self,prev=False):
+        if "select_craft_type" not in self.valid_actions:
+            return
         self._l_craftmenu.select_item(prev)
                 
     def spawn(self,position:Vector2):
@@ -545,13 +557,48 @@ class AnimateObject(PhysicalObject):
         self.next_health_gen = 0
         self.next_stamina_gen =0
 
-    # TODO: not in use
-    def get_observation_space(self):
-        pass
+
+    # TODO: get from player to object
+    # def get_observation_space(self):
+    #     x_dim = (self.vision_radius * 2 + 1)
+    #     chans = len(self._l_content.item_types) + 1
+    #     return spaces.Box(low=0, high=1, shape=(self.vision_radius, self.vision_radius, chans))
+
+    def get_object_observation(self,obj:PhysicalObject):
+        
+        obj_vec = self._l_content.obj_vec_map.get(obj.config_id)
+        group_vec = self._l_content.create_tags_vec(obj.tags) #TODO: memoize
+        return np.concatenate([obj_vec,group_vec]) 
+
+    def get_default_observation(self):
+        
+        obj_vec = self._l_content.obj_vec_map.get(None)#np.zeros(self._l_content.max_obs_id)
+        group_vec = ints_to_multi_hot(None,3)
+        return np.concatenate([obj_vec,group_vec])
 
     # TODO: not in use
     def get_observation(self):
-        pass
+        if not self.is_enabled():
+            return None
+        obj_coord = gamectx.physics_engine.vec_to_coord(self.get_position())
+        col_min = obj_coord[0] - self._l_content.vision_radius
+        col_max = obj_coord[0] + self._l_content.vision_radius
+        row_min = obj_coord[1] - self._l_content.vision_radius
+        row_max = obj_coord[1] + self._l_content.vision_radius
+        results = []
+        empty_loc_vec = self.get_default_observation()
+        for r in range(row_max, row_min-1, -1):
+            row_results = []
+            for c in range(col_min, col_max+1):
+                obj_ids = gamectx.physics_engine.space.get_objs_at((c, r))
+                obs_at_loc = empty_loc_vec
+                if len(obj_ids) > 0:
+                    obj_id = obj_ids[0] # TODO: Switch to use TOP
+                    obj = gamectx.object_manager.get_by_id(obj_id)
+                    obs_at_loc = self.get_object_observation(obj)
+                row_results.append(obs_at_loc)
+            results.append(row_results)
+        return np.array(results)
  
     def set_player(self,player:Player):
         self.player_id = player.get_id()
@@ -601,6 +648,8 @@ class AnimateObject(PhysicalObject):
             } 
 
     def walk(self, direction, new_angle):
+        if "walk" not in self.valid_actions:
+            return
         walk_speed = self.walk_speed
         if self.stamina <= 0:
             walk_speed = walk_speed/2
@@ -624,9 +673,11 @@ class AnimateObject(PhysicalObject):
             }     
 
         self.update_position(new_pos, callback = lambda suc: self.play_sound('walk') if suc else None )        
+        return []
 
     def jump(self):
-        
+        if "jump" not in self.valid_actions:
+            return
         direction = Vector2(0, 1).rotate(self.angle)
         
         target_pos = self.get_position() + (direction * TILE_SIZE *2)
@@ -649,7 +700,8 @@ class AnimateObject(PhysicalObject):
 
 
     def grab(self):
-
+        if "grab" not in self.valid_actions:
+            return
         ticks_in_action = int(self._l_content.speed_factor())
 
         received_obj = None
@@ -698,6 +750,8 @@ class AnimateObject(PhysicalObject):
         self.play_sound("stunned")
 
     def drop(self):
+        if "drop" not in self.valid_actions:
+            return
         ticks_in_action = int(self._l_content.speed_factor())
 
         direction = Vector2(0, 1).rotate(self.angle)
@@ -740,6 +794,8 @@ class AnimateObject(PhysicalObject):
             self.inventory().remove_selected()
        
     def unarmed_attack(self):
+        if "unarmed_attack" not in self.valid_actions:
+            return
 
         # selected_obj:PhysicalObject = self.inventory().get_selected()
         attack_speed = self.attack_speed
@@ -773,6 +829,8 @@ class AnimateObject(PhysicalObject):
         self.play_sound("attack")
 
     def push(self):
+        if "push" not in self.valid_actions:
+            return
         attack_speed = self.attack_speed
 
         if self.stamina <= 0:
@@ -909,7 +967,7 @@ class TagTool(Tool):
         direction = Vector2(0, 1).rotate(user_object.angle)
 
         target_pos = user_object.get_position() + (direction * TILE_SIZE)
-        print(f"ANgle {user_object.angle} direciton: {direction}, target_pos {target_pos}")
+        logging.debug(f"ANgle {user_object.angle} direciton: {direction}, target_pos {target_pos}")
 
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
 
@@ -1010,7 +1068,7 @@ class Tree(PhysicalObject):
             self.add_fruit()
 
     def add_tree_trunk(self):
-        o = PhysicalObject(depth=1)
+        o = PhysicalObject(visheight=1)
         o.type = "part"
         o.pushable = False
         o.collision_type = 0
@@ -1022,7 +1080,7 @@ class Tree(PhysicalObject):
     def add_fruit(self):
         o = self._l_content.create_object_from_config_id('apple1')
         o.spawn(position=self.get_position())
-        o.depth = 3
+        o.visheight = 3
         o.collectable = 1
         y = random.random() * self._l_content.tile_size*1.8
         x = random.random()* self._l_content.tile_size - self._l_content.tile_size/2
@@ -1032,7 +1090,7 @@ class Tree(PhysicalObject):
 
     def add_tree_top(self):
         o = PhysicalObject()
-        o.depth=2
+        o.visheight=2
         o.type = "part"
         o.set_image_id('tree_top')
         o.pushable = False
@@ -1082,27 +1140,27 @@ class Food(PhysicalObject):
 
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
-        self.depth = 1
+        self.visheight = 1
         self.energy = self.config.get("energy",10)
         self.type =  'food'
         
     def spawn(self,position):
         super().spawn(position=position)
-        self.depth = 1
+        self.visheight = 1
 
 class Rock(PhysicalObject):
 
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
-        self.depth = 1
+        self.visheight = 1
         self.type =  'rock'
-
+        self.sleeping = self.config.get("sleeping",True)
 
 class Liquid(PhysicalObject):
 
     def __init__(self, *args,**kwargs):
         super().__init__(*args,**kwargs)
-        self.depth = 0
+        self.visheight = 0
         self.type =  'liquid'
         self.permanent = True
         self.set_shape_color(color=(30, 30, 150))

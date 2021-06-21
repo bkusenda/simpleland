@@ -243,7 +243,15 @@ class SimplelandEnvSingle(gym.Env):
 import time
 import argparse
 if __name__ == "__main__":
-
+    levels = {
+        'critical': logging.CRITICAL,
+        'error': logging.ERROR,
+        'warn': logging.WARNING,
+        'warning': logging.WARNING,
+        'info': logging.INFO,
+        'debug': logging.DEBUG
+    }
+    
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--render", action="store_true", help="Render")
@@ -251,14 +259,17 @@ if __name__ == "__main__":
     parser.add_argument("--max_steps", default=10000, type=int)
     parser.add_argument("--time_profile", action="store_true")
     parser.add_argument("--agent_count", default=1, type=int, help="Number test of agents")
-    logging.getLogger().setLevel(logging.DEBUG)
+    parser.add_argument("--verbose",action="store_true")
+    parser.add_argument("--log_level",default="info",help=", ".join(list(levels.keys())),type=str)
+
+    args =  parser.parse_args()
+
+    logging.getLogger().setLevel(levels.get(args.log_level))
 
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     
-    args =  parser.parse_args()
-
     agent_map = {str(i):{} for i in range(args.agent_count)}
-    debug = False
+    verbose = args.verbose
     time_profile = args.time_profile
     mem_profile = args.mem_profile
     render = args.render
@@ -284,23 +295,32 @@ if __name__ == "__main__":
             episode_count+=1
         else:
             obs, rewards, dones, infos = env.step(actions)
+            # for id, ob in obs.items():
+            #     space= env.observation_spaces[id]
+            #     if space.contains(ob) is False:
+            #         print("OBS space not matching")
+            #         print(ob)
+            #         print(type(ob))
+            #         print(ob.shape)
+            #         print(space)
         
-        if debug:
+        if verbose:
             actions={}
             for id, ob in obs.items():
                 if render:
                     env.render(player_id=id)  
-                logging.info(f"Player: {id}")
-                logging.info(obs[id])
+                # logging.info(obs[id])
+                reward = None
+                done = None
+                info=None
                 if len(rewards)> 0:
-                    logging.info(rewards[id])
-                    logging.info(dones[id])
-                    logging.info(infos[id])
-                logging.info(f"Episode {episode_count} Game Step:{clock.get_time()}")
-                logging.info("----------")
+                    reward = rewards[id]
+                    done = dones[id]
+                    info = infos[id]
+                
                 action = env.action_spaces[id].sample() #input()
-                logging.info(action)
-                # time.sleep(.1)
+                logging.info(f"Episode {episode_count} Game Step:{clock.get_time()}, Reward: {reward}, {done}, {info} -> Action {action}")
+                
                 try:
                     action = int(action)
                 except:

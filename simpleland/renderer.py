@@ -391,22 +391,22 @@ class Renderer:
 
     def filter_objects_for_rendering(self,objs,camera:Camera):
         center = camera.get_center()
-        object_list_depth_sorted = [[], [], [], []]
+        object_list_visheight_sorted = [[], [], [], []]
         if center is None:
             return []
         for k, o in objs.items():
             o:GObject = o
-            if o is not None and o.is_enabled() and not o.is_deleted and o.is_visible():
+            if o is not None and o.is_enabled() and o.is_visible():
                 within_range = o.get_view_position().distance_to(center) < self.view_width
                 if within_range:
-                    object_list_depth_sorted[o.depth].append(o)
+                    object_list_visheight_sorted[o.visheight].append(o)
 
         # TODO: Need to adjust with angle
         center_bottom = center - Vector2(0,100)
         
-        for lst in object_list_depth_sorted:
+        for lst in object_list_visheight_sorted:
             lst.sort(key=lambda o: o.get_position().distance_to(center_bottom))
-        return object_list_depth_sorted
+        return object_list_visheight_sorted
 
     def ta(self,val):
         return int((val//self.config.tile_size) * self.config.tile_size)
@@ -535,12 +535,12 @@ class Renderer:
                 color=(20,20,20))
         
         
-        obj_list_sorted_by_depth= self.filter_objects_for_rendering(gamectx.object_manager.get_objects(),camera)
+        obj_list_sorted_by_visheight= self.filter_objects_for_rendering(gamectx.object_manager.get_objects(),camera)
 
-        for depth, render_obj_dict in enumerate(obj_list_sorted_by_depth):
+        for visheight, render_obj_dict in enumerate(obj_list_sorted_by_visheight):
             obj:GObject
             for obj in render_obj_dict:
-                if not obj.enabled or obj.is_deleted or not obj.is_visible():
+                if not obj.enabled or not obj.is_visible():
                     continue
                 self._draw_object(center, obj, angle, screen_factor, screen_view_center, obj.shape_color)
             

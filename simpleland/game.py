@@ -158,16 +158,10 @@ class GameContext:
 
     def remove_all_objects(self):
         for o in list(self.object_manager.get_objects().values()):
-            if not o.is_deleted:
-                self.remove_object(o)
+            self.remove_object(o)
 
     def get_object_by_id(self,obj_id):
         return self.object_manager.get_by_id(obj_id)
-    
-    def cleanup(self):
-        for o in list(self.object_manager.get_objects().values()):
-            if o.is_deleted:
-                self.object_manager.remove_by_id(o.get_id())
 
     # Event Methods
     def add_event(self,e:Event):
@@ -200,7 +194,6 @@ class GameContext:
     def _process_remove_object_event(self,e:RemoveObjectEvent):
         obj = self.object_manager.get_by_id(e.object_id)
         if obj is not None:
-            obj.delete()
             obj.set_last_change(clock.get_time())
             self.physics_engine.remove_object(obj)
             self.object_manager.remove_by_id(obj.get_id())

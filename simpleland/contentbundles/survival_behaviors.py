@@ -60,12 +60,13 @@ class PlayingTag(Behavior):
 
 
     def on_it(self,obj:AnimateObject):
+        # position = obj.get_position()
+
         if self.following_obj is None:
             self.find_follow_object(obj)
             self.recent_pos = set()
         elif clock.get_tick_counter() - self.last_freq >self.check_freq:
             self.find_follow_object(obj)
-
 
         orig_direction: Vector2 = self.following_obj.get_position() - obj.get_position()
         direction = normalized_direction(orig_direction)

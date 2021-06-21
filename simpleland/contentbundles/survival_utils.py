@@ -1,5 +1,7 @@
 
 from ..common import Vector2
+import numpy as np
+from collections import defaultdict
 from .. import gamectx
 
 def vec_to_coord(v):
@@ -36,6 +38,37 @@ def angle_to_sprite_direction(angle):
         direction = "down"
     return direction
 
+# Vectorizers
+def int_map_to_onehot_map(name_int_map,max_id=None):
+    """
+    converts name -> int to name -> onehot
+    returns empty_vec as default
+    """
+    if max_id is None:
+        max_id = len(name_int_map)
+    empty_vec = np.zeros(max_id)
+    vec_map = defaultdict(lambda:empty_vec)
+    vec_map[None] = empty_vec
+    for i, (name, idx) in enumerate(name_int_map.items()):
+        v = np.zeros(max_id)
+        v[idx] = 1
+        vec_map[name] = v
+    return vec_map
+
+def ints_to_multi_hot(ints,max_id):
+    """
+    converts name -> int to name -> onehot
+    returns empty_vec as default
+    """
+
+    vec = np.zeros(max_id)
+    if ints is None:
+        return vec
+    for i in ints:
+        vec[i] = 1
+    return vec
+
+    
 
 # def direction_to_angle(direction):
 #     angle = 0

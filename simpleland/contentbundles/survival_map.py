@@ -4,6 +4,7 @@ import os
 import hashlib
 from .survival_utils import coord_to_vec
 from ..import gamectx
+import numpy as np
 
 def rand_int_from_coord(x,y,seed=123):
     v =  (x + y * seed ) % 12783723
@@ -37,12 +38,13 @@ class GameMap:
 
         self.seed = 123
         self.full_path = pkg_resources.resource_filename(__name__,path)
-        self.map_layers = []
-        for layer_filename in map_config['layers']:
+        self.static_layers = []
+        for layer_filename in map_config['static_layers']:
             with open(os.path.join(self.full_path,layer_filename),'r') as f:
                 layer = f.readlines()
-                self.map_layers.append(layer)            
+                self.static_layers.append(layer)            
         self.index = map_config['index']
+        self.boundary = map_config.get('boundary')
         self.tile_size = 16
         self.sector_size = 64
         self.sectors = {}
@@ -70,24 +72,68 @@ class GameMap:
         sector.add(coord,info)
         self.sectors[scoord] = sector
         return sector
-        
+
+    def load_boundary(self):
+        if self.boundary is None:
+            return
+        xmin = self.boundary['x'][0]
+        xmax = self.boundary['x'][1]
+        ymin = self.boundary['y'][0]
+        ymax = self.boundary['y'][1]
+        boundary_obj_config_id = self.boundary['obj']
+        keys = set(self.index.keys())
+        for x in range(xmin,xmax+1):
+            self.spawn_locations = []
+            objtop = gamectx.content.create_object_from_config_id(boundary_obj_config_id)
+            objtop.spawn(position=coord_to_vec((x,ymin)) )
+            objbot = gamectx.content.create_object_from_config_id(boundary_obj_config_id)
+            objbot.spawn(position=coord_to_vec((x,ymax)))
+
+        for y in range(ymin+1,ymax):
+            self.spawn_locations = []
+            objtop = gamectx.content.create_object_from_config_id(boundary_obj_config_id)
+            objtop.spawn(position=coord_to_vec((xmin,y)) )
+            objbot = gamectx.content.create_object_from_config_id(boundary_obj_config_id)
+            objbot.spawn(position=coord_to_vec((xmax,y))) 
+
+    def random_coords(self,num=1):
+        xs = np.random.randint(self.boundary['x'][0] +1,self.boundary['x'][1]-1,num)
+        ys = np.random.randint(self.boundary['y'][0]+1,self.boundary['y'][1]-1,num)
+        return [((xs[i],ys[i])) for i in range(num)]
+
     def load_static_layers(self):
         keys = set(self.index.keys())
-        for i, lines in enumerate(self.map_layers):
+        xmin = 0
+        xmax = 0
+        ymin = 0
+        ymax = 0
+        for i, lines in enumerate(self.static_layers):
             self.spawn_locations = []
             for ridx, line in enumerate(lines):
                 linel = len(line)
                 for cidx in range(0,linel,2):
                     key = line[cidx:cidx+2]
                     coord = (cidx//2, ridx)
+                    if coord[0] > xmax:
+                        xmax = coord[0]
+                    if coord[1] > ymax:
+                        ymax = coord[1]
+
                     if key in keys:
                         info = self.index.get(key)
                         self.add(coord,info)
+
+        if "x" not in self.boundary:
+            self.boundary['x'] = [xmin-1,xmax+1]
+        if "y" not in self.boundary:
+            self.boundary['y'] = [ymin-1,ymax+1]
+
 
     def initialize(self,coord):
         if not self.loaded:
             print("Loading Static Layers")
             self.load_static_layers()
+            self.load_boundary()
             self.loaded= True
         self.load_sectors_near_coord(self.get_sector_coord(coord))
 

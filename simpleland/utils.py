@@ -26,8 +26,8 @@ class TickPerSecCounter:
         return sum([v for i, v in enumerate(self.counts) if self.last_spot != i])/(self.size -1)
 
 
-def merged_dict(d1,d2,depth=0):
-    if depth==0:
+def merged_dict(d1,d2,visheight=0):
+    if visheight==0:
         if d1 is None:
             d1 = {}
         d1 = copy.deepcopy(d1)
@@ -36,7 +36,7 @@ def merged_dict(d1,d2,depth=0):
     for k,v in d2.items():
         if k in d1:
             if isinstance(v,dict) and isinstance(d1[k],dict):
-                d1[k] = merged_dict(d1[k],v,depth+1)
+                d1[k] = merged_dict(d1[k],v,visheight+1)
             else:
                 d1[k] = v
         else:

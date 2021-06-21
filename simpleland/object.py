@@ -12,10 +12,10 @@ import copy
 
 class RenderAble:
 
-    def __init__(self, position:Vector2, angle, depth = 2):
+    def __init__(self, position:Vector2, angle, visheight = 2):
         self.position = position
         self.angle = angle
-        self.depth = depth
+        self.visheight = visheight
         self.image_offset = Vector2(0,0)
         self.visible=True
         self.image_id_default = None
@@ -27,7 +27,7 @@ class GObject(Base):
     def __init__(self,
                  id= None,
                  data = None,
-                 depth = 2):
+                 visheight = 2):
         if id is None:
             self.id = gen_id()
         else:
@@ -39,12 +39,13 @@ class GObject(Base):
         self.created_tick = clock.get_tick_counter()
         self.player_id = None
 
+        self.sleeping = False # if true, not used for updating
+
         self.shape_group: ShapeGroup = ShapeGroup()
         self.data = {} if data is None else data
         self.last_change = None
-        self.is_deleted = False
         self.enabled=True
-        self.depth=depth
+        self.visheight=visheight
         self.visible=True
         self.image_width, self.image_height = 80,80
         self.shape_color = None
@@ -104,9 +105,6 @@ class GObject(Base):
 
     def set_shape_color(self,color):
         self.shape_color = color
-
-    def delete(self):        
-        self.is_deleted = True
     
     def set_data_value(self,k,value):
         self.data[k] = value

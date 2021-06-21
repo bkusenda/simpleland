@@ -2,6 +2,7 @@ import math
 from simpleland.contentbundles.survival_behaviors import FleeAnimals, FollowAnimals, PlayingTag
 from simpleland import physics_engine
 import random
+from collections import defaultdict
 from typing import Dict, Any, Tuple
 
 from ..camera import Camera
@@ -32,8 +33,9 @@ import json
 import os
 from .survival_assets import load_asset_bundle
 from .survival_map import GameMap
-from .survival_controllers import TagController
+from .survival_controllers import PlayerSpawnController, TagController
 from .survival_objects import *
+from .survival_utils import int_map_to_onehot_map,ints_to_multi_hot
 
 
 ############################
@@ -50,13 +52,7 @@ def default_collision_callback(obj1: PhysicalObject, obj2: PhysicalObject):
     
     return obj1.collision_type >0 and obj1.collision_type == obj2.collision_type
 
-def get_item_map(item_types):
-    item_map = {}
-    for i, k in enumerate(item_types):
-        v = np.zeros(len(item_types)+1)
-        v[i] = 1
-        item_map[k] = v
-    return item_map
+
 
 
 def read_json_file(path):
@@ -99,32 +95,36 @@ class GameContent(SurvivalContent):
         self.default_camera_zoom = config['default_camera_zoom']
         self.tile_size = self.game_config['tile_size']
 
-        self.item_types = ['tree', 'food', 'rock', 'player', 'wood']
-        self.item_map = get_item_map(self.item_types)
-        self.default_v = np.zeros(len(self.item_types)+1)
-        self.default_v[len(self.item_types)] = 1
+        # Effect Vector Lookup
+        self.effect_int_map = {config_id:value.get('obs_id',i) for i, (config_id, value) in enumerate(self.game_config['effects'].items())}
+        self.max_effect_id = len(self.effect_int_map)
+        self.effect_vec_map = int_map_to_onehot_map(self.effect_int_map)
 
-        self.item_type_count = len(self.item_types)
-        self.vision_distance = 2
+        self.tag_list = self.game_config['tag_list']
+        self.max_tags = 3 #len(self.tag_list)
+        self.tag_int_map = { tag:i for i,tag in enumerate(self.tag_list)}
+
+        # Object Vector Lookup
+        self.obj_int_map = {config_id:value.get('obs_id',i) for i, (config_id, value) in enumerate(self.game_config['objects'].items())}
+        self.max_obs_id = len(self.obj_int_map)
+        self.obj_vec_map = int_map_to_onehot_map(self.obj_int_map)   
+        self.vision_radius = 2 # Vision info should be moved to objects, possibly predifined
 
         self.player_count = 0
         self.keymap = [23, 19, 4, 1, 5, 6, 18,0, 26,3, 24]
 
-        self.spawn_locations = []
-        self.food_locations = []
         self.loaded = False
         self.gamemap = GameMap(
             path = self.config_path,
             map_config=self.map_config)
         self._speed_factor = None
         self.call_counter = 0
-        self.spawn_points = {}
 
         # All loadable classes should be registered
         self.classes = [
             Effect, Human, Monster, Inventory,
             Food,Tool, Animal, Tree, Rock, 
-            Liquid, PhysicalObject, TagController, TagTool]
+            Liquid, PhysicalObject, TagController, PlayerSpawnController, TagTool]
 
         for cls in self.classes:
             gamectx.register_base_class(cls)
@@ -133,6 +133,9 @@ class GameContent(SurvivalContent):
 
         self.behavior_classes = [FleeAnimals,FollowAnimals,PlayingTag]
         self.bevavior_class_map:Dict[str,Behavior] = {cls.__name__: cls for cls  in self.behavior_classes}
+
+    def create_tags_vec(self,tags):
+        return ints_to_multi_hot([self.tag_int_map[tag] for tag in tags], self.max_tags)
 
     def get_game_config(self):
         return self.game_config
@@ -197,6 +200,10 @@ class GameContent(SurvivalContent):
     def get_asset_bundle(self):
         return self.asset_bundle
 
+    def request_reset(self):
+        for player in gamectx.player_manager.players_map.values():
+            player.set_data_value("reset_required", True)
+
     def reset_required(self):
         for player in gamectx.player_manager.players_map.values():
             if not player.get_data_value("reset_required", True):
@@ -223,7 +230,6 @@ class GameContent(SurvivalContent):
             self.load()
 
         gamectx.remove_all_events()
-        self.spawn_players()
         self.reset_controllers()
 
 
@@ -232,9 +238,9 @@ class GameContent(SurvivalContent):
     #####################
     # TODO: get from player to object
     def get_observation_space(self):
-        x_dim = (self.vision_distance * 2 + 1)
+        x_dim = (self.vision_radius * 2 + 1)
         y_dim = x_dim
-        chans = len(self.item_types) + 1
+        chans = self.max_obs_id + self.max_tags
         return spaces.Box(low=0, high=1, shape=(x_dim, y_dim, chans))
 
     # TODO: get from player to object
@@ -243,31 +249,7 @@ class GameContent(SurvivalContent):
 
     # TODO: get from player to object
     def get_observation(self, obj: GObject):
-        if obj is None or not obj.is_enabled():
-            return None
-        obj_coord = gamectx.physics_engine.vec_to_coord(obj.get_position())
-        xvis = self.vision_distance
-        yvis = self.vision_distance
-        col_min = obj_coord[0] - xvis
-        col_max = obj_coord[0] + xvis
-        row_min = obj_coord[1] - yvis
-        row_max = obj_coord[1] + yvis
-        results = []
-        for r in range(row_max, row_min-1, -1):
-            row_results = []
-            for c in range(col_min, col_max+1):
-                obj_ids = gamectx.physics_engine.space.get_objs_at((c, r))
-                if len(obj_ids) > 0:
-                    obj_id = obj_ids[0]
-                    obj_seen = gamectx.object_manager.get_by_id(obj_id)
-                    if obj_seen is None:
-                        print("ERROR cannot find object {}".format(obj_seen))
-                    else:   
-                        row_results.append(self.item_map.get(obj_seen.type))
-                else:
-                    row_results.append(self.default_v)
-            results.append(row_results)
-        return np.array(results)
+        return obj.get_observation()
 
     def get_step_info(self, player: Player) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         observation = None
@@ -286,28 +268,11 @@ class GameContent(SurvivalContent):
             done = player.get_data_value("reset_required", False)
             if done:
                 player.set_data_value("allow_obs", False)
-
-            info['lives_used'] = player.get_data_value("lives_used")
-            energy = obj.energy
-            info['energy'] = energy
-
-            # Claim food rewards
-            food_reward_count = obj.reward
+            reward = obj.reward
             obj.reward = 0
-            reward = food_reward_count
-
-            if done:
-                reward = -5
         else:
             info['msg'] = "no player found"
         return observation, reward, done, info
-
-    def reset_player(self,player:Player):
-        player.set_data_value("lives_used", 0)
-        player.set_data_value("food_reward_count", 0)
-        player.set_data_value("reset_required", False)
-        player.set_data_value("allow_obs", True)
-        player.events = []
 
     # **********************************
     # NEW PLAYER
@@ -325,46 +290,8 @@ class GameContent(SurvivalContent):
                 player_type=player_type,
                 is_human = is_human)
             gamectx.add_player(player)
-        self.spawn_player(player,reset=True)        
         return player
 
-    #########################
-    # Loading/Spawning
-    #########################
-    def spawn_objects(self):
-        #TOOD: make configurable
-        config_id = 'monster1'
-        objs = gamectx.object_manager.get_objects_by_config_id(config_id)
-        spawn_points = self.gamemap.get_spawn_points(config_id)
-        if len(objs) < 1 and len(spawn_points)>0:
-            object_config = self.game_config['objects'][config_id]['config']
-            Monster(config_id = config_id, config=object_config).spawn(spawn_points[0])
-
-
-    def spawn_player(self,player:Player, reset=False):
-        if player.get_object_id() is not None:
-            player_object = gamectx.object_manager.get_by_id(player.get_object_id())
-        else:
-            # TODO: get playertype from game mode + client config
-
-            player_config = self.game_config['player_types']['1']
-            config_id = player_config['config_id']
-            spawn_points = self.gamemap.get_spawn_points(config_id)
-            player.set_data_value("spawn_point",spawn_points[0])
-            player_object:PhysicalObject = self.create_object_from_config_id(config_id)
-            player_object.set_player(player)
-
-        if reset:
-            self.reset_player(player)
-
-        spawn_point = player.get_data_value("spawn_point")
-
-        player_object.spawn(spawn_point)
-        return player_object
-
-    def spawn_players(self,reset=True):
-        for player in gamectx.player_manager.players_map.values():
-            self.spawn_player(player,reset)
 
     ########################
     # GET INPUT
@@ -504,26 +431,22 @@ class GameContent(SurvivalContent):
         elif "JUMP" in actions_set:
             obj.jump()
         elif "WALK" in actions_set:
-            obj.walk(direction,angle_update)
-            # events.append(ObjectEvent(
-            #     obj.get_id(),
-            #     "walk",
-            #     direction,
-            #     angle_update))
+            # obj.walk(direction,angle_update)
+            events.append(ObjectEvent(
+                obj.get_id(),
+                "walk",
+                direction,
+                angle_update))
 
         return events
 
     def update(self):
         objs = list(gamectx.object_manager.get_objects().values())
         for o in objs:
-            if o is None or o.is_deleted or not o.enabled:
+            if not o.enabled or o.sleeping:
                 continue
-            if o.is_enabled():
-                o.update()
-        self.spawn_objects()
+            o.update()
         self.update_controllers()
-
-
 
     def post_process_frame(self, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:

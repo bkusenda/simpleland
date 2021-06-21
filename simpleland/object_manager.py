@@ -11,9 +11,7 @@ class GObjectManager:
         self.configs_id_index:Dict[str,set] = {}
         self.obj_history: Dict[str,str] = {}
 
-
     def add(self,obj: GObject):
-        # self.objects[obj.get_id()] = obj
         self.objects[obj.get_id()] = obj
         self.obj_history[obj.get_id()] = obj.type
         obj_id_set = self.configs_id_index.get(obj.config_id,set())        

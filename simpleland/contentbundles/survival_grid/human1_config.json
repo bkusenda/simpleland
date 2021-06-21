@@ -16,7 +16,7 @@
  "walk_speed": 1.25,
  "attack_speed": 0.75,
  "vision_radius": 4,
- "start_inventory":{"wood1":3},
+ "start_inventory":{},
  "craft_items":["wall1"],
  "craft_requirements":{
     "wall1": {"wood1": 1}

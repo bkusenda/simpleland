@@ -9,8 +9,14 @@
             "config_id": "human1"
         }
     },
-    "active_controllers":["tag1"],
+    "active_controllers":["pspawn","tag1"],
     "controllers":{
+        "pspawn":{
+            "class":"PlayerSpawnController",
+            "config":{
+
+            }
+        },
         "tag1":{
             "class":"TagController",
             "config":{
@@ -19,11 +25,15 @@
         }
 
     },
+    "tag_list":["tagged"],
     "maps": {
         "main": {
             "format": "txt",
-            "layers": [
-                "map_layer_1_test.txt"
+            "boundary": {
+
+                "obj": "rock1"},
+            "static_layers": [
+                "map_tag_box.txt"
             ],
             "index": {
                 "s0": {
@@ -84,7 +94,8 @@
     },
     "objects": {
         "human1": {
-            "class": "Human"
+            "class": "Human",
+            "obs_id":0
         },
         "monster1": {
             "class": "Monster"
