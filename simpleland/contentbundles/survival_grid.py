@@ -33,7 +33,7 @@ import json
 import os
 from .survival_assets import load_asset_bundle
 from .survival_map import GameMap
-from .survival_controllers import PlayerSpawnController, TagController
+from .survival_controllers import FoodCollectController, PlayerSpawnController, TagController
 from .survival_objects import *
 from .survival_utils import int_map_to_onehot_map,ints_to_multi_hot
 
@@ -42,18 +42,7 @@ from .survival_utils import int_map_to_onehot_map,ints_to_multi_hot
 # COLLISION HANDLING
 ############################
 def default_collision_callback(obj1: PhysicalObject, obj2: PhysicalObject):
-    if ('animate' in obj1.get_types() and obj2.type == "liquid"):
-        return obj2.on_collision_with_animate(obj1)
-    elif ('liquid' in obj1.get_types() and 'animate' in obj2.get_types()):
-        return obj1.on_collision_with_animate(obj2)
-    elif 'animate' in obj1.get_types()  and obj2.collision_type >0:
-        obj1.on_collection_default(obj2)
-        return obj2.collision_type
-    
-    return obj1.collision_type >0 and obj1.collision_type == obj2.collision_type
-
-
-
+    return obj1.collision_with(obj2)
 
 def read_json_file(path):
     try:
@@ -62,7 +51,6 @@ def read_json_file(path):
             return json.load(f)
     except Exception as e:
         return {}
-
 
 def read_game_config(sub_dir, game_config):
     game_config = read_json_file(os.path.join(sub_dir,game_config))
@@ -80,7 +68,6 @@ def read_game_config(sub_dir, game_config):
         data['sounds'] = read_json_file(os.path.join(sub_dir,data.get('sounds',f"{id}_sounds.json")))
         data['model'] = read_json_file(os.path.join(sub_dir,data.get('model',f"{id}_model.json")))
     return game_config
-
 
 class GameContent(SurvivalContent):
 
@@ -124,7 +111,10 @@ class GameContent(SurvivalContent):
         self.classes = [
             Effect, Human, Monster, Inventory,
             Food,Tool, Animal, Tree, Rock, 
-            Liquid, PhysicalObject, TagController, PlayerSpawnController, TagTool]
+            Liquid, PhysicalObject, 
+            TagController, 
+            PlayerSpawnController,
+            FoodCollectController, TagTool]
 
         for cls in self.classes:
             gamectx.register_base_class(cls)
@@ -164,6 +154,16 @@ class GameContent(SurvivalContent):
     
     def get_object_sounds(self,config_id):
         return self.game_config['objects'].get(config_id,{}).get('sounds',{})
+
+    def get_available_location(self,max_tries = 200):
+        point= None
+        tries = 0
+        while point is None or tries > max_tries:
+            coord = self.gamemap.random_coords(num=1)[0]
+            objs = gamectx.physics_engine.space.get_objs_at(coord)
+            if len(objs) == 0:
+                point = coord_to_vec(coord)
+        return point
 
     # Factory Methods
     def create_behavior(self,name,*args,**kwargs):
@@ -247,7 +247,6 @@ class GameContent(SurvivalContent):
     def get_action_space(self):
         return spaces.Discrete(len(self.keymap))
 
-    # TODO: get from player to object
     def get_observation(self, obj: GObject):
         return obj.get_observation()
 
@@ -315,12 +314,13 @@ class GameContent(SurvivalContent):
             return []
         if not player.get_data_value("allow_input",False):
             return []
-        keypressed = set(input_event.input_data['pressed'])
-        keydown = set(input_event.input_data['keydown'])
+        keypressed = input_event.input_data['pressed']
+        keydown = input_event.input_data['keydown']
         # keyup = set(input_event.input_data['keyup'])
 
         obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
 
+        # TODO: only check for admin client events if player is human
         # Client Events
         if 27 in keydown:
             print("QUITTING")
@@ -343,100 +343,7 @@ class GameContent(SurvivalContent):
         if player is None or not player.get_data_value("allow_input",False) or player.get_data_value("reset_required",False):
             return events
 
-        obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
-
-        if obj is not None and obj.get_action().get('blocking',True):
-            return events
-
-        # Object Movement
-        actions_set = set()
-        direction = Vector2(0,0)
-        angle_update = None
-        if 23 in keypressed:
-            # W UP
-            direction = Vector2(0, -1)
-            angle_update = 180
-            actions_set.add("WALK")
-
-        if 19 in keypressed:
-            # S DOWN
-            direction = Vector2(0, 1)
-            angle_update = 0
-            actions_set.add("WALK")
-
-        if 4 in keypressed:
-            # D RIGHT
-            direction = Vector2(1, 0)
-            angle_update = 270
-            actions_set.add("WALK")
-            
-        if 1 in keypressed:
-            # A LEFT
-            direction = Vector2(-1, 0)
-            angle_update = 90
-            actions_set.add("WALK")
-
-        # TODO: Establish action presidence
-        if 5 in keypressed:
-            actions_set.add("GRAB")
-
-        elif 6 in keypressed:
-            actions_set.add("DROP")
-
-        elif 18 in keypressed:
-            actions_set.add("USE")
-
-        elif 26 in keydown:
-            actions_set.add("PREV_ITEM")
-
-        elif 3 in keydown:
-            actions_set.add("NEXT_ITEM")
-
-        elif 2 in keydown:
-            actions_set.add("NEXT_CRAFT_TYPE")
-
-        elif 22 in keydown:
-            actions_set.add("PREV_CRAFT_TYPE")
-        
-        elif 17 in keydown:
-            actions_set.add("CRAFT")
-
-        elif 33 in keypressed:
-            actions_set.add("JUMP")
-
-        elif  7 in keypressed:
-            actions_set.add("PUSH")
-
-        elif 0 in keypressed:
-            actions_set.add("NA")
-
-        if "GRAB" in actions_set:
-            obj.grab()
-        elif "DROP" in actions_set:
-            obj.drop()
-        elif "USE" in actions_set:
-            obj.use()
-        elif "NEXT_ITEM" in actions_set:
-            obj.select_item()
-        elif "PREV_ITEM" in actions_set:
-            obj.select_item(prev=True)
-        elif "CRAFT" in actions_set:
-            obj.craft()
-        elif "NEXT_CRAFT_TYPE" in actions_set:
-            obj.select_craft_type()
-        elif "PREV_CRAFT_TYPE" in actions_set:
-            obj.select_craft_type(prev=True)
-        elif "PUSH" in actions_set:
-            obj.push()
-        elif "JUMP" in actions_set:
-            obj.jump()
-        elif "WALK" in actions_set:
-            # obj.walk(direction,angle_update)
-            events.append(ObjectEvent(
-                obj.get_id(),
-                "walk",
-                direction,
-                angle_update))
+        obj.assign_input_event(input_event)     
 
         return events
 
@@ -461,8 +368,8 @@ class GameContent(SurvivalContent):
                 obj_stamina = obj.stamina
 
                 lines.append(f"H:{obj_health}, E:{obj_energy}, S:{obj_stamina}")
-                lines.append(f"Inventory: {obj.inventory().as_string()}")
-                lines.append(f"Craft Menu: {obj.craftmenu().as_string()}")
+                lines.append(f"Inventory: {obj.get_inventory().as_string()}")
+                lines.append(f"Craft Menu: {obj.get_craftmenu().as_string()}")
 
             if renderer.config.show_console:
                 renderer.render_to_console(lines, x=5, y=5)

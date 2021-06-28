@@ -6,6 +6,7 @@ import time
 from .common import Shape, Vector2, load_dict_snapshot, Base,get_shape_from_dict
 from .common import create_dict_snapshot, state_to_dict, ShapeGroup, TimeLoggingContainer
 from .common import COLLISION_TYPE
+from .component import Component
 from .clock import clock
 import copy
 
@@ -39,6 +40,9 @@ class GObject(Base):
         self.created_tick = clock.get_tick_counter()
         self.player_id = None
 
+        self.components:Component = []
+        #TODO Component Lookups
+
         self.sleeping = False # if true, not used for updating
 
         self.shape_group: ShapeGroup = ShapeGroup()
@@ -62,6 +66,9 @@ class GObject(Base):
 
     def update(self):
         pass
+        # for component in self.components:
+        #     if component.enabled:
+        #         component.update()
 
     def get_view_position(self):
         if self.view_position is None:
@@ -95,7 +102,7 @@ class GObject(Base):
 
     def disable(self):
         self.enabled=False
-        self.update_position(None, skip_collision_check=True)
+        # self.update_position(None, skip_collision_check=True)
 
     def enable(self):
         self.enabled=True
@@ -119,6 +126,7 @@ class GObject(Base):
     def set_image_dims(self,height,width):
         self.image_width, self.image_height = (height,width)
 
+    # TODO, make tiggerable
     def update_position(self, position: Vector2,skip_collision_check=False,callback=None):
         self._update_position_callback(
             self,

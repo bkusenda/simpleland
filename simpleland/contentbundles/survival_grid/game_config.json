@@ -9,10 +9,16 @@
             "config_id": "human1"
         }
     },
-    "active_controllers":["pspawn","tag1"],
+    "active_controllers":["pspawn","foodcollect"],
     "controllers":{
         "pspawn":{
             "class":"PlayerSpawnController",
+            "config":{
+
+            }
+        },
+        "foodcollect":{
+            "class":"FoodCollectController",
             "config":{
 
             }

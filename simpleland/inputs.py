@@ -8,6 +8,7 @@ from simpleland.player import Player
 def get_default_key_map():
     key_map = {}
     key_map[pygame.K_a] = 1
+    key_map[pygame.K_LEFT] = 1
     key_map[pygame.K_b] = 2
     key_map[pygame.K_c] = 3
     key_map[pygame.K_d] = 4

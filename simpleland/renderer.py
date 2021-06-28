@@ -397,9 +397,11 @@ class Renderer:
         for k, o in objs.items():
             o:GObject = o
             if o is not None and o.is_enabled() and o.is_visible():
-                within_range = o.get_view_position().distance_to(center) < self.view_width
-                if within_range:
-                    object_list_visheight_sorted[o.visheight].append(o)
+                view_position = o.get_view_position()
+                if view_position is not None:
+                    within_range = o.get_view_position().distance_to(center) < self.view_width
+                    if within_range:
+                        object_list_visheight_sorted[o.visheight].append(o)
 
         # TODO: Need to adjust with angle
         center_bottom = center - Vector2(0,100)

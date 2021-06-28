@@ -210,7 +210,6 @@ class GameContext:
 
     def run_event_processing(self):
         # Main Event Processing Bus
-        
         all_new_events = []
         events_to_remove = []
         events_set = set(self.event_manager.get_events())
@@ -293,10 +292,13 @@ class GameContext:
         self.content.update()
 
     def run_step(self):
+        
         self.run_event_processing()
         if not self.config.client_only_mode:
             self.run_physics_processing()
             self.run_update()
+            
+
 
         self.tick()
         self.step_counter +=1

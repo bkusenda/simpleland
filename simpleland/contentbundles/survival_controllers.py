@@ -4,12 +4,12 @@ import random
 from ..common import Base, Vector2
 from ..clock import clock
 from .survival_common import StateController,SurvivalContent
-from .survival_objects import TagTool,AnimateObject,Monster, PhysicalObject
+from .survival_objects import TagTool,AnimateObject,Monster, PhysicalObject, Food, invoke_triggers
 from .survival_behaviors import PlayingTag
 from .survival_utils import coord_to_vec
 from ..player import Player
 from .. import gamectx
-
+import logging
 
 
 class PlayerSpawnController(StateController):
@@ -50,14 +50,10 @@ class PlayerSpawnController(StateController):
 
         spawn_point = player.get_data_value("spawn_point")
         if spawn_point is None:
-            point_found= False
-            while not point_found:
-                coord = self.content.gamemap.random_coords(num=1)[0]
-                
-                objs = gamectx.physics_engine.space.get_objs_at(coord)
-                if len(objs) == 0:
-                    point_found = True
-                    spawn_point = coord_to_vec(coord)
+            spawn_point = self.content.get_available_location()
+        if spawn_point is None:
+            logging.error("No spawnpoint available")
+
 
         player_object.spawn(spawn_point)
         return player_object
@@ -66,18 +62,6 @@ class PlayerSpawnController(StateController):
         for player in gamectx.player_manager.players_map.values():
             self.spawn_player(player,reset)
 
-
-# class SpawnController(StateController):
-
-
-#     def __init__(self,*args,**kwargs):
-#         super().__init__(*args,**kwargs)
-#         self.content:SurvivalContent = gamectx.content
-
-#     # self.spawn_player(player,reset=True)        
-#     #########################
-#     # Loading/Spawning
-#     #########################
 #     def spawn_objects(self):
 #         #TOOD: make configurable
 #         config_id = 'monster1'
@@ -86,32 +70,79 @@ class PlayerSpawnController(StateController):
 #         if len(objs) < 1 and len(spawn_points)>0:
 #             object_config = self.content.get_game_config()['objects'][config_id]['config']
 #             Monster(config_id = config_id, config=object_config).spawn(spawn_points[0])
-#     #TODO: Move to spawncontroller
-#     def spawn_player(self,player:Player, reset=False):
-#         if player.get_object_id() is not None:
-#             player_object = gamectx.object_manager.get_by_id(player.get_object_id())
-#         else:
-#             # TODO: get playertype from game mode + client config
+#   
 
-#             player_config = self.game_config['player_types']['1']
-#             config_id = player_config['config_id']
-#             spawn_points = self.gamemap.get_spawn_points(config_id)
+class FoodCollectController(StateController):
+
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.content:SurvivalContent = gamectx.content
+        self.actor_obj_ids = set()
+        self.food_ids = set()
+        self.game_start_tick = 0
+        self.last_check = 0
+        self.check_freq = 10 * self.content.speed_factor()
+        self.needed_food = 4
+
+    def get_objects(self):
+        objs = []
+        for obj_id in self.actor_obj_ids:
+            obj = gamectx.object_manager.get_by_id(obj_id)
+            if obj is not None:
+                objs.append(obj)
+        return objs
+
+    def collected_trigger(self,obj,actor_obj):
+        actor_obj.reward+=1
+        self.food_ids.discard(obj.get_id())
+        return True
+
+    def collision_with_trigger(self,obj,obj2):
+        if obj2.get_id() not in self.food_ids:
+            return True
+        print("Found FOOD!")
+        obj.reward+=1
+        gamectx.remove_object(obj2)
+        self.food_ids.discard(obj2.get_id())
+        return True
+
+    def spawn_food(self):
+        loc = self.content.get_available_location()
+        if loc is not None:
+            food:Food = self.content.create_object_from_config_id("apple1")
+            food.spawn(loc)
+            self.food_ids.add(food.get_id())
+            food.add_trigger("receive_grab","collect",self.collected_trigger)  
+
+    def reset(self):
+
+        # Assign players to tag game
+        self.actor_obj_ids = set()
+        objs:List[AnimateObject] = []
+        for obj in gamectx.object_manager.get_objects_by_config_id("human1"):
+            obj.add_trigger("collision_with","collect",self.collision_with_trigger)
+            objs.append(obj)
+            self.actor_obj_ids.add(obj.get_id())
+
+
+        # Get All Food in game
+        self.actor_obj_ids = set()
+        objs:List[Food] = []
+        for obj in gamectx.object_manager.get_objects_by_config_id("apple1"):
+            obj.add_trigger("receive_grab","collect",self.collected_trigger)
+            self.food_ids.add(obj.get_id())
+            objs.append(obj)
+        self.spawn_food()
             
-#             player.set_data_value("spawn_point",random.choice(spawn_points))
-#             player_object:PhysicalObject = self.create_object_from_config_id(config_id)
-#             player_object.set_player(player)
 
-#         if reset:
-#             self.reset_player(player)
+    def update(self):
+        time_since = clock.get_tick_counter() - self.last_check
+        if time_since > self.check_freq:
+            if len(self.food_ids)< self.needed_food:
+                self.spawn_food()
 
-#         spawn_point = player.get_data_value("spawn_point")
-
-#         player_object.spawn(spawn_point)
-#         return player_object
-
-#     def spawn_players(self,reset=True):
-#         for player in gamectx.player_manager.players_map.values():
-#             self.spawn_player(player,reset)
+            self.last_check = clock.get_tick_counter()
+            
 
 
 class TagController(StateController):
@@ -147,12 +178,12 @@ class TagController(StateController):
             self.tag_tool = self.content.create_object_from_config_id("tag_tool")
             self.tag_tool.spawn(Vector2(0,0))
             self.tag_tool.disable()
-            self.tag_tool.set_controller_id(self.cid)
+            self.tag_tool.add_trigger("tag_user","tag_user",self.tag_trigger)
         
         if self.tagged_obj is not None:
-            slot_tools = self.tagged_obj.inventory().find("tag_tool")
+            slot_tools = self.tagged_obj.get_inventory().find("tag_tool")
             for i, tool in slot_tools:
-                self.tagged_obj.inventory().remove_by_slot(i)
+                self.tagged_obj.get_inventory().remove_by_slot(i)
             self.tag_tool.remove_effect(self.tagged_obj)
 
         # Assign players to tag game
@@ -175,23 +206,19 @@ class TagController(StateController):
         # Select Who is "it"
         obj = random.choice(objs)
         obj.tags.add(self.is_tagged_tag)
-        obj.inventory().add(self.tag_tool, True)
+        obj.get_inventory().add(self.tag_tool, True)
         self.tag_tool.add_effect(obj)
         self.tagged_obj = obj
         self.game_start_tick = clock.get_tick_counter()
         self.last_tag = clock.get_tick_counter()
 
-
-    def receive_message(self,sender_obj,message_name,**kwargs):
-        if message_name == "tagged":
-            self.tagged(sender_obj,kwargs['source_obj'],kwargs['target_obj'])
-
-    def tagged(self,tag_tool, old_obj, new_obj):
-        self.tagged_obj = new_obj
-        old_obj.tags.discard(self.is_tagged_tag)
+    def tag_trigger(self,tag_tool, source_obj, target_obj):
+        self.tagged_obj = target_obj
+        source_obj.tags.discard(self.is_tagged_tag)
         self.last_tag = clock.get_tick_counter()
         self.tagged_obj.reward += -10
         self.tag_changes+=1
+        return True
     
     def update(self):
         tag_time = clock.get_tick_counter() - self.last_tag
@@ -199,7 +226,6 @@ class TagController(StateController):
             print("Resetting tag game")
             for obj in self.get_objects():
                 if obj is not None and obj.get_id() != self.tagged_obj.get_id():
-                    obj.reward=10
-            # self.reset()
+                    obj.reward+=10
             self.content.request_reset()
             
