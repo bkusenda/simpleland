@@ -9,7 +9,7 @@
             "config_id": "human1"
         }
     },
-    "active_controllers":["pspawn","foodcollect"],
+    "active_controllers":["pspawn","foodcollect","objcollision"],
     "controllers":{
         "pspawn":{
             "class":"PlayerSpawnController",
@@ -23,13 +23,18 @@
 
             }
         },
+        "objcollision":{
+            "class":"ObjectCollisionController",
+            "config":{
+
+            }
+        },
         "tag1":{
             "class":"TagController",
             "config":{
 
             }
         }
-
     },
     "tag_list":["tagged"],
     "maps": {
@@ -39,7 +44,7 @@
 
                 "obj": "rock1"},
             "static_layers": [
-                "map_tag_box.txt"
+                "map_9x9_vwall.txt"
             ],
             "index": {
                 "s0": {
@@ -101,7 +106,10 @@
     "objects": {
         "human1": {
             "class": "Human",
-            "obs_id":0
+            "obs_id":0,
+            "config": {
+                "disabled_actions":["attack", "unarmed_attack", "select_item", "grab", "drop"]
+            }
         },
         "monster1": {
             "class": "Monster"

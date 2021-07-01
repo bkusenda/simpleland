@@ -1,24 +1,28 @@
 {
- "health_start": 100,
- "health_gen": 5,
- "health_max": 100,
- "health_gen_period": 10,
- "stamina_max": 100,
- "stamina_gen": 40,
- "stamina_gen_period": 1,
- "energy_start": 100,
- "energy_max": 100,
- "energy_decay_period": 5,
- "energy_decay": 1,
- "low_energy_health_penalty": 10,
- "strength": 1,
- "inventory_size": 1,
- "walk_speed": 1.25,
- "attack_speed": 0.75,
- "vision_radius": 4,
- "start_inventory":{},
- "craft_items":["wall1"],
- "craft_requirements":{
-    "wall1": {"wood1": 1}
-}
+    "health_start": 100,
+    "health_gen": 5,
+    "health_max": 100,
+    "health_gen_period": 10,
+    "stamina_max": 100,
+    "stamina_gen": 40,
+    "stamina_gen_period": 1,
+    "energy_start": 100,
+    "energy_max": 100,
+    "energy_decay_period": 3,
+    "energy_decay": 10,
+    "low_energy_health_penalty": 10,
+    "strength": 1,
+    "inventory_size": 1,
+    "walk_speed": 1.25,
+    "attack_speed": 0.75,
+    "vision_radius": 4,
+    "start_inventory": {},
+    "craft_items": [
+        "wall1"
+    ],
+    "craft_requirements": {
+        "wall1": {
+            "wood1": 1
+        }
+    }
 }

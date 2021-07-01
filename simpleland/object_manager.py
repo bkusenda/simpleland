@@ -9,11 +9,10 @@ class GObjectManager:
     def __init__(self):
         self.objects: Dict[str, GObject] = {}
         self.configs_id_index:Dict[str,set] = {}
-        self.obj_history: Dict[str,str] = {}
+        # self.obj_history: Dict[str,str] = {}
 
     def add(self,obj: GObject):
         self.objects[obj.get_id()] = obj
-        self.obj_history[obj.get_id()] = obj.type
         obj_id_set = self.configs_id_index.get(obj.config_id,set())        
         obj_id_set.add(obj.get_id())
         self.configs_id_index[obj.config_id] = obj_id_set

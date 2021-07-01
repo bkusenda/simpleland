@@ -25,6 +25,14 @@ from simpleland.server import GameUDPServer, UDPHandler
 import signal
 import sys
 
+LOG_LEVELS = {
+    'critical': logging.CRITICAL,
+    'error': logging.ERROR,
+    'warn': logging.WARNING,
+    'warning': logging.WARNING,
+    'info': logging.INFO,
+    'debug': logging.DEBUG
+}
 
 def get_game_def(
         game_id,
@@ -118,11 +126,15 @@ def get_arguments(override_args=None):
 
     parser.add_argument("--game_id", default="space_grid1", help="id of game")
     parser.add_argument("--content_overrides", default="{}", type=str,help="JSON string containing content updates. eg --content_overrides='{\"player_start_energy\":35}'")
-
+    parser.add_argument("--log_level",default="info",help=", ".join(list(LOG_LEVELS.keys())),type=str)
     return  parser.parse_args(override_args)
 
 
 def run(args):
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+    
+    logging.getLogger().setLevel(LOG_LEVELS.get(args.log_level))
+
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     print(args.__dict__)
 

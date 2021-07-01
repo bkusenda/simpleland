@@ -34,9 +34,9 @@ class Sector:
 
 class GameMap:
 
-    def __init__(self,path,map_config):
+    def __init__(self,path,map_config, tile_size = 16, seed=123):
 
-        self.seed = 123
+        self.seed = seed
         self.full_path = pkg_resources.resource_filename(__name__,path)
         self.static_layers = []
         for layer_filename in map_config['static_layers']:
@@ -45,8 +45,8 @@ class GameMap:
                 self.static_layers.append(layer)            
         self.index = map_config['index']
         self.boundary = map_config.get('boundary')
-        self.tile_size = 16
-        self.sector_size = 64
+        self.tile_size = tile_size
+        self.sector_size = self.tile_size * 4
         self.sectors = {}
         self.sectors_loaded = set()
         self.loaded = False
@@ -63,13 +63,13 @@ class GameMap:
         return pos[0]//self.tile_size//self.sector_size,pos[1]//self.tile_size//self.sector_size
 
     
-    def add(self,coord,info):
+    def add(self,coord,info=None):
         scoord = self.get_sector_coord(coord)
         sector:Sector = self.sectors.get(scoord)
         if sector is None:
-            logging.debug(f"Creating sector {scoord}")
             sector = Sector(scoord,self.sector_size,self.sector_size)
-        sector.add(coord,info)
+        if info is not None:
+            sector.add(coord,info)
         self.sectors[scoord] = sector
         return sector
 
@@ -131,7 +131,6 @@ class GameMap:
 
     def initialize(self,coord):
         if not self.loaded:
-            print("Loading Static Layers")
             self.load_static_layers()
             self.load_boundary()
             self.loaded= True
@@ -154,18 +153,16 @@ class GameMap:
         nei_scoords = self.get_neigh_coords(scoord)
         not_loaded_scoords = nei_scoords.difference(self.sectors_loaded)
         if scoord not in self.sectors_loaded:
-            print(f"Loading Current sector {scoord}")
             self.load_sector(scoord)
         for new_scoord in not_loaded_scoords:
-            print(f"Loading sector {new_scoord}")
             self.load_sector(new_scoord)        
 
     def load_sector(self,scoord):
         sector:Sector = self.sectors.get(scoord)
         if sector is None:
             coord = scoord[0] * self.sector_size, scoord[1] * self.sector_size
-            sector = self.add(coord, info = {'type':'obj','obj':'water1'})
-            logging.debug(f"Adding obj at in sector: {scoord} at {coord}" )
+            # sector = self.add(coord, info = {'type':'obj','obj':'water1'})
+            sector = self.add(coord)
         self.sectors_loaded.add(scoord)
         for coord, item_list in sector.items.items():
             for info in item_list:

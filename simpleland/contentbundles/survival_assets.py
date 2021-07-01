@@ -14,7 +14,6 @@ from ..object import GObject
 
 from ..player import Player
 from ..event import (DelayedEvent)
-from .survival_config import TILE_SIZE
 from .survival_utils import coord_to_vec
 import numpy as np
 from gym import spaces

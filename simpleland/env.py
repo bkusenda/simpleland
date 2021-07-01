@@ -4,7 +4,7 @@ from simpleland.registry import load_game_content, GameDef
 import gym
 from gym import spaces
 import logging
-from simpleland.runner import get_game_def, get_player_def, UDPHandler, GameUDPServer
+from simpleland.runner import get_game_def, get_player_def, UDPHandler, GameUDPServer, LOG_LEVELS
 from simpleland.event import InputEvent
 import threading
 import sys
@@ -106,7 +106,6 @@ class SimplelandEnv:
         self.action_spaces = {agent_id:self.content.get_action_space() for agent_id in self.agent_clients.keys()}
         self.observation_spaces = {agent_id:self.content.get_observation_space() for agent_id in self.agent_clients.keys()}
         
-        logging.info("Ob spaces: {}".format(self.observation_spaces))
         self.step_counter = 0
         
         self.ob = None
@@ -243,14 +242,7 @@ class SimplelandEnvSingle(gym.Env):
 import time
 import argparse
 if __name__ == "__main__":
-    levels = {
-        'critical': logging.CRITICAL,
-        'error': logging.ERROR,
-        'warn': logging.WARNING,
-        'warning': logging.WARNING,
-        'info': logging.INFO,
-        'debug': logging.DEBUG
-    }
+
     
     parser = argparse.ArgumentParser()
 
@@ -260,11 +252,11 @@ if __name__ == "__main__":
     parser.add_argument("--time_profile", action="store_true")
     parser.add_argument("--agent_count", default=1, type=int, help="Number test of agents")
     parser.add_argument("--verbose",action="store_true")
-    parser.add_argument("--log_level",default="info",help=", ".join(list(levels.keys())),type=str)
+    parser.add_argument("--log_level",default="info",help=", ".join(list(LOG_LEVELS.keys())),type=str)
 
     args =  parser.parse_args()
 
-    logging.getLogger().setLevel(levels.get(args.log_level))
+    logging.getLogger().setLevel(LOG_LEVELS.get(args.log_level))
 
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     
@@ -288,6 +280,14 @@ if __name__ == "__main__":
     episode_count = 0
     actions = {}
 
+    logging.info("OBSERVATION SPACES")
+    for name, space in env.observation_spaces.items():
+        logging.info(f"\t{name}: {space}")
+
+    logging.info("ACTION SPACES")
+    for name, space in env.action_spaces.items():
+        logging.info(f"\t{name}: {space}")
+
     for i in range(0,max_steps):
         if dones.get('__all__'):
             obs = env.reset()
@@ -295,15 +295,6 @@ if __name__ == "__main__":
             episode_count+=1
         else:
             obs, rewards, dones, infos = env.step(actions)
-            # for id, ob in obs.items():
-            #     space= env.observation_spaces[id]
-            #     if space.contains(ob) is False:
-            #         print("OBS space not matching")
-            #         print(ob)
-            #         print(type(ob))
-            #         print(ob.shape)
-            #         print(space)
-        
         if verbose:
             actions={}
             for id, ob in obs.items():

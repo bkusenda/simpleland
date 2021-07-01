@@ -2,7 +2,7 @@
     "collectable": true,
     "pushable": false,
     "count_max": 10,
-    "energy": 10,
+    "energy": 50,
     "permanent": false,
     "health":100,
     "remove_on_destroy":true,

@@ -1,4 +1,5 @@
 import math
+from simpleland.contentbundles.survival_config import CONTENT_ID
 from simpleland.contentbundles.survival_behaviors import FleeAnimals, FollowAnimals, PlayingTag
 from simpleland import physics_engine
 import random
@@ -12,7 +13,7 @@ from ..object import GObject
 
 from ..player import Player
 from ..renderer import Renderer
-from ..utils import gen_id
+from ..utils import gen_id, getsize, getsizewl
 
 from ..asset_bundle import AssetBundle
 from ..common import COLLISION_TYPE
@@ -33,10 +34,10 @@ import json
 import os
 from .survival_assets import load_asset_bundle
 from .survival_map import GameMap
-from .survival_controllers import FoodCollectController, PlayerSpawnController, TagController
+from .survival_controllers import FoodCollectController,ObjectCollisionController, PlayerSpawnController, TagController
 from .survival_objects import *
 from .survival_utils import int_map_to_onehot_map,ints_to_multi_hot
-
+import time
 
 ############################
 # COLLISION HANDLING
@@ -44,55 +45,28 @@ from .survival_utils import int_map_to_onehot_map,ints_to_multi_hot
 def default_collision_callback(obj1: PhysicalObject, obj2: PhysicalObject):
     return obj1.collision_with(obj2)
 
-def read_json_file(path):
-    try:
-        full_path = pkg_resources.resource_filename(__name__,path)
-        with open(full_path,'r') as f:
-            return json.load(f)
-    except Exception as e:
-        return {}
-
-def read_game_config(sub_dir, game_config):
-    game_config = read_json_file(os.path.join(sub_dir,game_config))
-    game_config['asset_bundle'] = read_json_file(
-            os.path.join(sub_dir,game_config['asset_bundle']))
-    for id, obj_data in game_config['controllers'].items():
-        if "config" not in obj_data:
-            obj_data['config'] = read_json_file(os.path.join(sub_dir,obj_data.get('config',f"{id}_config.json")))
-    for id, obj_data in game_config['objects'].items():
-        obj_data['config'] = read_json_file(os.path.join(sub_dir,obj_data.get('config',f"{id}_config.json")))
-        obj_data['sounds'] = read_json_file(os.path.join(sub_dir,obj_data.get('sounds',f"{id}_sounds.json")))
-        obj_data['model'] = read_json_file(os.path.join(sub_dir,obj_data.get('model',f"{id}_model.json")))
-    for id, data in game_config['effects'].items():
-        data['config'] = read_json_file(os.path.join(sub_dir,data.get('config',f"{id}_config.json")))
-        data['sounds'] = read_json_file(os.path.join(sub_dir,data.get('sounds',f"{id}_sounds.json")))
-        data['model'] = read_json_file(os.path.join(sub_dir,data.get('model',f"{id}_model.json")))
-    return game_config
-
 class GameContent(SurvivalContent):
 
     def __init__(self, config):
         super().__init__(config)
-        self.config_path = 'survival_grid'
-        self.game_config = read_game_config(self.config_path,'game_config.json')
-        self.asset_bundle = load_asset_bundle(self.game_config['asset_bundle'])
-        self.active_controllers:List[str] = self.game_config['active_controllers']
-        self.map_config = self.game_config['maps'][self.game_config['start_map']]
+        self.asset_bundle = load_asset_bundle(self.config['asset_bundle'])
+        self.active_controllers:List[str] = self.config['active_controllers']
+        self.map_config = self.config['maps'][self.config['start_map']]
         # TODO, load from game config
         self.default_camera_zoom = config['default_camera_zoom']
-        self.tile_size = self.game_config['tile_size']
+        self.tile_size = self.config['tile_size']
 
         # Effect Vector Lookup
-        self.effect_int_map = {config_id:value.get('obs_id',i) for i, (config_id, value) in enumerate(self.game_config['effects'].items())}
+        self.effect_int_map = {config_id:value.get('obs_id',i) for i, (config_id, value) in enumerate(self.config['effects'].items())}
         self.max_effect_id = len(self.effect_int_map)
         self.effect_vec_map = int_map_to_onehot_map(self.effect_int_map)
 
-        self.tag_list = self.game_config['tag_list']
-        self.max_tags = 3 #len(self.tag_list)
+        self.tag_list = self.config['tag_list']
+        self.max_tags = 3 #Static for now to keep observation space same between configuration, #len(self.tag_list)
         self.tag_int_map = { tag:i for i,tag in enumerate(self.tag_list)}
 
         # Object Vector Lookup
-        self.obj_int_map = {config_id:value.get('obs_id',i) for i, (config_id, value) in enumerate(self.game_config['objects'].items())}
+        self.obj_int_map = {config_id:value.get('obs_id',i) for i, (config_id, value) in enumerate(self.config['objects'].items())}
         self.max_obs_id = len(self.obj_int_map)
         self.obj_vec_map = int_map_to_onehot_map(self.obj_int_map)   
         self.vision_radius = 2 # Vision info should be moved to objects, possibly predifined
@@ -102,8 +76,10 @@ class GameContent(SurvivalContent):
 
         self.loaded = False
         self.gamemap = GameMap(
-            path = self.config_path,
-            map_config=self.map_config)
+            path = self.config.get("game_config_root"),
+            map_config=self.map_config,
+            tile_size = self.tile_size,
+            seed = self.config.get("map_seed",123))
         self._speed_factor = None
         self.call_counter = 0
 
@@ -111,10 +87,11 @@ class GameContent(SurvivalContent):
         self.classes = [
             Effect, Human, Monster, Inventory,
             Food,Tool, Animal, Tree, Rock, 
-            Liquid, PhysicalObject, 
+            Liquid, PhysicalObject, TagTool,
             TagController, 
             PlayerSpawnController,
-            FoodCollectController, TagTool]
+            ObjectCollisionController,
+            FoodCollectController]
 
         for cls in self.classes:
             gamectx.register_base_class(cls)
@@ -124,11 +101,17 @@ class GameContent(SurvivalContent):
         self.behavior_classes = [FleeAnimals,FollowAnimals,PlayingTag]
         self.bevavior_class_map:Dict[str,Behavior] = {cls.__name__: cls for cls  in self.behavior_classes}
 
+        # Memory Debugging
+        self.debug_memory = False
+        self.console_report_freq_sec = 4
+        self.console_report_last = 0
+        self.max_size = {}
+
     def create_tags_vec(self,tags):
         return ints_to_multi_hot([self.tag_int_map[tag] for tag in tags], self.max_tags)
 
     def get_game_config(self):
-        return self.game_config
+        return self.config
 
     def load_controllers(self):
         self.controllers = {}
@@ -147,13 +130,13 @@ class GameContent(SurvivalContent):
         return self.controllers.get(cid)
 
     def get_effect_sprites(self,config_id):
-        return self.game_config['effects'].get(config_id,{}).get('model',{})
+        return self.config['effects'].get(config_id,{}).get('model',{})
 
     def get_object_sprites(self,config_id):
-        return self.game_config['objects'].get(config_id,{}).get('model',{})
+        return self.config['objects'].get(config_id,{}).get('model',{})
     
     def get_object_sounds(self,config_id):
-        return self.game_config['objects'].get(config_id,{}).get('sounds',{})
+        return self.config['objects'].get(config_id,{}).get('sounds',{})
 
     def get_available_location(self,max_tries = 200):
         point= None
@@ -170,7 +153,7 @@ class GameContent(SurvivalContent):
         return self.bevavior_class_map[name](*args,**kwargs)
 
     def create_controller(self,cid):
-        info = self.game_config['controllers'].get(cid)
+        info = self.config['controllers'].get(cid)
         if info is None:
             raise Exception(f"{cid} not in game_config['controllers']")
         cls = get_base_cls_by_name(info['class'])
@@ -178,7 +161,7 @@ class GameContent(SurvivalContent):
         return controller
 
     def create_object_from_config_id(self,config_id):
-        info = self.game_config['objects'].get(config_id)
+        info = self.config['objects'].get(config_id)
         if info is None:
             raise Exception(f"{config_id} not defined in game_config['objects']")
         cls = get_base_cls_by_name(info['class'])
@@ -310,7 +293,6 @@ class GameContent(SurvivalContent):
         events= []
         player = gamectx.player_manager.get_player(input_event.player_id)
         if player is None:
-            print("PLAYER IS NON")
             return []
         if not player.get_data_value("allow_input",False):
             return []
@@ -323,7 +305,7 @@ class GameContent(SurvivalContent):
         # TODO: only check for admin client events if player is human
         # Client Events
         if 27 in keydown:
-            print("QUITTING")
+            logging.info("QUITTING")
             gamectx.change_game_state("STOPPED")
             return events
 
@@ -354,6 +336,42 @@ class GameContent(SurvivalContent):
                 continue
             o.update()
         self.update_controllers()
+
+
+        if self.debug_memory:
+            cur_tick = clock.get_exact_time()
+            sz = getsize(gamectx.object_manager)  
+            if sz > self.max_size.get("om",(0,0))[0]:
+                self.max_size['om'] = (sz,cur_tick)
+
+            sz = getsize(gamectx.event_manager)  
+            if sz > self.max_size.get("em",(0,0))[0]:
+                self.max_size['em'] = (sz,cur_tick)
+
+            sz = getsize(gamectx.physics_engine)  
+            if sz > self.max_size.get("ph",(0,0))[0]:
+                self.max_size['ph'] = (sz,cur_tick)
+
+            sz = getsize(self.gamemap)  
+            if sz > self.max_size.get("map",(0,0))[0]:
+                self.max_size['map'] = (sz,cur_tick)
+
+            sz = getsize(self)  
+            if sz > self.max_size.get("cnt",(0,0))[0]:
+                self.max_size['cnt'] = (sz,cur_tick)
+
+
+            sz = len(gamectx.object_manager.objects)
+            if sz > self.max_size.get("ob_count",(0,0))[0]:
+                self.max_size['ob_count'] = (sz,cur_tick)
+
+
+            if (time.time() - self.console_report_last) > self.console_report_freq_sec:
+
+                logging.info("--")
+                for k,v in self.max_size.items():
+                    logging.info(f"{k}:".ljust(10)+ f"at:{v[1]}".rjust(15) +f"v:{v[0]}".rjust(15))
+                self.console_report_last = time.time()
 
     def post_process_frame(self, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:

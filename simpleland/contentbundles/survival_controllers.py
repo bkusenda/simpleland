@@ -4,9 +4,8 @@ import random
 from ..common import Base, Vector2
 from ..clock import clock
 from .survival_common import StateController,SurvivalContent
-from .survival_objects import TagTool,AnimateObject,Monster, PhysicalObject, Food, invoke_triggers
+from .survival_objects import TagTool,AnimateObject,Monster, PhysicalObject, Food
 from .survival_behaviors import PlayingTag
-from .survival_utils import coord_to_vec
 from ..player import Player
 from .. import gamectx
 import logging
@@ -26,7 +25,6 @@ class PlayerSpawnController(StateController):
         player.set_data_value("allow_obs", True)
         player.events = []
 
-
     def reset(self):
         self.spawn_players(reset=True)
 
@@ -39,7 +37,6 @@ class PlayerSpawnController(StateController):
             player_object = gamectx.object_manager.get_by_id(player.get_object_id())
         else:
             # TODO: get playertype from game mode + client config
-
             player_config = self.content.get_game_config()['player_types']['1']
             config_id = player_config['config_id']
             player_object:PhysicalObject = self.content.create_object_from_config_id(config_id)
@@ -62,15 +59,41 @@ class PlayerSpawnController(StateController):
         for player in gamectx.player_manager.players_map.values():
             self.spawn_player(player,reset)
 
-#     def spawn_objects(self):
-#         #TOOD: make configurable
-#         config_id = 'monster1'
-#         objs = gamectx.object_manager.get_objects_by_config_id(config_id)
-#         spawn_points = self.content.gamemap.get_spawn_points(config_id)
-#         if len(objs) < 1 and len(spawn_points)>0:
-#             object_config = self.content.get_game_config()['objects'][config_id]['config']
-#             Monster(config_id = config_id, config=object_config).spawn(spawn_points[0])
-#   
+
+class ObjectCollisionController(StateController):
+
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.content:SurvivalContent = gamectx.content
+        self.actor_obj_ids = set()
+        self.obj_config_ids = set(["rock1"])
+        self.reward_delta = -1
+
+    def get_objects(self):
+        objs = []
+        for obj_id in self.actor_obj_ids:
+            obj = gamectx.object_manager.get_by_id(obj_id)
+            if obj is not None:
+                objs.append(obj)
+        return objs
+
+    def collision_with_trigger(self,obj,obj2):
+        if obj2.config_id not in self.obj_config_ids:
+            return True
+        obj.reward+=self.reward_delta
+        return True
+
+
+    def reset(self):
+        self.actor_obj_ids = set()
+        objs:List[AnimateObject] = []
+        for obj in gamectx.object_manager.get_objects_by_config_id("human1"):
+            obj.add_trigger("collision_with","obj_collid",self.collision_with_trigger)
+            objs.append(obj)
+            self.actor_obj_ids.add(obj.get_id())
+
+    def update(self):
+        pass
 
 class FoodCollectController(StateController):
 
@@ -100,10 +123,17 @@ class FoodCollectController(StateController):
     def collision_with_trigger(self,obj,obj2):
         if obj2.get_id() not in self.food_ids:
             return True
-        print("Found FOOD!")
         obj.reward+=1
         gamectx.remove_object(obj2)
+        obj.consume_food(obj2)
         self.food_ids.discard(obj2.get_id())
+        gamectx.remove_object(obj2)
+        return True
+
+    def die_trigger(self,obj):
+        obj.reward-=20
+        print("DIE TRIGGER")
+        
         return True
 
     def spawn_food(self):
@@ -118,9 +148,11 @@ class FoodCollectController(StateController):
 
         # Assign players to tag game
         self.actor_obj_ids = set()
+        self.food_ids = set()
         objs:List[AnimateObject] = []
         for obj in gamectx.object_manager.get_objects_by_config_id("human1"):
             obj.add_trigger("collision_with","collect",self.collision_with_trigger)
+            obj.add_trigger("die","collect",self.die_trigger)
             objs.append(obj)
             self.actor_obj_ids.add(obj.get_id())
 
@@ -162,7 +194,6 @@ class TagController(StateController):
         self.tags_used = set(self.is_tagged_tag)
         # self.rounds = 0
 
-        print("Tag Controller Created")
 
     def get_objects(self):
         objs = []
