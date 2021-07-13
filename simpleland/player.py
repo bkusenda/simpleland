@@ -17,7 +17,7 @@ class Player(Base):
         player.client_id = data['client_id']
         player.player_type = data['player_type']
         player.data = data.get('data',{})
-
+        
         if data['camera'] :
             player.camera = Camera(**data['camera']['data'])
         return player

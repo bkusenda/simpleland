@@ -18,7 +18,6 @@ class RendererConfig(Base):
         self.save_observation=False
         self.render_shapes = False
         self.show_console = True
-        self.disable_textures = False
         self.sdl_audio_driver = None # 'dsp'
         self.sdl_video_driver = None #'dummy'
         self.sound_enabled = True
@@ -27,6 +26,7 @@ class RendererConfig(Base):
         self.tile_size = 16
         self.view_type = 0
         self.debug_render_bodies = False
+        self.enable_resize = False
 
 def __repr__(self) -> str:
     return pprint.pformat(self.__dict__)
@@ -41,7 +41,8 @@ class ClientConfig(Base):
         self.client_id = None
         self.server_hostname = None
         self.server_port = None
-        
+        # TODO: additional customization for observations
+        self.include_state_observation = False
 
     def __repr__(self) -> str:
         return pprint.pformat(self.__dict__)

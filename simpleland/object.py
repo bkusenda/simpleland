@@ -23,12 +23,14 @@ class RenderAble:
         self.shape = None
 
 class GObject(Base):
+    #TODO: Add component suport
 
 
     def __init__(self,
                  id= None,
                  data = None,
                  visheight = 2):
+        super().__init__()
         if id is None:
             self.id = gen_id()
         else:
@@ -39,9 +41,6 @@ class GObject(Base):
         self.config_id = None
         self.created_tick = clock.get_tick_counter()
         self.player_id = None
-
-        self.components:Component = []
-        #TODO Component Lookups
 
         self.sleeping = False # if true, not used for updating
 

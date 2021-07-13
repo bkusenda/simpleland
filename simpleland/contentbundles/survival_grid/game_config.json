@@ -5,7 +5,7 @@
     "start_map": "main",
     "player_types": {
         "1": {
-            "default_camera_zoom": 160,
+            "default_camera_distance": 160,
             "config_id": "human1"
         }
     },

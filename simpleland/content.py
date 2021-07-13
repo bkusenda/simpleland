@@ -73,8 +73,3 @@ class Content:
 
     # def get_class_by_type_name(self,name):
     #     return GObject
-
-
-
-
-    

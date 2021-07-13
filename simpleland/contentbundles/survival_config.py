@@ -49,9 +49,9 @@ def game_def(content_overrides={}):
 
     content_config = merged_dict(content_config, read_game_config(config_root,config_filename))
     content_config = merged_dict(content_config, content_overrides)
-    camera_zoom = content_config.get('default_camera_zoom')
-    if camera_zoom is None:
-        content_config['default_camera_zoom'] = content_config['tile_size'] * 10
+    camera_distance = content_config.get('default_camera_distance')
+    if camera_distance is None:
+        content_config['default_camera_distance'] = content_config['tile_size']
 
 
     game_def = GameDef(

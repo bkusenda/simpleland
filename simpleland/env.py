@@ -27,7 +27,7 @@ from simpleland.clock import clock
 class SimplelandEnv:
 
     def __init__(self, 
-            resolution=(1280,720), 
+            resolution=(42,42), 
             game_id="survival_grid", 
             hostname = 'localhost', 
             port = 10001, 
@@ -38,18 +38,17 @@ class SimplelandEnv:
             view_type=0,
             render_shapes=False,
             player_type = 1,
-            content_config = {}):
+            include_state_observation = False,
+            content_overrides = {}):
         
         game_def = get_game_def(
             game_id=game_id,
             enable_server=enable_server, 
             port=port,
             remote_client=False,
-            tick_rate = tick_rate)
+            tick_rate = tick_rate,
+            content_overrides = content_overrides)
 
-        game_def.content_config = merged_dict(
-            game_def.content_config,
-            content_config)
         self.content = load_game_content(game_def)
 
         gamectx.initialize(
@@ -79,7 +78,8 @@ class SimplelandEnv:
                 render_shapes=render_shapes,
                 player_type=player_type,
                 is_human=False,
-                view_type=view_type)
+                view_type=view_type,
+                include_state_observation = include_state_observation)
 
             # Render config changes
             player_def.renderer_config.sdl_audio_driver = 'dsp'
@@ -104,7 +104,11 @@ class SimplelandEnv:
   
         # TODO: make different for each client
         self.action_spaces = {agent_id:self.content.get_action_space() for agent_id in self.agent_clients.keys()}
-        self.observation_spaces = {agent_id:self.content.get_observation_space() for agent_id in self.agent_clients.keys()}
+        if include_state_observation:
+            self.observation_spaces = {agent_id:self.content.get_observation_space() for agent_id in self.agent_clients.keys()}
+        else: 
+            self.observation_spaces = {agent_id:spaces.Box(low=0, high=255, shape=(resolution[0],resolution[1], 3)) for agent_id in self.agent_clients.keys()}
+        
         
         self.step_counter = 0
         
@@ -155,9 +159,12 @@ class SimplelandEnv:
         infos ={}
   
         for agent_id,client in self.agent_clients.items():
-            ob, reward, done, info = self.content.get_step_info(player= client.player)
-            if ob is None:
+            ob, reward, done, info, skip = self.content.get_step_info(player= client.player,include_state_observation=client.config.include_state_observation)
+            if skip:
                 continue
+            if not client.config.include_state_observation:
+                client.render()
+                ob = client.get_rgb_array()
             obs[agent_id] = ob
             dones[agent_id] = done
             rewards[agent_id] = reward
@@ -184,13 +191,13 @@ class SimplelandEnv:
             for agent_id,client in self.agent_clients.items():
                 if self.dry_run:
                     return self.observation_spaces[agent_id].sample()
-                client.render(force=True)
+                client.render()
                 return client.get_rgb_array()
         else:
             client = self.agent_clients[player_id]
             if self.dry_run:
                 return self.observation_spaces[player_id].sample()
-            client.render(force=True)
+            client.render()
             return client.get_rgb_array()
 
     def reset(self) -> Dict[str,Any]:
@@ -217,7 +224,7 @@ class SimplelandEnvSingle(gym.Env):
             agent_map={self.agent_id:{}},
             enable_server=False,
             tick_rate=tick_rate,
-            content_config=content_config,
+            content_overrides=content_config,
             view_type=view_type,
             player_type=player_type,
             render_shapes=render_shapes)

@@ -65,13 +65,15 @@ def get_player_def(
         resolution=None,
         fps=None,
         render_shapes=None,
-        disable_textures=None,
         is_human=True,
         draw_grid = False,
         tile_size=16,
         debug_render_bodies=False,
         view_type=0,
-        sound_enabled = True) -> PlayerDefinition:
+        sound_enabled = True,
+        show_console = True,
+        enable_resize=False,
+        include_state_observation = False) -> PlayerDefinition:
     player_def = PlayerDefinition()
 
     player_def.client_config.player_type = player_type
@@ -83,15 +85,17 @@ def get_player_def(
     player_def.client_config.frames_per_second = fps
     player_def.client_config.is_remote = remote_client
     player_def.client_config.is_human = is_human
+    player_def.client_config.include_state_observation = include_state_observation
 
     player_def.renderer_config.resolution = resolution
     player_def.renderer_config.render_shapes = render_shapes
-    player_def.renderer_config.disable_textures = disable_textures
     player_def.renderer_config.draw_grid = draw_grid
     player_def.renderer_config.tile_size = tile_size
     player_def.renderer_config.debug_render_bodies = debug_render_bodies
     player_def.renderer_config.view_type = view_type
     player_def.renderer_config.sound_enabled =sound_enabled
+    player_def.renderer_config.show_console =show_console
+    player_def.renderer_config.enable_resize = enable_resize
     return player_def
 
 def get_arguments(override_args=None):
@@ -108,7 +112,6 @@ def get_arguments(override_args=None):
     parser.add_argument("--hostname", default="localhost", help="hostname or ip, default is localhost")
     parser.add_argument("--client_id", default=gen_id(), help="user id, default is random")
     parser.add_argument("--render_shapes", action='store_true', help="render actual shapes")
-    parser.add_argument("--disable_textures", action='store_true', help="don't show images")
     parser.add_argument("--fps", default=60, type=int, help="fps")
     parser.add_argument("--player_type", default=0, type=int, help="Player type (0=default, 10=observer_only)")
     parser.add_argument("--view_type", default=0, type=int, help="NOT USED at moment: View type (0=perspective, 1=world)")
@@ -116,6 +119,8 @@ def get_arguments(override_args=None):
     parser.add_argument("--debug_render_bodies", action="store_true", help=" render")
     parser.add_argument("--disable_sound", action="store_true", help="disable_sound")
     parser.add_argument("--draw_grid", action="store_true", help="draw_grid")
+    parser.add_argument("--show_console", action="store_true", help="Show on screen info")
+    parser.add_argument("--enable_resize", action="store_true", help="Enable Screen Resize")
 
     # used for both client and server
     parser.add_argument("--port", default=10001, help="the port the server is running on")
@@ -176,7 +181,6 @@ def run(args):
         remote_client=args.remote_client,
         hostname=args.hostname,
         port=args.port,
-        disable_textures=args.disable_textures,
         render_shapes=args.render_shapes,
         resolution=resolution,
         fps=args.fps,
@@ -185,7 +189,9 @@ def run(args):
         tile_size=args.tile_size,
         debug_render_bodies = args.debug_render_bodies,
         view_type = args.view_type,
-        sound_enabled= not args.disable_sound
+        sound_enabled= not args.disable_sound,
+        show_console= args.show_console,
+        enable_resize = args.enable_resize
     )
 
     content: Content = load_game_content(game_def)

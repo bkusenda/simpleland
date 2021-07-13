@@ -316,7 +316,7 @@ class GameContext:
             self.render_client_step()
             for player in list(self.player_manager.players_map.values()):
                 # print(f"Player: {player.get_id()} {player.get_object_id()}")
-                observation, reward, done, info = self.content.get_step_info(player)
+                observation, reward, done, info, _ = self.content.get_step_info(player)
             if self.config.wait_for_user_input:
                 # print(f"Player: {player.get_id()} {player.get_object_id()}")
                 # print(observation)

@@ -350,7 +350,7 @@ class GameClient:
         self.tick_counter.tick()
         self.step_counter += 1
     
-    def render(self,force=False):
+    def render(self):
         self.renderer.set_log_info("TPS: {} ".format(self.tick_counter.avg()))
         self.renderer.process_frame(player=self.player)
         self.content.post_process_frame( player=self.player, renderer=self.renderer)

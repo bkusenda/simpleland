@@ -106,6 +106,10 @@ def get_shape_from_dict(dict_data):
 
 class Base:
 
+    def __init__(self):
+        self.net_blacklist = set()
+        self.net_whitelist = set()
+
     @staticmethod
     def create_from_snapshot(snapshot):
         cls = get_base_cls_by_name(snapshot['_type'])

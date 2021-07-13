@@ -53,7 +53,7 @@ class GameContent(SurvivalContent):
         self.active_controllers:List[str] = self.config['active_controllers']
         self.map_config = self.config['maps'][self.config['start_map']]
         # TODO, load from game config
-        self.default_camera_zoom = config['default_camera_zoom']
+        self.default_camera_distance = config['default_camera_distance']
         self.tile_size = self.config['tile_size']
 
         # Effect Vector Lookup
@@ -233,20 +233,23 @@ class GameContent(SurvivalContent):
     def get_observation(self, obj: GObject):
         return obj.get_observation()
 
-    def get_step_info(self, player: Player) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
+    def get_step_info(self, player: Player, include_state_observation=True) -> Tuple[np.ndarray, float, bool, Dict[str, Any], bool]:
         observation = None
         done = False
         reward = 0
         info = {}
         if player is not None:
             if not player.get_data_value("allow_obs", False):
-                return None, None, None, None
+                return None, None, None, None, True
 
             obj_id = player.get_object_id()
             obj: AnimateObject = gamectx.object_manager.get_by_id(obj_id)
             if obj is None:
-                return None, reward, done, info
-            observation = self.get_observation(obj)
+                return None, reward, done, info, True
+            if include_state_observation:
+                observation = self.get_observation(obj)
+            else:
+                observation =  None
             done = player.get_data_value("reset_required", False)
             if done:
                 player.set_data_value("allow_obs", False)
@@ -254,7 +257,7 @@ class GameContent(SurvivalContent):
             obj.reward = 0
         else:
             info['msg'] = "no player found"
-        return observation, reward, done, info
+        return observation, reward, done, info, False
 
     # **********************************
     # NEW PLAYER
@@ -264,7 +267,7 @@ class GameContent(SurvivalContent):
             player_id = gen_id()
         player = gamectx.player_manager.get_player(player_id)
         if player is None:
-            cam_distance = self.default_camera_zoom
+            cam_distance = self.default_camera_distance
             player = Player(
                 client_id=client_id,
                 uid=player_id,
@@ -272,6 +275,9 @@ class GameContent(SurvivalContent):
                 player_type=player_type,
                 is_human = is_human)
             gamectx.add_player(player)
+            self.get_controller_by_id("pspawn").spawn_player(player,reset=True)
+
+
         return player
 
 
@@ -381,13 +387,32 @@ class GameContent(SurvivalContent):
             obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
             obj_health = 0
             if obj is not None:
-                obj_energy = obj.energy
                 obj_health = obj.health
-                obj_stamina = obj.stamina
 
-                lines.append(f"H:{obj_health}, E:{obj_energy}, S:{obj_stamina}")
                 lines.append(f"Inventory: {obj.get_inventory().as_string()}")
                 lines.append(f"Craft Menu: {obj.get_craftmenu().as_string()}")
+
+                # TODO: make HUD optional/ configurable
+                bar_height = round(renderer.resolution[1] /40)
+                bar_width_max = round(renderer.resolution[0] /6)
+                bar_padding = round(renderer.resolution[1] /200)
+
+                tl = renderer.resolution[1] - bar_height - bar_padding
+                bar_width = round(obj.stamina/obj.stamina_max * bar_width_max)
+                # Stamina
+                renderer.draw_rectangle(bar_padding,tl, bar_width,bar_height, color=(0,0,200))
+
+                # Energy
+                tl = tl - bar_height - bar_padding
+                bar_width = round(obj.energy/obj.energy_max * bar_width_max)
+                renderer.draw_rectangle(bar_padding,tl, bar_width,bar_height, color=(200,200,0))
+
+                # Health
+                tl = tl - bar_height - bar_padding
+                bar_width = round(obj.health/obj.health_max * bar_width_max)
+                renderer.draw_rectangle(bar_padding,tl, bar_width,bar_height, color=(200,0,0))
+
+                renderer.draw_rectangle(bar_width_max + bar_padding,tl, bar_padding/2,renderer.resolution[1] - tl - bar_padding, color=(200,200,200))
 
             if renderer.config.show_console:
                 renderer.render_to_console(lines, x=5, y=5)

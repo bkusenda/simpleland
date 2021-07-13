@@ -83,16 +83,18 @@ class PhysicalObject(GObject):
 
     def __init__(self, config_id="", config={}, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.nattrs = {}
         self.config: Dict[str, Any] = config
         self.config_id = config_id
         self._l_content: SurvivalContent = gamectx.content
 
-        self.triggers: Dict[str, Dict[str, Callable]] = {}
+        self._l_triggers: Dict[str, Dict[str, Callable]] = {}
         self.input_events: List[InputEvent] = []
 
         self.type = "physical_object"
         self._types = None
         self.image_id_default = None
+        self.health_max = self.config.get('health_max', 100)
         self.health = self.config.get('health_start', 100)
         self.permanent = self.config.get('permanent', False)
         self.remove_on_destroy = self.config.get('remove_on_destroy', True)
@@ -135,7 +137,7 @@ class PhysicalObject(GObject):
 
     def _invoke_triggers(self, fn_name, *args, **kwargs):
         cancel = False
-        triggers = self.triggers.get(fn_name)
+        triggers = self._l_triggers.get(fn_name)
         if triggers is not None:
             trigger: Trigger = None
             for trigger in triggers.values():
@@ -147,12 +149,12 @@ class PhysicalObject(GObject):
         # to check if fn exists
         getattr(self, fn_name)
         trigger = Trigger(id, func)
-        fn_triggers = self.triggers.get(fn_name, {})
+        fn_triggers = self._l_triggers.get(fn_name, {})
         fn_triggers[id] = trigger
-        self.triggers[fn_name] = fn_triggers
+        self._l_triggers[fn_name] = fn_triggers
 
     def remove_trigger(self, fn_name, id):
-        del self.triggers.get(fn_name)[id]
+        del self._l_triggers.get(fn_name)[id]
 
     def add_effect(self, effect: Effect):
         self._effects[effect.config_id] = effect
@@ -542,6 +544,8 @@ class AnimateObject(PhysicalObject):
         self.walk_speed = 1/3
 
         self.attack_strength = 1
+        self.energy_max = self.config.get('energy_max', 100)
+        self.stamina_max = self.config.get('stamina_max', 100)
         self.energy = 0
         self.stamina = 0
 
@@ -621,9 +625,9 @@ class AnimateObject(PhysicalObject):
     @invoke_triggers
     def spawn(self, position: Vector2):
         super().spawn(position)
-        self.energy = self.config.get('health_start', 100)
-        self.energy = self.config.get('energy_start', 100)
-        self.stamina = self.config.get('stamina_max', 100)
+        
+        self.energy  = self.config.get('energy_start', 100)
+        self.stamina = self.config.get('stamina_start', 100)
         self.attack_speed = self.config.get('attack_speed', 0.3)
         self.walk_speed = self.config.get('walk_speed', 0.3)
         self.next_energy_decay = 0
@@ -674,8 +678,6 @@ class AnimateObject(PhysicalObject):
         # Additional Info to add
         # Health
         # something underneath player
-        if not self.is_enabled():
-            return None
         obj_coord = gamectx.physics_engine.vec_to_coord(self.get_position())
         col_min = obj_coord[0] - self._l_content.vision_radius
         col_max = obj_coord[0] + self._l_content.vision_radius
@@ -733,7 +735,7 @@ class AnimateObject(PhysicalObject):
     @invoke_triggers
     def consume_food(self, food_obj: PhysicalObject):
         self.energy += food_obj.energy
-        self.energy = min(self.energy,self.config.get("energy_max"))
+        self.energy = min(self.energy,self.energy_max)
         self.play_sound("eat")
         ticks_in_action = self._l_content.speed_factor()/0.3
 
@@ -747,7 +749,7 @@ class AnimateObject(PhysicalObject):
         if self.stamina <= 0:
             walk_speed = walk_speed/2
         else:
-            self.stamina -= 0
+            self.stamina -= 5
 
         direction = direction * self.velocity_multiplier
         self.angle = angle_update
@@ -944,12 +946,12 @@ class AnimateObject(PhysicalObject):
 
         # Health regen
         if cur_time > self.next_health_gen:
-            self.health = min(self.config.get('health_max', 100), self.health + self.config.get('health_gen', 0))
+            self.health = min(self.health_max, self.health + self.config.get('health_gen', 0))
             self.next_health_gen = cur_time + (self.config.get('health_gen_period', 0) * self._l_content.speed_factor())
 
         # Stamina regen
         if cur_time > self.next_stamina_gen and self.stamina < self.config.get('stamina_max', 50):
-            self.stamina = min(self.config.get('stamina_max', 10), self.stamina + self.config.get('stamina_gen', 5))
+            self.stamina = min(self.stamina_max, self.stamina + self.config.get('stamina_gen', 5))
             gen_delay = (self.config.get('stamina_gen_period', 0) * self._l_content.speed_factor())
             self.next_stamina_gen = cur_time + gen_delay
 
