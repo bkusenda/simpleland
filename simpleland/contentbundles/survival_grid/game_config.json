@@ -3,19 +3,21 @@
     "tile_size": 16,
     "asset_bundle": "asset_bundle.json",
     "start_map": "main",
+    "speed_factor_multiplier" : 0.8,
     "player_types": {
         "1": {
             "default_camera_distance": 160,
             "config_id": "human1"
         }
     },
-    "active_controllers":["pspawn","foodcollect","objcollision"],
+    "active_controllers":["pspawn","foodcollect","objcollision","infect1"],
     "controllers":{
         "pspawn":{
             "class":"PlayerSpawnController",
             "config":{
 
             }
+
         },
         "foodcollect":{
             "class":"FoodCollectController",
@@ -34,9 +36,15 @@
             "config":{
 
             }
+        },
+        "infect1":{
+            "class":"InfectionController",
+            "config":{
+
+            }
         }
     },
-    "tag_list":["tagged"],
+    "tag_list":["tagged","playingtag","food_collect","playinginfection","infected"],
     "maps": {
         "main": {
             "format": "txt",
@@ -108,11 +116,16 @@
             "class": "Human",
             "obs_id":0,
             "config": {
-                "disabled_actions":["attack", "unarmed_attack", "select_item", "grab", "drop"]
+                "disabled_actions":[],
+                "show_info_bar":true,
+                "start_inventory":{"wall1":4}
             }
         },
         "monster1": {
-            "class": "Monster"
+            "class": "Monster",
+            "config": {
+                "show_info_bar":true
+            }
         },
         "apple1": {
             "class": "Food"
@@ -142,7 +155,8 @@
             "class": "PhysicalObject"
         },
         "wall1": {
-            "class": "PhysicalObject"
+            "class": "PhysicalObject",
+            "config":{"craft_requirements": {"wood1":1}}
         }
     }
 }

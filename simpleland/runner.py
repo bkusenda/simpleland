@@ -139,8 +139,6 @@ def run(args):
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     
     logging.getLogger().setLevel(LOG_LEVELS.get(args.log_level))
-
-    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     print(args.__dict__)
 
     if not args.enable_server and not args.enable_client and not args.remote_client:

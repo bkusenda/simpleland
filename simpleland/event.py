@@ -203,11 +203,11 @@ class PositionChangeEvent(Event):
     def __repr__(self):
         return f"pos change event for obj{self.obj_id} {self.old_pos} to {self.new_pos}"
 
+class AdminCommandEvent(Event):
 
-class AdminEvent(Event):
-
-    def __init__(self, value, id=None, **kwargs):
+    def __init__(self, value, player_id:str=None,id=None, **kwargs):
         super().__init__(id,**kwargs)
+        self.player_id = player_id
         self.value = value
 
 class ViewEvent(Event):

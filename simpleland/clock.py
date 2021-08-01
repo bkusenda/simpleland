@@ -29,7 +29,7 @@ class StepClock:
     def tick(self):
         if self.tick_rate: 
             self.pygame_clock.tick(self.tick_rate)
-            self.tick_time  = int(self.get_game_time() * self.tick_rate)
+            self.tick_time  = round(self.get_game_time() * self.tick_rate)
         else:
             self.tick_time +=1
         return self.tick_time

@@ -1,4 +1,5 @@
 from abc import abstractclassmethod, abstractmethod
+from simpleland.player import Player
 from typing import Dict, List, Any
 from ..common import Base
 from ..clock import clock
@@ -40,18 +41,44 @@ class SurvivalContent(Content):
         pass
 
 class Effect(Base):
+    # TODO: Merge with action somehow, 
 
-    def __init__(self, config_id="", ticks=1, step_size=1, angle_step_size=0):
+    def __init__(self, 
+            config_id="", 
+            ticks=1, 
+            step_size=1, 
+            angle_step_size=0,
+            continuous=True,
+            type="sprite",
+            data = {}):
         self.config_id = config_id
         self.ticks = ticks
         self.step_size = step_size
         self.start_tick = clock.get_tick_counter()
         self.angle_step_size = angle_step_size
+        self.type = type
+        self.expired = False
+        self.continuous = continuous
+        self.data = data
 
+
+    def is_expired(self):
+        if self.expired:
+             return True
+        else:
+            self.expired = self.continuous is False and ((clock.get_tick_counter() - self.start_tick) > self.ticks )
+            return self.expired
 
 class Action(Base):
 
-    def __init__(self, type="UNKNOWN", ticks=1, step_size=1,start_tick=None,blocking=True,continuous=False,start_position = None):
+    def __init__(self, 
+            type="UNKNOWN", 
+            ticks=1, 
+            step_size=1,
+            start_tick=None,
+            blocking=True,
+            continuous=False,
+            start_position = None):
         self.type = type
         self.ticks = ticks
         self.step_size = step_size
@@ -84,6 +111,9 @@ class StateController(Base):
         super().__init__(*args, **kwargs)
         self.cid = cid
         self.config = config
+
+    def join(self,player:Player):
+        pass
 
     def reset(self):
         pass

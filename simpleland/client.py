@@ -133,7 +133,7 @@ class ClientConnector:
         self.last_latency_ms = None
         self.last_latency_ticks = None
         self.request_counter = 0
-        self.ticks_per_second = 20
+        self.ticks_per_second = 60
 
         self.connection_clock = StepClock(self.ticks_per_second)
         self.tick_counter = TickPerSecCounter(2)
@@ -142,7 +142,7 @@ class ClientConnector:
         self.last_sync = 0
 
         self.report_freq = 2
-        self.last_report = 0
+        self.last_report = time.time()
 
     def add_network_info(self, latency: int, success: bool):
         self.latency_log[self.request_counter % LATENCY_LOG_SIZE] = {'latency': latency, 'success': success}
@@ -219,8 +219,13 @@ class ClientConnector:
         self.tick_counter.tick()
 
         if (time.time() - self.last_report) > self.report_freq:
-            kbytes_out_summary = self.total_bytes_out/self.total_tx * self.ticks_per_second/1024
-            kbytes_in_summary = self.total_bytes_in/self.total_tx * self.ticks_per_second/1024
+            # kbytes_out_summary = self.total_bytes_out/self.total_tx * self.ticks_per_second/1024
+            # kbytes_in_summary = self.total_bytes_in/self.total_tx * self.ticks_per_second/1024
+            t_delta=time.time() - self.last_report
+            kbytes_out_summary = self.total_bytes_out/t_delta/1024
+            self.total_bytes_out = 0
+            kbytes_in_summary = self.total_bytes_in/t_delta/1024
+            self.total_bytes_in = 0
             print(f"NET Tick rate {self.tick_counter.avg()},  out:{kbytes_out_summary}kB, in:{kbytes_in_summary}kB")
             
             self.last_report = time.time()
@@ -299,12 +304,10 @@ class GameClient:
                     incomming_data['info']['snapshot_timestamp'],
                     incomming_data['info'])
 
-
-
     def load_snapshot(self):
 
-        
-        snap1,snap1_timestamp,snap2,snap2_timestamp = self.snapshot_history.get_pair_by_timestamp(clock.get_tick_counter())
+        snap1,snap1_timestamp,snap2,snap2_timestamp = self.snapshot_history.get_pair_by_timestamp(
+            clock.get_tick_counter())
         
         snap = snap1
         if snap is None:

@@ -17,13 +17,15 @@ from .object_manager import GObjectManager
 from .player_manager import PlayerManager
 from .physics_engine import GridPhysicsEngine
 
-from .event import (ContentEvent, Event, ObjectEvent,
+from .event import (AdminCommandEvent, ContentEvent, Event, ObjectEvent,
             PeriodicEvent, PositionChangeEvent, ViewEvent, SoundEvent, DelayedEvent, InputEvent)
 from .event import RemoveObjectEvent
 import pygame
 import sys
 from .content import Content
 from .common import register_base_cls, Base
+from .inputs import get_input_events
+import time
 
 class GameContext:
 
@@ -219,6 +221,9 @@ class GameContext:
             if type(e) == InputEvent:
                 new_events = self.content.process_input_event(e)
                 events_to_remove.append(e)
+            elif type(e) == AdminCommandEvent:
+                new_events = self.content.process_admin_command_event(e)
+                events_to_remove.append(e)
             elif type(e) ==ContentEvent :
                 new_events = self.content.process_event(e)
                 events_to_remove.append(e)
@@ -268,12 +273,37 @@ class GameContext:
             client.render()
 
 
-    # Game Loop Methods
-    def wait_for_input(self):
+
+    def wait_for_input_and_confirm(self):
 
         wait=True
+        
+        pygame.event.clear()
+        last_keydown_event = None
         while wait:
-            pygame.event.clear()
+            event = pygame.event.wait()
+            wait = True
+            if event.type == pygame.KEYDOWN:
+                if (event.key == pygame.K_ESCAPE) or (event.type == pygame.QUIT):
+                    pygame.quit()
+                    sys.exit()
+                elif (event.key == pygame.K_p):
+                    wait = False
+                    if last_keydown_event is not None:
+                        print("Adding event")
+                        pygame.event.post(last_keydown_event)
+                else:
+                    last_keydown_event = event
+                    print(f"Keydown event: {last_keydown_event}")
+                    
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                wait = False
+
+    def wait_for_input(self):
+        time.sleep(0.2)
+        wait=True
+        pygame.event.clear()
+        while wait:
             event = pygame.event.wait()
             wait = True
             if event.type == pygame.KEYDOWN:
@@ -282,6 +312,7 @@ class GameContext:
                     sys.exit()
                 else:
                     wait = False
+                    
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 wait = False
 
@@ -297,9 +328,6 @@ class GameContext:
         if not self.config.client_only_mode:
             self.run_physics_processing()
             self.run_update()
-            
-
-
         self.tick()
         self.step_counter +=1
   
@@ -318,13 +346,7 @@ class GameContext:
                 # print(f"Player: {player.get_id()} {player.get_object_id()}")
                 observation, reward, done, info, _ = self.content.get_step_info(player)
             if self.config.wait_for_user_input:
-                # print(f"Player: {player.get_id()} {player.get_object_id()}")
-                # print(observation)
-                print(reward)
-                print(done)
-                print(info)
-                print("----------")
-
+                print(f"Waiting for input: t={clock.get_exact_time()}")
 
                 self.wait_for_input()
 

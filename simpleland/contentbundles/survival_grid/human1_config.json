@@ -8,7 +8,7 @@
     "stamina_gen_period": 0.3,
     "energy_start": 100,
     "energy_max": 100,
-    "energy_decay_period": 0.3,
+    "energy_decay_period": 1,
     "energy_decay": 1,
     "low_energy_health_penalty": 1,
     "strength": 1,
@@ -18,11 +18,6 @@
     "vision_radius": 4,
     "start_inventory": {},
     "craft_items": [
-        "wall1"
-    ],
-    "craft_requirements": {
-        "wall1": {
-            "wood1": 1
-        }
-    }
+        "wall1", "human1"
+    ]
 }

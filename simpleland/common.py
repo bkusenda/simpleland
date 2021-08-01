@@ -4,8 +4,14 @@ import json
 OBJ_TYPES = ['default','sensor']
 COLLISION_TYPE = {v:i for i, v in enumerate(OBJ_TYPES)}
 from pygame import Vector2
-
+import queue
 base_class_registry = {}
+
+# def queue_to_list(q):
+#     l = []
+#     while q.qsize() >0:
+#         l.append(q.get())
+#     return l
 
 def register_base_cls(cls):
     base_class_registry[cls.__name__]=cls
@@ -48,6 +54,12 @@ def create_dict_snapshot(obj, exclude_keys = {}):
             data[k] = v
         elif isinstance(v, tuple):
             data[k] = {'_type':"tuple", 'value':v}
+        elif isinstance(v, set):
+            data[k] = {'_type':"set", 'value':list(v)}
+        elif isinstance(v, queue.Queue):
+            pass
+
+            # data[k] = {'_type':"queue", 'value':list(v.queue)}
         elif isinstance(v,dict):
             data[k] = {}
             for kk,vv in v.items():
@@ -72,8 +84,36 @@ def parse_inner_val(v):
     result = None
     if v is None or isinstance(v, (int, float, str, Vector2, tuple)):
         result = v
+    elif isinstance(v, dict):
+        if v.get("_type") == "tuple":
+            result = tuple(v.get("value",None))
+        elif v.get("_type") == "set":
+            result = set(v.get("value",[]))
+        elif v.get("_type") == "queue":
+            result = queue.Queue(v.get("value",[]))
+        elif "_type" not in v:
+            result = {}
+            for kk,vv in v.items():
+                result[kk] = parse_inner_val(vv)
+        elif "_type" in v:
+            cls = get_base_cls_by_name(v['_type'])
+            o = cls()
+            o.load_snapshot(v)
+            result = o
+
+    elif isinstance(v, list):
+        result = v
+    else:
+        raise TypeError("")
+    return result
+
+def parse_inner_val_old(v):
+    result = None
+    if v is None or isinstance(v, (int, float, str, Vector2, tuple)):
+        result = v
     elif (isinstance(v, dict) and v.get("_type") == "tuple"):
         result = tuple(v.get("value",None))
+        
     elif v is None or (isinstance(v, dict) and ("_type" not in v)):
         result = {}
         for kk,vv in v.items():
@@ -86,6 +126,7 @@ def parse_inner_val(v):
     elif v is None or (isinstance(v, list)):
         result = v
     else:
+        print("Type error")
         raise TypeError("")
     return result
 

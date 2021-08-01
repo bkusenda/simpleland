@@ -64,7 +64,7 @@ class Player(Base):
         return data
 
     def load_snapshot(self, data):
-        load_dict_snapshot(self, data, exclude_keys={"events","camera"})
+        load_dict_snapshot(self, data, exclude_keys={"events"})
 
     def get_camera(self) -> Camera:
         return self.camera

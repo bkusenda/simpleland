@@ -7,8 +7,8 @@ from collections import defaultdict
 from typing import Dict, Any, Tuple
 
 from ..camera import Camera
-from ..event import (DelayedEvent, Event, InputEvent, ObjectEvent,
-                     PeriodicEvent, PositionChangeEvent, SoundEvent, ViewEvent)
+from ..event import (AdminCommandEvent, DelayedEvent, Event, InputEvent, ObjectEvent,ViewEvent,
+                     PeriodicEvent, PositionChangeEvent, SoundEvent)
 from ..object import GObject
 
 from ..player import Player
@@ -20,7 +20,7 @@ from ..common import COLLISION_TYPE
 import numpy as np
 from ..clock import clock
 from typing import List,Dict,Any
-from ..event import InputEvent, Event, ViewEvent, DelayedEvent
+from ..event import InputEvent, Event, DelayedEvent
 from .. import gamectx
 from ..common import  Vector2, get_base_cls_by_name
 import pygame
@@ -34,7 +34,7 @@ import json
 import os
 from .survival_assets import load_asset_bundle
 from .survival_map import GameMap
-from .survival_controllers import FoodCollectController,ObjectCollisionController, PlayerSpawnController, TagController
+from .survival_controllers import FoodCollectController,ObjectCollisionController, PlayerSpawnController, TagController,InfectionController
 from .survival_objects import *
 from .survival_utils import int_map_to_onehot_map,ints_to_multi_hot
 import time
@@ -62,7 +62,7 @@ class GameContent(SurvivalContent):
         self.effect_vec_map = int_map_to_onehot_map(self.effect_int_map)
 
         self.tag_list = self.config['tag_list']
-        self.max_tags = 3 #Static for now to keep observation space same between configuration, #len(self.tag_list)
+        self.max_tags = 10 #Static for now to keep observation space same between configuration, #len(self.tag_list)
         self.tag_int_map = { tag:i for i,tag in enumerate(self.tag_list)}
 
         # Object Vector Lookup
@@ -80,18 +80,23 @@ class GameContent(SurvivalContent):
             map_config=self.map_config,
             tile_size = self.tile_size,
             seed = self.config.get("map_seed",123))
-        self._speed_factor = None
+        
+        
+        # self._default_speed_factor_multiplier = self.config['default_speed_factor_multiplier']
+        self._speed_factor_multiplier = self.config['speed_factor_multiplier']
+        
+        self._ticks_per_step = None
         self.call_counter = 0
 
         # All loadable classes should be registered
-        self.classes = [
+        self.classes = [Action,
             Effect, Human, Monster, Inventory,
             Food,Tool, Animal, Tree, Rock, 
-            Liquid, PhysicalObject, TagTool,
+            Liquid, PhysicalObject, TagTool,Camera,
             TagController, 
             PlayerSpawnController,
             ObjectCollisionController,
-            FoodCollectController]
+            FoodCollectController,InfectionController]
 
         for cls in self.classes:
             gamectx.register_base_class(cls)
@@ -168,17 +173,20 @@ class GameContent(SurvivalContent):
         obj:PhysicalObject = cls(config_id=config_id,config=info['config'])
         return obj
 
-    def speed_factor(self):
-        if self._speed_factor is not None:
-            return self._speed_factor
+    def get_config_from_config_id(self,config_id):
+        return self.config['objects'].get(config_id).get('config')
+
+    def ticks_per_step(self):
+        if self._ticks_per_step is not None:
+            return self._ticks_per_step
         """
         Step size in ticks
         """
         tick_rate = gamectx.tick_rate
         if not tick_rate or tick_rate == 0:
             tick_rate = 1
-        self._speed_factor = max(tick_rate * 1/6,1)
-        return self._speed_factor
+        self._ticks_per_step = max(tick_rate * self._speed_factor_multiplier,1)
+        return self._ticks_per_step
 
     def get_asset_bundle(self):
         return self.asset_bundle
@@ -275,16 +283,16 @@ class GameContent(SurvivalContent):
                 player_type=player_type,
                 is_human = is_human)
             gamectx.add_player(player)
-            self.get_controller_by_id("pspawn").spawn_player(player,reset=True)
+            for controller_id in self.active_controllers:
+                self.get_controller_by_id(controller_id).join(player)
+            # self.get_controller_by_id("pspawn").spawn_player(player,reset=True)
 
 
         return player
 
-
     ########################
     # GET INPUT
     ########################
-
     def process_position_change_event(self,e:PositionChangeEvent):
         if not e.is_player_obj:
             return            
@@ -293,6 +301,13 @@ class GameContent(SurvivalContent):
         new_scoord = self.gamemap.get_sector_coord_from_pos(e.new_pos)
         if old_scoord != new_scoord:
             self.gamemap.load_sectors_near_coord(new_scoord)
+
+
+    def process_admin_command_event(self,admin_event:AdminCommandEvent):
+        print("Admin Ccmmand Event")
+        print(admin_event.value)
+        events = []
+        return events
                 
 
     def process_input_event(self, input_event:InputEvent):
@@ -302,22 +317,56 @@ class GameContent(SurvivalContent):
             return []
         if not player.get_data_value("allow_input",False):
             return []
-        keypressed = input_event.input_data['pressed']
+        # keydown = input_event.input_data['pressed']
         keydown = input_event.input_data['keydown']
         # keyup = set(input_event.input_data['keyup'])
 
-        obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
-
         # TODO: only check for admin client events if player is human
+        mode = player.get_data_value("INPUT_MODE","PLAY")
+        
+        
+        if mode == "CONSOLE":
+            return events
+
+
+
         # Client Events
         if 27 in keydown:
             logging.info("QUITTING")
-            gamectx.change_game_state("STOPPED")
+            if mode == "PLAY":
+                gamectx.change_game_state("STOPPED")
+            else:
+                player.set_data_value("INPUT_MODE","PLAY")
             return events
+        if 31 in keydown:
+            logging.info("Zoom Out")
+            events.append(ViewEvent(player.get_id(), 50, Vector2(0,0)))
+            
+        if 32 in keydown:
+            logging.info("Zoom in")
+            events.append(ViewEvent(player.get_id(), -50, Vector2(0,0)))
 
+        if 80 in keydown:
+            self._speed_factor_multiplier += 0.1
+            self._ticks_per_step = None
+
+        if 81 in keydown:
+            self._speed_factor_multiplier -= 0.1
+            self._ticks_per_step = None
+
+        if 13 in keydown:
+            logging.info("MAP")
+            player.set_data_value("INPUT_MODE","MAP")
+
+        if 99 in keydown:
+            logging.info("CONSOLE")
+            player.set_data_value("INPUT_MODE","CONSOLE")
+            
         # If client, dont' process any other events
         if gamectx.config.client_only_mode:
             return events
+
+        obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
 
         if obj is None or not obj.enabled:
             return events
@@ -331,7 +380,8 @@ class GameContent(SurvivalContent):
         if player is None or not player.get_data_value("allow_input",False) or player.get_data_value("reset_required",False):
             return events
 
-        obj.assign_input_event(input_event)     
+        if mode == "PLAY":
+            obj.assign_input_event(input_event)     
 
         return events
 
@@ -383,11 +433,16 @@ class GameContent(SurvivalContent):
         if player is not None and player.player_type == 0:
             lines = []
             lines.append("Lives Used: {}".format(player.get_data_value("lives_used", 0)))
+            lines.append("INPUT_MODE:{}".format(player.get_data_value("INPUT_MODE", 0)))
+            lines.append("CONSOLE_COMMAND: {}".format(player.get_data_value("CONSOLE_TEXT", "")))
+            lines.append("Game Speed Factor: {}".format(self.ticks_per_step()))
 
             obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
             obj_health = 0
+            #TODO: instead render as part of hud via infobox
             if obj is not None:
                 obj_health = obj.health
+                lines.append(f"Total Reward: {obj.total_reward}")
 
                 lines.append(f"Inventory: {obj.get_inventory().as_string()}")
                 lines.append(f"Craft Menu: {obj.get_craftmenu().as_string()}")
@@ -397,22 +452,25 @@ class GameContent(SurvivalContent):
                 bar_width_max = round(renderer.resolution[0] /6)
                 bar_padding = round(renderer.resolution[1] /200)
 
-                tl = renderer.resolution[1] - bar_height - bar_padding
+                tlheight = renderer.resolution[1] - bar_height - bar_padding
                 bar_width = round(obj.stamina/obj.stamina_max * bar_width_max)
+
                 # Stamina
-                renderer.draw_rectangle(bar_padding,tl, bar_width,bar_height, color=(0,0,200))
+                renderer.draw_rectangle(bar_padding,tlheight, bar_width,bar_height, color=(0,0,200))
 
                 # Energy
-                tl = tl - bar_height - bar_padding
+                tlheight = tlheight - bar_height - bar_padding
                 bar_width = round(obj.energy/obj.energy_max * bar_width_max)
-                renderer.draw_rectangle(bar_padding,tl, bar_width,bar_height, color=(200,200,0))
+                renderer.draw_rectangle(bar_padding,tlheight, bar_width,bar_height, color=(200,200,0))
 
                 # Health
-                tl = tl - bar_height - bar_padding
+                tlheight = tlheight - bar_height - bar_padding
                 bar_width = round(obj.health/obj.health_max * bar_width_max)
-                renderer.draw_rectangle(bar_padding,tl, bar_width,bar_height, color=(200,0,0))
+                renderer.draw_rectangle(bar_padding,tlheight, bar_width,bar_height, color=(200,0,0))
 
-                renderer.draw_rectangle(bar_width_max + bar_padding,tl, bar_padding/2,renderer.resolution[1] - tl - bar_padding, color=(200,200,200))
+                renderer.draw_rectangle(bar_width_max + bar_padding,tlheight, bar_padding/2,renderer.resolution[1] - tlheight - bar_padding, color=(200,200,200))
+                
+
 
             if renderer.config.show_console:
                 renderer.render_to_console(lines, x=5, y=5)

@@ -11,17 +11,6 @@ from .clock import clock
 import copy
 
 
-class RenderAble:
-
-    def __init__(self, position:Vector2, angle, visheight = 2):
-        self.position = position
-        self.angle = angle
-        self.visheight = visheight
-        self.image_offset = Vector2(0,0)
-        self.visible=True
-        self.image_id_default = None
-        self.shape = None
-
 class GObject(Base):
     #TODO: Add component suport
 
@@ -42,7 +31,7 @@ class GObject(Base):
         self.created_tick = clock.get_tick_counter()
         self.player_id = None
 
-        self.sleeping = False # if true, not used for updating
+        self.sleeping = False # if true, do not update
 
         self.shape_group: ShapeGroup = ShapeGroup()
         self.data = {} if data is None else data

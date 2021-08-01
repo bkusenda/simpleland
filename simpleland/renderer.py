@@ -20,6 +20,8 @@ import logging
 from .player import Camera
 from .spritesheet import Spritesheet
 from .content import Content
+from .utils import colormap
+
 
 
 def scale(vec, vec2):
@@ -54,7 +56,6 @@ class Renderer:
         self.sounds = {}
         self.sprite_sheets = {}
 
-        
         self.log_info = None
         self.font = {}
         self.fps_clock = pygame.time.Clock()
@@ -117,7 +118,7 @@ class Renderer:
             body_w, body_h = img_orig.get_size()
             image_size = int(body_w*scale_x), int(body_h*scale_y)
             if image_size[0] > 500:
-                image_size = 500
+                image_size = 500, 500
             img = pygame.transform.scale(img_orig, image_size)
             image_sizes[(scale_x, scale_y)] = img
             self.image_cache[image_id] = image_sizes
@@ -142,7 +143,7 @@ class Renderer:
         self.load_sounds()
         self.load_images()
         self.play_music("background")
-        # pygame.key.set_repeat(500,100)
+        pygame.key.set_repeat(1000,1)
 
         self.initialized = True
 
@@ -188,7 +189,7 @@ class Renderer:
             p2 = Vector2(x_pos, y+self.view_height)
             self._draw_grid_line(p1, p2, angle, center, screen_view_center, color, screen_factor)
 
-    def draw_rectangle(self, x, y, width,height, color):
+    def draw_rectangle(self, x, y, width, height, color):
         rect = pygame.Rect(x, y, width, height)
         # rect.center = Vector2(x,y)
         pygame.draw.rect(self._display_surf, color, rect)
@@ -207,15 +208,165 @@ class Renderer:
             rect.center = image_loc
             pygame.draw.rect(self._display_surf, color, rect)
 
+    def _draw_infobox(self, infobox, surface:pygame.Surface, screen_factor):
+        
+        w,h = surface.get_size()
+        padding = infobox.get("padding",1) * screen_factor[0]
+        rows = len(infobox['value'])
+
+        row_h = round ((h -(padding * (rows +1))) / rows )
+        
+        x_max = w - padding * 2
+        x = padding
+        for i,renderable in enumerate(infobox['value']):
+            y = row_h * i + padding *(i+1)
+            
+            bg_color = renderable.get("bg_color")
+            color = renderable.get("color")
+            label = renderable.get("label")
+            loc = x,y
+            barw = x_max
+            if label is not None:
+                fsize=row_h
+                font = self.font.get(fsize)
+                if font is None:
+                    font = pygame.font.SysFont(None, fsize)
+                    self.font[fsize] = font
+                twidth,_ = font.size(label)
+
+                surface.blit(font.render(label, True, (200,200,200)), loc)
+                loc = x + twidth,y
+                barw = barw - twidth
+            
+            
+            if bg_color is not None:
+                rect = pygame.Rect(loc[0], loc[1],
+                                    barw,
+                                    row_h)
+
+                pygame.draw.rect(surface, bg_color, rect)
+                
+            if renderable.get("type") == "bar":
+                width = round(barw * renderable.get("value"))
+
+                rect = pygame.Rect(loc[0], loc[1],
+                                    width,
+                                    row_h)
+
+                pygame.draw.rect(surface, color, rect)
+
+            elif renderable.get("type") == "block_list":    
+                size = renderable.get("size",3)
+                chunk = barw/size
+                pygame.draw.rect(surface, bg_color, rect)
+                for val in renderable.get('value'):
+                    bloc = loc[0] + chunk * val,loc[1]
+                    blockw = chunk
+
+                    # Bar
+                    rect = pygame.Rect(bloc[0], bloc[1],
+                                        blockw,
+                                        row_h)
+
+                    pygame.draw.rect(surface, colormap[round((val/size)*len(colormap))], rect)
+
+            elif renderable.get('type') == 'icon':                    
+                if renderable['value'] is not None:
+                    image_id = renderable['value'][0]
+                    image_orig  = self.get_image_by_id(image_id)
+                    iw,ih = image_orig.get_rect().size
+
+                    image = self.get_scaled_image_by_id(image_id, row_h/iw,row_h/iw)
+                    rect = image.get_rect()
+                    rect.center = loc[0] + barw/2, loc[1] + row_h /2
+                    surface.blit(image, rect)
+            elif renderable.get("type") is "text":
+                fsize=row_h
+                font = self.font.get(fsize)
+                if font is None:
+                    font = pygame.font.SysFont(None, fsize)
+                    self.font[fsize] = font
+                text = renderable['value']
+                twidth,_ = font.size(text)
+                loc = loc[0]+ barw/2 - twidth /2, loc[1]
+
+                surface.blit(font.render(text, True, (200,200,200)), loc)
+ 
+
     def _draw_object(self, center, obj: GObject, screen_angle, screen_factor, screen_view_center, color=None):
 
         renderables = obj.get_renderables(screen_angle)
         for renderable in renderables:
-            position = renderable['position']
-            image_id = renderable['image_id']
-            angle = renderable['angle']
-            pos = obj.get_view_position() - position - obj.image_offset
-            self._draw_image(pos, center, image_id, angle, screen_factor, screen_view_center)
+            if renderable.get("type") is "text":
+                fsize = round(3 * screen_factor[0])
+                spacing = 12
+                color = (255, 255, 255)
+                pos = obj.get_view_position() - Vector2(self.config.tile_size/2, self.config.tile_size/2)
+                loc = scale(screen_factor, pos - center) + screen_view_center
+
+                font = self.font.get(fsize)
+                if font is None:
+                    font = pygame.font.SysFont(None, fsize)
+                    self.font[fsize] = font
+        # for i, l in enumerate(lines):
+                self._display_surf.blit(font.render(renderable.get("value"), True, color), loc)
+            elif renderable.get("type") is "infobox":
+                boxscale = renderable.get("scale",(1.0,1.0))
+                background_color = renderable.get("background_color",(0,0,0))
+                pos = obj.get_view_position() - Vector2(self.config.tile_size/2, self.config.tile_size/2)
+                loc = scale(screen_factor, pos - center) + screen_view_center
+                size = (self.config.tile_size * screen_factor[0] * boxscale[0],self.config.tile_size * screen_factor[1] * boxscale[1])                
+                surface = pygame.Surface(size)
+
+                if background_color is None:
+                    surface.set_colorkey((0,0,0))
+                else:               
+                    surface.fill(background_color)
+                self._draw_infobox(renderable, surface=surface, screen_factor=screen_factor)
+
+                self._display_surf.blit(surface,loc)
+
+            elif renderable.get("type") is "bar":
+                color = renderable.get("color")
+                bg_color = renderable.get("bg_color")
+                pos = obj.get_view_position() - Vector2(self.config.tile_size/2, self.config.tile_size/2)
+                loc = scale(screen_factor, pos - center) + screen_view_center
+                barw = round(self.config.tile_size * screen_factor[0] /2)
+                barh = 1 * screen_factor[0]
+                # Bar BG
+                rect = pygame.Rect(loc[0], loc[1],
+                                   barw,
+                                   barh)
+
+                pygame.draw.rect(self._display_surf, bg_color, rect)
+                width = round(barw * renderable.get("value"))
+                # Bar
+                rect = pygame.Rect(loc[0], loc[1],
+                                   width,
+                                   barh)
+
+                pygame.draw.rect(self._display_surf, color, rect)
+            elif renderable.get("type") is "tag":
+                color = renderable.get("color")
+                index = renderable.get("index",0)
+                # bg_color = renderable.get("bg_color")
+                tw = 1.2 * screen_factor[0]#round(self.config.tile_size * screen_factor[0] /2)
+                th = 1.2 * screen_factor[1]
+                pos = obj.get_view_position() - Vector2(self.config.tile_size/2 - 1.2 * index, 0)
+                loc = scale(screen_factor, pos - center) + screen_view_center
+
+                # Bar
+                rect = pygame.Rect(loc[0], loc[1],
+                                   tw,
+                                   th)
+
+                pygame.draw.rect(self._display_surf, color, rect)            
+            else:
+                position = renderable['position']
+                image_id = renderable['image_id']
+                angle = renderable['angle']
+                pos = obj.get_view_position() - position - obj.image_offset
+                self._draw_image(pos, center, image_id, angle, screen_factor, screen_view_center)
 
     def filter_objects_for_rendering(self, objs, camera: Camera):
         center = camera.get_center()
