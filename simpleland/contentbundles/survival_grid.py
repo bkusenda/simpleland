@@ -83,16 +83,16 @@ class GameContent(SurvivalContent):
         
         
         # self._default_speed_factor_multiplier = self.config['default_speed_factor_multiplier']
-        self._speed_factor_multiplier = self.config['speed_factor_multiplier']
+        self._step_duration_factor = self.config['step_duration_factor']
         
-        self._ticks_per_step = None
+        self._step_duration = None
         self.call_counter = 0
 
         # All loadable classes should be registered
         self.classes = [Action,
             Effect, Human, Monster, Inventory,
             Food,Tool, Animal, Tree, Rock, 
-            Liquid, PhysicalObject, TagTool,Camera,
+            Liquid, PhysicalObject, Camera,
             TagController, 
             PlayerSpawnController,
             ObjectCollisionController,
@@ -176,17 +176,17 @@ class GameContent(SurvivalContent):
     def get_config_from_config_id(self,config_id):
         return self.config['objects'].get(config_id).get('config')
 
-    def ticks_per_step(self):
-        if self._ticks_per_step is not None:
-            return self._ticks_per_step
+    def step_duration(self):
+        if self._step_duration is not None:
+            return self._step_duration
         """
         Step size in ticks
         """
         tick_rate = gamectx.tick_rate
         if not tick_rate or tick_rate == 0:
             tick_rate = 1
-        self._ticks_per_step = max(tick_rate * self._speed_factor_multiplier,1)
-        return self._ticks_per_step
+        self._step_duration = max(1,tick_rate * self._step_duration_factor)
+        return self._step_duration
 
     def get_asset_bundle(self):
         return self.asset_bundle
@@ -286,8 +286,6 @@ class GameContent(SurvivalContent):
             for controller_id in self.active_controllers:
                 self.get_controller_by_id(controller_id).join(player)
             # self.get_controller_by_id("pspawn").spawn_player(player,reset=True)
-
-
         return player
 
     ########################
@@ -304,8 +302,7 @@ class GameContent(SurvivalContent):
 
 
     def process_admin_command_event(self,admin_event:AdminCommandEvent):
-        print("Admin Ccmmand Event")
-        print(admin_event.value)
+        self.log_console(f"RUNNING COMMAND: {admin_event.value}")
         events = []
         return events
                 
@@ -328,8 +325,6 @@ class GameContent(SurvivalContent):
         if mode == "CONSOLE":
             return events
 
-
-
         # Client Events
         if 27 in keydown:
             logging.info("QUITTING")
@@ -346,13 +341,15 @@ class GameContent(SurvivalContent):
             logging.info("Zoom in")
             events.append(ViewEvent(player.get_id(), -50, Vector2(0,0)))
 
+        # minus        
         if 80 in keydown:
-            self._speed_factor_multiplier += 0.1
-            self._ticks_per_step = None
+            self._step_duration_factor = max(0, self._step_duration_factor - 0.01)
+            self._step_duration = None
 
+        # equals/plus
         if 81 in keydown:
-            self._speed_factor_multiplier -= 0.1
-            self._ticks_per_step = None
+            self._step_duration_factor = self._step_duration_factor + 0.01
+            self._step_duration = None
 
         if 13 in keydown:
             logging.info("MAP")
@@ -384,6 +381,20 @@ class GameContent(SurvivalContent):
             obj.assign_input_event(input_event)     
 
         return events
+    
+    def message_player(self,p:Player,message, duration=0):
+
+        delay = duration*self.step_duration()
+        msgs = p.get_data_value("messages",[])
+        msgs.append((int(delay) + clock.get_ticks(),message))
+        p.set_data_value("messages",msgs)
+
+    def log_console(self,message,player_id=None):
+        for pid,p in gamectx.player_manager.players_map.items():
+            if p is not None and (player_id is None or pid == player_id):
+                log = p.get_data_value("log",[])
+                log.append(f"{clock.get_ticks()}: {message}")
+                p.set_data_value("log",log)
 
     def update(self):
         objs = list(gamectx.object_manager.get_objects().values())
@@ -395,7 +406,7 @@ class GameContent(SurvivalContent):
 
 
         if self.debug_memory:
-            cur_tick = clock.get_exact_time()
+            cur_tick = clock.get_ticks()
             sz = getsize(gamectx.object_manager)  
             if sz > self.max_size.get("om",(0,0))[0]:
                 self.max_size['om'] = (sz,cur_tick)
@@ -416,11 +427,9 @@ class GameContent(SurvivalContent):
             if sz > self.max_size.get("cnt",(0,0))[0]:
                 self.max_size['cnt'] = (sz,cur_tick)
 
-
             sz = len(gamectx.object_manager.objects)
             if sz > self.max_size.get("ob_count",(0,0))[0]:
                 self.max_size['ob_count'] = (sz,cur_tick)
-
 
             if (time.time() - self.console_report_last) > self.console_report_freq_sec:
 
@@ -431,11 +440,12 @@ class GameContent(SurvivalContent):
 
     def post_process_frame(self, player: Player, renderer: Renderer):
         if player is not None and player.player_type == 0:
+            input_mode = player.get_data_value("INPUT_MODE", "")
+            
             lines = []
             lines.append("Lives Used: {}".format(player.get_data_value("lives_used", 0)))
-            lines.append("INPUT_MODE:{}".format(player.get_data_value("INPUT_MODE", 0)))
-            lines.append("CONSOLE_COMMAND: {}".format(player.get_data_value("CONSOLE_TEXT", "")))
-            lines.append("Game Speed Factor: {}".format(self.ticks_per_step()))
+            lines.append("INPUT_MODE:{}".format(input_mode))
+            lines.append("Step Duration Factor (larger = slower) {}".format(self._step_duration_factor))
 
             obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
             obj_health = 0
@@ -443,7 +453,6 @@ class GameContent(SurvivalContent):
             if obj is not None:
                 obj_health = obj.health
                 lines.append(f"Total Reward: {obj.total_reward}")
-
                 lines.append(f"Inventory: {obj.get_inventory().as_string()}")
                 lines.append(f"Craft Menu: {obj.get_craftmenu().as_string()}")
 
@@ -469,10 +478,31 @@ class GameContent(SurvivalContent):
                 renderer.draw_rectangle(bar_padding,tlheight, bar_width,bar_height, color=(200,0,0))
 
                 renderer.draw_rectangle(bar_width_max + bar_padding,tlheight, bar_padding/2,renderer.resolution[1] - tlheight - bar_padding, color=(200,200,200))
-                
-
+            
+            
 
             if renderer.config.show_console:
+                log = player.get_data_value("log",[])
+                if len(log) > 5:
+                    log = log[-5:]
+                    player.set_data_value("log",log)
+                lines.append("")
+                lines.append("--------- LOG -----------")
+                lines.extend(log)
+                if input_mode == "CONSOLE":
+                    lines.append("$> {}".format(player.get_data_value("CONSOLE_TEXT", "_")))
                 renderer.render_to_console(lines, x=5, y=5)
-                if obj_health <= 0:
-                    renderer.render_to_console(['You Died'], x=50, y=50, fsize=50)
+
+            # Show Messages
+            message_output=[]
+            remaining_messages = []
+            messages = player.get_data_value("messages",[])
+            for expires_key, msg in messages:
+                if clock.get_ticks()< expires_key:
+                    remaining_messages.append((expires_key, msg))
+                    message_output.append(f"{msg}")
+            
+            if len(remaining_messages)>0:
+                player.set_data_value("messages",remaining_messages[-3:])
+                renderer.render_to_console(message_output, x=50, y=50, fsize=50)
+            

@@ -9,7 +9,6 @@ class StepClock:
         self.pygame_clock = pygame.time.Clock()
         self.tick_rate = tick_rate
 
-
     def get_start_time(self):
         return self._start_time
 
@@ -18,7 +17,6 @@ class StepClock:
 
     def set_tick_rate(self,tick_rate):
         self.tick_rate = tick_rate
-
 
     def get_tick_size(self):
         return 1.0 / self.tick_rate
@@ -34,13 +32,7 @@ class StepClock:
             self.tick_time +=1
         return self.tick_time
 
-    def get_time(self):
-        return self.tick_time
-
-    def get_tick_counter(self):
-        return self.tick_time
-
-    def get_exact_time(self):
+    def get_ticks(self):
         return self.tick_time
 
 

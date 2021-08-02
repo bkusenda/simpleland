@@ -28,7 +28,7 @@ class GObject(Base):
         self.view_position = None
         self.angle = 0
         self.config_id = None
-        self.created_tick = clock.get_tick_counter()
+        self.created_tick = clock.get_ticks()
         self.player_id = None
 
         self.sleeping = False # if true, do not update
@@ -80,7 +80,7 @@ class GObject(Base):
         self.image_id_default = id
 
     def update_last_change(self):
-        self.set_last_change(clock.get_tick_counter())
+        self.set_last_change(clock.get_ticks())
     
     def set_update_position_callback(self,callback):
         self._update_position_callback = callback
@@ -127,7 +127,7 @@ class GObject(Base):
 
     def set_position(self, position: Vector2):
         self.position = position
-        self.set_last_change(clock.get_time())
+        self.set_last_change(clock.get_ticks())
         # self.update_position(position,True)
 
     def get_position(self):
@@ -150,7 +150,7 @@ class GObject(Base):
         self.last_change = timestamp
 
     def mark_updated(self):
-        self.set_last_change(clock.get_tick_counter())
+        self.set_last_change(clock.get_ticks())
 
     def get_last_change(self):
         return self.last_change

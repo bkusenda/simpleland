@@ -71,7 +71,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
 
         response_data = {}
         response_data['info'] = {
-            'server_tick': clock.get_tick_counter(),
+            'server_tick': clock.get_ticks(),
             'server_time': clock.get_game_time(),
             'message': "UPDATE",
             'client_id': client.get_id(),

@@ -92,7 +92,7 @@ class GridPhysicsEngine:
 
 
     def add_object(self, obj: GObject):
-        obj.last_change = clock.get_time()
+        obj.last_change = clock.get_ticks()
         obj.set_update_position_callback(self.update_obj_position)
         self.update_obj_position(obj,obj.get_position(),skip_collision_check=True)
 

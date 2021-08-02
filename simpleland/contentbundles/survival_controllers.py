@@ -4,7 +4,7 @@ import random
 from ..common import Base, Vector2
 from ..clock import clock
 from .survival_common import Effect, StateController,SurvivalContent
-from .survival_objects import TagTool,AnimateObject,Monster, PhysicalObject, Food
+from .survival_objects import AnimateObject,Monster, PhysicalObject, Food
 from .survival_behaviors import PlayingInfection, PlayingTag
 from ..player import Player
 from .. import gamectx
@@ -26,12 +26,15 @@ class PlayerSpawnController(StateController):
         player.events = []
 
     def reset(self):
+        super().reset()
         self.spawn_players(reset=True)
 
     def update(self):
         pass
 
     def join(self,player):
+        if not self.started:
+            return
         self.spawn_player(player,True)    
 
     def spawn_player(self,player:Player, reset=False):
@@ -70,6 +73,8 @@ class ObjectCollisionController(StateController):
         self.actor_obj_ids = set()
         self.obj_config_ids = set(["rock1"])
         self.reward_delta = -1
+        
+
 
     def get_objects(self):
         objs = []
@@ -87,6 +92,7 @@ class ObjectCollisionController(StateController):
 
 
     def reset(self):
+        super().reset()
         self.actor_obj_ids = set()
         objs:List[AnimateObject] = []
         for obj in gamectx.object_manager.get_objects_by_config_id("human1"):
@@ -106,7 +112,7 @@ class FoodCollectController(StateController):
         self.food_ids = set()
         self.game_start_tick = 0
         self.last_check = 0
-        self.check_freq = 10 * self.content.ticks_per_step()
+        self.check_freq = 10 * self.content.step_duration()
         self.needed_food = 4
 
     def get_objects(self):
@@ -118,8 +124,10 @@ class FoodCollectController(StateController):
         return objs
 
     def join(self,player:Player):
+        if not self.started:
+            return            
         obj = gamectx.object_manager.get_by_id(player.get_object_id())
-        if obj is not None:
+        if obj is not None and player.get_object_id() not in self.actor_obj_ids:
             self.add_player_object(obj)
 
     def add_player_object(self,obj:PhysicalObject):
@@ -158,6 +166,7 @@ class FoodCollectController(StateController):
             food.add_trigger("receive_grab","collect",self.collected_trigger)  
 
     def reset(self):
+        super().reset()
 
         # Assign players to tag game
         self.actor_obj_ids = set()
@@ -176,12 +185,12 @@ class FoodCollectController(StateController):
             
 
     def update(self):
-        time_since = clock.get_tick_counter() - self.last_check
+        time_since = clock.get_ticks() - self.last_check
         if time_since > self.check_freq:
             if len(self.food_ids)< self.needed_food:
                 self.spawn_food()
 
-            self.last_check = clock.get_tick_counter()
+            self.last_check = clock.get_ticks()
             
 
 
@@ -194,7 +203,7 @@ class TagController(StateController):
         self.behavior = "PlayingTag"
         self.obj_ids = set()
         self.game_start_tick = 0
-        self.ticks_per_round = 100 * self.content.ticks_per_step()
+        self.ticks_per_round = 100 * self.content.step_duration()
         self.last_tag = 0
         self.tag_changes = 0
         self.is_tagged_tag = "tagged"
@@ -212,8 +221,10 @@ class TagController(StateController):
         return objs
     
     def join(self,player:Player):
+        if not self.started:
+            return
         obj = gamectx.object_manager.get_by_id(player.get_object_id())
-        if obj is not None:
+        if obj is not None and player.get_object_id() not in self.obj_ids:
             self.add_player_object(obj)
 
     def add_player_object(self,obj):
@@ -227,6 +238,7 @@ class TagController(StateController):
             obj.default_behavior = PlayingTag(self)
 
     def reset(self):
+        super().reset()
         
         # Assign players to tag game
         self.obj_ids = set()
@@ -245,8 +257,8 @@ class TagController(StateController):
 
         obj.tags.add(self.is_tagged_tag)
         self.tagged_obj = obj
-        self.game_start_tick = clock.get_tick_counter()
-        self.last_tag = clock.get_tick_counter()
+        self.game_start_tick = clock.get_ticks()
+        self.last_tag = clock.get_ticks()
        
 
     def tag_trigger(self, source_obj):
@@ -275,7 +287,7 @@ class TagController(StateController):
 
             self.tagged_obj = target_obj
             source_obj.tags.discard(self.is_tagged_tag)
-            self.last_tag = clock.get_tick_counter()
+            self.last_tag = clock.get_ticks()
             self.tagged_obj.add_reward(-10)       
             self.tag_changes+=1
             return False
@@ -283,7 +295,7 @@ class TagController(StateController):
             return True
     
     def update(self):
-        tag_time = clock.get_tick_counter() - self.last_tag
+        tag_time = clock.get_ticks() - self.last_tag
         if tag_time > self.ticks_per_round:
             print("Resetting tag game")
             for obj in self.get_objects():
@@ -302,7 +314,7 @@ class InfectionController(StateController):
         self.behavior = "PlayingInfection"
         self.obj_ids = set()
         self.game_start_tick = 0
-        self.ticks_per_round = 100 * self.content.ticks_per_step()
+        self.ticks_per_round = 100 * self.content.step_duration()
         self.last_infect = 0
         self.infect_counter = 0
         self.infected_tag = "infected"
@@ -319,8 +331,11 @@ class InfectionController(StateController):
         return objs
 
     def join(self,player:Player):
+        if not self.started:
+            return
+        
         obj = gamectx.object_manager.get_by_id(player.get_object_id())
-        if obj is not None:
+        if obj is not None and player.get_object_id() not in self.obj_ids:
             self.add_player_object(obj)
         
 
@@ -332,10 +347,11 @@ class InfectionController(StateController):
         obj.add_trigger("unarmed_attack","infect",self.infect_trigger)
         if p is None:
             obj.default_behavior = PlayingInfection(self)
-
-
+        else:
+            self.content.message_player(p,"Playing Infection" ,10)
+            
     def reset(self):
-
+        super().reset()
 
         # Assign players to tag game
         self.obj_ids = set()
@@ -355,15 +371,16 @@ class InfectionController(StateController):
 
         self.infected_obj_ids=set()
         self.infected_obj_ids.add(obj.get_id())
-        self.game_start_tick = clock.get_tick_counter()
-        self.last_infect = clock.get_tick_counter()
+        self.game_start_tick = clock.get_ticks()
+        self.last_infect = clock.get_ticks()
+        
        
 
     def infect_trigger(self, source_obj):
         if not self.infected_tag in source_obj.tags:
             return True
 
-        print("Trying to Infect")
+        self.content.log_console("Trying to Infecting")
         direction = Vector2(0, 1).rotate(source_obj.angle)
         target_pos = source_obj.get_position() + (direction * source_obj._l_content.tile_size)
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
@@ -377,13 +394,13 @@ class InfectionController(StateController):
                 
 
         if target_obj is not None:
-            print("Infecting")
+            self.content.log_console("Infecting")
             target_obj.tags.add(self.infected_tag)
             target_obj.stunned()
             source_obj.invoke_attacking_action()
 
             self.infected_obj_ids.add(target_obj.get_id())
-            self.last_infect = clock.get_tick_counter()
+            self.last_infect = clock.get_ticks()
             target_obj.add_reward(-10)      
             self.infect_counter+=1
             return False
@@ -391,7 +408,7 @@ class InfectionController(StateController):
             return True
     
     def update(self):
-        tag_time = clock.get_tick_counter() - self.last_infect
+        tag_time = clock.get_ticks() - self.last_infect
         if tag_time > self.ticks_per_round:
             print("Resetting infection game")
             for obj in self.get_objects():
@@ -400,7 +417,7 @@ class InfectionController(StateController):
                 else:
                     obj.add_reward(-2) 
 
-            self.content.request_reset()
+            self.reset()
 
 
 # class TagController2(StateController):
@@ -413,7 +430,7 @@ class InfectionController(StateController):
 #         self.behavior = "PlayingTag"
 #         self.obj_ids = set()
 #         self.game_start_tick = 0
-#         self.ticks_per_round = 100 * self.content.ticks_per_step()
+#         self.ticks_per_round = 100 * self.content.step_duration()
 #         self.last_tag = 0
 #         self.tag_changes = 0
 #         self.is_tagged_tag = "tagged"

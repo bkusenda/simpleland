@@ -3,7 +3,7 @@
     "tile_size": 16,
     "asset_bundle": "asset_bundle.json",
     "start_map": "main",
-    "speed_factor_multiplier" : 0.8,
+    "step_duration_factor" : 0.2,
     "player_types": {
         "1": {
             "default_camera_distance": 160,

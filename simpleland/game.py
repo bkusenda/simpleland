@@ -100,7 +100,7 @@ class GameContext:
     def create_snapshot_for_client(self,client):
         from .client import RemoteClient
         client:RemoteClient = client
-        snapshot_timestamp = clock.get_tick_counter()
+        snapshot_timestamp = clock.get_ticks()
         om_snapshot = self.object_manager.get_snapshot_update(client.last_snapshot_time_ms)
         # om_snapshot = self.object_manager.get_snapshot_full()
         pm_snapshot = self.player_manager.get_snapshot() # TODO: Only send relevent Players
@@ -147,7 +147,7 @@ class GameContext:
 
     # Object Methods
     def add_object(self,obj:GObject):
-        obj.set_last_change(clock.get_time())
+        obj.set_last_change(clock.get_ticks())
         self.object_manager.add(obj)
         self.physics_engine.add_object(obj)                
 
@@ -196,12 +196,12 @@ class GameContext:
     def _process_remove_object_event(self,e:RemoveObjectEvent):
         obj = self.object_manager.get_by_id(e.object_id)
         if obj is not None:
-            obj.set_last_change(clock.get_time())
+            obj.set_last_change(clock.get_ticks())
             self.physics_engine.remove_object(obj)
             self.object_manager.remove_by_id(obj.get_id())
         else:
             # TODO: Caused by multiple actions on same tick issue            
-            print(f"****Object not found, not deleting {clock.get_tick_counter()} {e.object_id}")
+            print(f"****Object not found, not deleting {clock.get_ticks()} {e.object_id}")
         
         return True
 
@@ -346,7 +346,7 @@ class GameContext:
                 # print(f"Player: {player.get_id()} {player.get_object_id()}")
                 observation, reward, done, info, _ = self.content.get_step_info(player)
             if self.config.wait_for_user_input:
-                print(f"Waiting for input: t={clock.get_exact_time()}")
+                print(f"Waiting for input: t={clock.get_ticks()}")
 
                 self.wait_for_input()
 

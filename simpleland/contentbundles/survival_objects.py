@@ -128,7 +128,9 @@ class PhysicalObject(GObject):
         self._action_queue = Queue()
         self._effects: Dict[str, Effect] = {}
         self.disabled_actions = set(self.config.get('disabled_actions', []))
-        self.created_tick = clock.get_exact_time()
+        self.created_tick = clock.get_ticks()
+        
+
 
         self.view_position = None
 
@@ -253,7 +255,7 @@ class PhysicalObject(GObject):
                 continue
             if effect.type == "sprite":
                 sprites = self.get_effect_sprites(effect.config_id)
-                cur_tick = clock.get_tick_counter()
+                cur_tick = clock.get_ticks()
                 idx = cur_tick - effect.start_tick
                 total_sprite_images = len(sprites)
                 sprite_idx = int((idx/effect.ticks) * total_sprite_images) % total_sprite_images
@@ -280,14 +282,14 @@ class PhysicalObject(GObject):
         return action_sprite[direction]
 
     def get_age(self):
-        return clock.get_tick_counter() - self.created_tick
+        return clock.get_ticks() - self.created_tick
 
     def get_action_renderables(self, angle=0):
         action = self.get_action()
         sprites = self.get_sprites(action.type, self.angle)
         if sprites is None or len(sprites) == 0:
             return None
-        cur_tick = clock.get_tick_counter()
+        cur_tick = clock.get_ticks()
         action_idx = (cur_tick - action.start_tick)
         if action_idx ==0:
             sprite_idx=0
@@ -320,7 +322,7 @@ class PhysicalObject(GObject):
         self._action = Action(ACTION_SPAWN, ticks=1, step_size=1, blocking=True)
         self.health = self.config.get('health_start', 100)
         self.show_info_bar = self.config.get('show_info_bar', False)
-        self.created_tick = clock.get_exact_time()
+        self.created_tick = clock.get_ticks()
         self.enable()
         self.update_position(position=position, skip_collision_check=True)
         self.play_sound("spawn")
@@ -336,7 +338,7 @@ class PhysicalObject(GObject):
                 # TODO: Updating act
                 # ion until better solution is implemented
                 self._action = self._action_queue.get()
-                self._action.start_tick = clock.get_exact_time()
+                self._action.start_tick = clock.get_ticks()
                 self._action.start_position = self.position
             else:
                 self.default_action()
@@ -349,12 +351,12 @@ class PhysicalObject(GObject):
         return self._effects
 
     def default_action(self, blocking=False, continuous=True):
-        ticks_in_action = 3 * self._l_content.ticks_per_step()
+        ticks_in_action = 3 * self._l_content.step_duration()
         self._action = Action(
             type=ACTION_IDLE,
             ticks=ticks_in_action,
             step_size=self._l_content.tile_size/ticks_in_action,
-            start_tick=clock.get_tick_counter(),
+            start_tick=clock.get_ticks(),
             blocking=blocking,
             continuous=continuous)
 
@@ -362,12 +364,12 @@ class PhysicalObject(GObject):
     def collision_with(self, obj2):
 
         if self.collision_type > 0 and self.collision_type == obj2.collision_type:
-            ticks_in_action = 1 * self._l_content.ticks_per_step()
+            ticks_in_action = 1 * self._l_content.step_duration()
             self._action = Action(
                 type=ACTION_IDLE,
                 ticks=ticks_in_action,
                 step_size=self._l_content.tile_size/ticks_in_action,
-                start_tick=clock.get_tick_counter(),
+                start_tick=clock.get_ticks(),
                 blocking=True,
                 continuous=False)
             return True
@@ -375,7 +377,7 @@ class PhysicalObject(GObject):
             return False
 
     def update_view_position(self):
-        cur_tick = clock.get_tick_counter()
+        cur_tick = clock.get_ticks()
         action = self.get_action()
         if cur_tick >= action.start_tick and action.start_position is not None and self.position is not None:
             idx = cur_tick - action.start_tick
@@ -394,10 +396,10 @@ class PhysicalObject(GObject):
 
         direction = direction * 1
         if new_angle is not None and self.angle != new_angle:
-            ticks_in_action = self._l_content.ticks_per_step()/move_speed
+            ticks_in_action = self._l_content.step_duration()/move_speed
             self.angle = new_angle
             return []
-        ticks_in_action = move_speed * self._l_content.ticks_per_step()
+        ticks_in_action = self._l_content.step_duration()/move_speed
 
         new_pos = self._l_content.tile_size * direction + self.get_position()
         self._action = Action(ACTION_MOVE, ticks=ticks_in_action, step_size=self._l_content.tile_size/ticks_in_action, blocking=True, start_position=self.position)
@@ -740,7 +742,7 @@ class AnimateObject(PhysicalObject):
     @invoke_triggers
     def select_item(self, prev=False):
         self._inventory.select_item(prev)
-        ticks_in_action = self._l_content.ticks_per_step()
+        ticks_in_action = self._l_content.step_duration()
         self._action = Action(
             ACTION_IDLE, 
                 ticks=ticks_in_action)
@@ -755,7 +757,7 @@ class AnimateObject(PhysicalObject):
     @invoke_triggers
     def craft(self):
         self.get_craftmenu().craft_selected(self.get_inventory())
-        ticks_in_action = self._l_content.ticks_per_step()
+        ticks_in_action = self._l_content.step_duration()
         self._action = Action(
             ACTION_IDLE, 
                 ticks=ticks_in_action)
@@ -763,7 +765,7 @@ class AnimateObject(PhysicalObject):
     @invoke_triggers
     def select_craft_type(self, prev=False):
         self._l_craftmenu.select_item(prev)
-        ticks_in_action = self._l_content.ticks_per_step()
+        ticks_in_action = self._l_content.step_duration()
         self._action = Action(
             ACTION_IDLE, 
                 ticks=ticks_in_action)
@@ -850,7 +852,7 @@ class AnimateObject(PhysicalObject):
         self.energy += food_obj.energy
         self.energy = min(self.energy,self.energy_max)
         self.play_sound("eat")
-        ticks_in_action = self._l_content.ticks_per_step()/0.5
+        ticks_in_action = self._l_content.step_duration()/0.5
         
 
         # self._action = Action(ACTION_EAT, ticks=ticks_in_action, step_size=self._l_content.tile_size/ticks_in_action)
@@ -862,14 +864,13 @@ class AnimateObject(PhysicalObject):
 
         move_action = self.angle == angle_update
         walk_speed = self.walk_speed
-
-        ticks_in_action = round(self._l_content.ticks_per_step()/walk_speed)
+        if self.stamina <= 0:
+            walk_speed = walk_speed/2
+        else:
+            self.stamina -= self.config.get('walk_stamina_usage', 1)
+        ticks_in_action = self._l_content.step_duration()/walk_speed
         self.angle = angle_update
         if move_action:
-            if self.stamina <= 0:
-                walk_speed = walk_speed/2
-            else:
-                self.stamina -= 5
 
             direction = direction * self.velocity_multiplier
             position = self.get_position()
@@ -883,7 +884,7 @@ class AnimateObject(PhysicalObject):
 
             self.update_position(new_pos, callback=lambda suc: self.play_sound('walk') if suc else None)
         else:
-            ticks_in_action=self._l_content.ticks_per_step() /3
+            ticks_in_action=self._l_content.step_duration()  / 3
             self._action = Action(ACTION_WALK, ticks=round(ticks_in_action))
             # self._action = Action(ACTION_WALK, ticks=round(ticks_in_action), step_size=self._l_content.tile_size/ticks_in_action, start_position=self.position)
             self.angle = angle_update
@@ -898,7 +899,7 @@ class AnimateObject(PhysicalObject):
         oids = gamectx.physics_engine.space.get_objs_at(target_coord)
 
         if len(oids) == 0:
-            ticks_in_action = self._l_content.ticks_per_step()/0.5
+            ticks_in_action = self._l_content.step_duration() * 2
             self._action = self._action = Action(
                 ACTION_JUMP,
                 ticks=ticks_in_action,
@@ -909,7 +910,7 @@ class AnimateObject(PhysicalObject):
 
     @invoke_triggers
     def grab(self):
-        ticks_in_action = int(self._l_content.ticks_per_step())
+        ticks_in_action = int(self._l_content.step_duration())
 
         received_obj = None
 
@@ -944,7 +945,7 @@ class AnimateObject(PhysicalObject):
 
     @invoke_triggers
     def stunned(self):
-        ticks_in_action = int(self._l_content.ticks_per_step()) * 10
+        ticks_in_action = int(self._l_content.step_duration()) * 10
         self._action = Action(
             ACTION_STUNNED,
             ticks=ticks_in_action,
@@ -955,7 +956,7 @@ class AnimateObject(PhysicalObject):
     @invoke_triggers
     def drop(self):
 
-        ticks_in_action = int(self._l_content.ticks_per_step())
+        ticks_in_action = int(self._l_content.step_duration())
 
         direction = Vector2(0, 1).rotate(self.angle)
 
@@ -1013,7 +1014,7 @@ class AnimateObject(PhysicalObject):
             attack_speed = attack_speed/2
         else:
             self.stamina -= 15
-        ticks_in_action = round(self._l_content.ticks_per_step()/attack_speed)
+        ticks_in_action = round(self._l_content.step_duration()/attack_speed)
         self._action = Action(
             ACTION_ATTACK,
             ticks=ticks_in_action,
@@ -1030,7 +1031,7 @@ class AnimateObject(PhysicalObject):
         else:
             self.stamina -= 15
 
-        ticks_in_action = round(self._l_content.ticks_per_step()/attack_speed)
+        ticks_in_action = round(self._l_content.step_duration()/attack_speed)
         direction = Vector2(0, 1).rotate(self.angle)
         target_pos = self.get_position() + (direction * self._l_content.tile_size)
         target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
@@ -1052,34 +1053,36 @@ class AnimateObject(PhysicalObject):
             lives_used += 1
             p.set_data_value("lives_used", lives_used)
             p.set_data_value("allow_input", False)
+            self._l_content.message_player(p,"You Died!",10)
+            delay = 10*self._l_content.step_duration()
 
             def event_fn(event: DelayedEvent, data):
                 p.set_data_value("reset_required", True)
                 return []
-            delay = 10*self._l_content.ticks_per_step()
+            
             event = DelayedEvent(event_fn, delay)
             gamectx.add_event(event)
 
     def update(self):
         # TODO: move properties like energry_decay_period, etc to object so they can be changed temporarily without modifying config
-        cur_time = clock.get_time()
+        cur_time = clock.get_ticks()
         self.set_last_change(cur_time)
         if cur_time > self.next_energy_decay:
             self.energy = max(0, self.energy - self.config.get('energy_decay', 0))
             if self.energy <= 0:
                 self.health -= self.config.get('low_energy_health_penalty', 0)
 
-            self.next_energy_decay = cur_time + (self.config.get('energy_decay_period', 0) * self._l_content.ticks_per_step())
+            self.next_energy_decay = cur_time + (self.config.get('energy_decay_period', 0) * self._l_content.step_duration())
 
         # Health regen
         if cur_time > self.next_health_gen:
             self.health = min(self.health_max, self.health + self.config.get('health_gen', 0))
-            self.next_health_gen = cur_time + (self.config.get('health_gen_period', 0) * self._l_content.ticks_per_step())
+            self.next_health_gen = cur_time + (self.config.get('health_gen_period', 0) * self._l_content.step_duration())
 
         # Stamina regen
         if cur_time > self.next_stamina_gen and self.stamina < self.config.get('stamina_max', 50):
             self.stamina = min(self.stamina_max, self.stamina + self.config.get('stamina_gen', 5))
-            gen_delay = (self.config.get('stamina_gen_period', 0) * self._l_content.ticks_per_step())
+            gen_delay = (self.config.get('stamina_gen_period', 0) * self._l_content.step_duration())
             self.next_stamina_gen = cur_time + gen_delay
 
         if self.health <= 0:
@@ -1129,66 +1132,6 @@ class Tool(Equipment):
 
     def use_by(self, user_object: AnimateObject):
         pass
-
-
-class TagTool(Tool):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.attack_speed = 2
-        self.type = "tool"
-        self.auto_select = True
-        self.controller_id = None
-
-    def set_controller_id(self, cid):
-        self.controller_id = cid
-
-    def get_controller(self) -> StateController:
-        return self._l_content.get_controller_by_id(self.controller_id)
-
-    def add_effect(self, obj):
-        obj.add_effect(Effect("blue", 3, 1, 0))
-
-    def remove_effect(self, obj):
-        obj.remove_effect("blue")
-
-    @invoke_triggers
-    def use_by(self, user_object: AnimateObject):
-        attack_speed = self.attack_speed
-        attack_speed = attack_speed/2
-
-        ticks_in_action = round(self._l_content.ticks_per_step()/attack_speed)
-        direction = Vector2(0, 1).rotate(user_object.angle)
-
-        target_pos = user_object.get_position() + (direction * self._l_content.tile_size)
-        logging.debug(f"ANgle {user_object.angle} direciton: {direction}, target_pos {target_pos}")
-
-        target_coord = gamectx.physics_engine.vec_to_coord(target_pos)
-
-        new_user_obj = None
-        for oid in gamectx.physics_engine.space.get_objs_at(target_coord):
-            obj2: PhysicalObject = gamectx.object_manager.get_by_id(oid)
-            if 'animal' in obj2.get_types():
-                added = obj2.get_inventory().add(self, True)
-                if added:
-                    new_user_obj = obj2
-                    break
-
-        if new_user_obj is not None:
-            self.tag_user(user_object, new_user_obj)
-
-        user_object._action = Action(
-            ACTION_ATTACK,
-            ticks=ticks_in_action,
-            step_size=self._l_content.tile_size/ticks_in_action)
-
-    @invoke_triggers
-    def tag_user(self, source_obj, target_obj):
-        self.add_effect(target_obj)
-        source_obj.get_inventory().remove_selected(True)
-        self.remove_effect(source_obj)
-        target_obj.stunned()
-
 
 class Monster(AnimateObject):
 

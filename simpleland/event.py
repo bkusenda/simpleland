@@ -21,7 +21,7 @@ class Event(Base):
             self.id = gen_id()
         else:
             self.id = id
-        self.creation_time = creation_time or clock.get_tick_counter()
+        self.creation_time = creation_time or clock.get_ticks()
         self.is_client_event = is_client_event
         self.is_server_event = is_server_event
 
@@ -73,7 +73,7 @@ class PeriodicEvent(Event):
 
         super().__init__(id,**kwargs)
         self.execution_step_interval = execution_step_interval
-        self.last_run = None if run_immediately else clock.get_tick_counter()
+        self.last_run = None if run_immediately else clock.get_ticks()
         self.data=data
         self.func = func
 
@@ -81,7 +81,7 @@ class PeriodicEvent(Event):
         return self.id
 
     def run(self):
-        game_step = clock.get_tick_counter()
+        game_step = clock.get_ticks()
         new_events = []
         remove_event = None
         if self.last_run is None or self.last_run + self.execution_step_interval <= game_step:
@@ -101,7 +101,7 @@ class DelayedEvent(Event):
                 **kwargs):
 
         super().__init__(id,is_client_event=is_client_event,**kwargs)
-        self.execution_step = execution_step + clock.get_tick_counter()
+        self.execution_step = execution_step + clock.get_ticks()
         self.data=data
         self.func = func
 
@@ -109,7 +109,7 @@ class DelayedEvent(Event):
         return self.id
 
     def run(self):
-        game_step = clock.get_tick_counter()
+        game_step = clock.get_ticks()
 
         new_events = []
         if  self.execution_step <= game_step:

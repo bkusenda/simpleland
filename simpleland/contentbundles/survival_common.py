@@ -54,7 +54,7 @@ class Effect(Base):
         self.config_id = config_id
         self.ticks = ticks
         self.step_size = step_size
-        self.start_tick = clock.get_tick_counter()
+        self.start_tick = clock.get_ticks()
         self.angle_step_size = angle_step_size
         self.type = type
         self.expired = False
@@ -66,7 +66,7 @@ class Effect(Base):
         if self.expired:
              return True
         else:
-            self.expired = self.continuous is False and ((clock.get_tick_counter() - self.start_tick) > self.ticks )
+            self.expired = self.continuous is False and ((clock.get_ticks() - self.start_tick) > self.ticks )
             return self.expired
 
 class Action(Base):
@@ -82,7 +82,7 @@ class Action(Base):
         self.type = type
         self.ticks = ticks
         self.step_size = step_size
-        self.start_tick = start_tick or clock.get_tick_counter()
+        self.start_tick = start_tick or clock.get_ticks()
         self.continuous = continuous
         self.blocking = blocking
         self.start_position = start_position
@@ -93,7 +93,7 @@ class Action(Base):
         if self.expired:
              return True
         else:
-            self.expired = self.continuous is False and ((clock.get_tick_counter() - self.start_tick) > self.ticks )
+            self.expired = self.continuous is False and ((clock.get_ticks() - self.start_tick) > self.ticks )
             return self.expired
 
 
@@ -111,11 +111,14 @@ class StateController(Base):
         super().__init__(*args, **kwargs)
         self.cid = cid
         self.config = config
+        self.started=False
 
     def join(self,player:Player):
         pass
 
+
     def reset(self):
+        self.started=True
         pass
 
     def update(self):

@@ -317,7 +317,7 @@ if __name__ == "__main__":
                     info = infos[id]
                 
                 action = env.action_spaces[id].sample() #input()
-                logging.info(f"Episode {episode_count} Game Step:{clock.get_time()}, Reward: {reward}, {done}, {info} -> Action {action}")
+                logging.info(f"Episode {episode_count} Game Step:{clock.get_ticks()}, Reward: {reward}, {done}, {info} -> Action {action}")
                 
                 try:
                     action = int(action)

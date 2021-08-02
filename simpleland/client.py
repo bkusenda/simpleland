@@ -307,7 +307,7 @@ class GameClient:
     def load_snapshot(self):
 
         snap1,snap1_timestamp,snap2,snap2_timestamp = self.snapshot_history.get_pair_by_timestamp(
-            clock.get_tick_counter())
+            clock.get_ticks())
         
         snap = snap1
         if snap is None:
@@ -317,7 +317,7 @@ class GameClient:
             gamectx.load_snapshot(snap)
 
             if snap1 is not None and snap2 is not None:
-                fraction = (clock.get_tick_counter()-snap1_timestamp)/(snap2_timestamp-snap1_timestamp)
+                fraction = (clock.get_ticks()-snap1_timestamp)/(snap2_timestamp-snap1_timestamp)
                 for odata in snap2['om']:
                     obj2 = Base.create_from_snapshot(odata)
                     obj1 = gamectx.get_object_by_id(obj2.get_id())

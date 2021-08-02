@@ -65,7 +65,7 @@ class PlayingTag(Behavior):
         if self.following_obj is None:
             self.find_follow_object(obj)
             self.recent_pos = set()
-        elif clock.get_tick_counter() - self.last_freq >self.check_freq:
+        elif clock.get_ticks() - self.last_freq >self.check_freq:
             self.find_follow_object(obj)
 
         orig_direction: Vector2 = self.following_obj.get_position() - obj.get_position()
@@ -156,7 +156,7 @@ class PlayingInfection(Behavior):
         if self.following_obj is None:
             self.find_follow_object(obj)
             self.recent_pos = set()
-        elif clock.get_tick_counter() - self.last_freq >self.check_freq:
+        elif clock.get_ticks() - self.last_freq >self.check_freq:
             self.find_follow_object(obj)
         
         if self.following_obj is None:
