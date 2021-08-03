@@ -170,8 +170,7 @@ class PhysicalObject(GObject):
     def remove_trigger(self, fn_name, id):
         del self._l_triggers.get(fn_name)[id]
 
-    def add_tag(self,tag):
-        print(self.tags)
+    def add_tag(self,tag):        
         self.tags.add(tag)
         if tag in self.tag_effect_map:
             self.add_effect(Effect(self.tag_effect_map.get(tag)))
@@ -914,7 +913,7 @@ class AnimateObject(PhysicalObject):
 
     @invoke_triggers
     def grab(self):
-        ticks_in_action = int(self._l_content.step_duration())
+        
 
         received_obj = None
 
@@ -938,6 +937,13 @@ class AnimateObject(PhysicalObject):
                     break
 
         if received_obj is not None:
+            self.invoke_grab_action(received_obj)
+
+        return True
+
+    def invoke_grab_action(self,received_obj):
+        if received_obj is not None:
+            ticks_in_action = int(self._l_content.step_duration())
             self.get_inventory().add(received_obj)
             self.play_sound("grab")
             self._action = self._action = Action(
@@ -945,7 +951,6 @@ class AnimateObject(PhysicalObject):
                 ticks=ticks_in_action,
                 step_size=self._l_content.tile_size/ticks_in_action)
 
-        return True
 
     @invoke_triggers
     def stunned(self):
@@ -1187,6 +1192,13 @@ class Tree(PhysicalObject):
         for i in range(0, random.randint(0, 3)):
             self.add_fruit()
 
+    def update_position(self,*args,**kwargs):
+        super().update_position(*args,**kwargs)
+        for cid in self.child_object_ids:
+            part = gamectx.object_manager.get_by_id(cid)
+            if part is not None:
+                part.update_position(*args,**kwargs)
+
     def add_tree_trunk(self):
         o = PhysicalObject(visheight=1)
         o.type = "part"
@@ -1220,6 +1232,13 @@ class Tree(PhysicalObject):
         self.top_id = o.get_id()
         self.child_object_ids.add(self.top_id)
 
+    def enable(self):
+        super().enable()
+        for cid in self.child_object_ids:
+            part = gamectx.object_manager.get_by_id(cid)
+            if part is not None:
+                part.enable()
+        
     def get_trunk(self) -> PhysicalObject:
         return gamectx.object_manager.get_by_id(self.trunk_id)
 
@@ -1246,13 +1265,12 @@ class Tree(PhysicalObject):
 
     @invoke_triggers # TODO: (BUG) will call triggers twice
     def receive_grab(self, actor_obj):
-        print("Receiving grab")
         if len(self.__fruit) > 0:
             fruit = self.__fruit.pop()
             self.child_object_ids.discard(fruit.get_id())
-            return fruit
-        else:
-            return None
+            actor_obj.invoke_grab_action(fruit)
+        
+        return False
 
 class Food(PhysicalObject):
 

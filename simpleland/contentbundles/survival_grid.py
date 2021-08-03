@@ -526,6 +526,8 @@ class GameContent(SurvivalContent):
 
     # Function to manually draw to frame
     def post_process_frame(self, player: Player, renderer: Renderer):
+        if renderer.config.disable_hud:
+            return
         pad = round(renderer.resolution[0]/30)
         cpad = round(pad/4)
         if player is not None and player.player_type == 0:

@@ -1,5 +1,6 @@
 
-{ 
+{
+    "default": ["tree_trunk"], 
  "top": "tree_top",
  "trunk": "tree_trunk"
 

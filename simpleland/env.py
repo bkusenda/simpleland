@@ -39,13 +39,14 @@ class SimplelandEnv:
             render_shapes=False,
             player_type = 1,
             include_state_observation = False,
+            remote_client=False,
             content_overrides = {}):
         
         game_def = get_game_def(
             game_id=game_id,
             enable_server=enable_server, 
             port=port,
-            remote_client=False,
+            remote_client=remote_client,
             tick_rate = tick_rate,
             content_overrides = content_overrides)
 

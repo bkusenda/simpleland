@@ -73,7 +73,8 @@ def get_player_def(
         sound_enabled = True,
         show_console = True,
         enable_resize=False,
-        include_state_observation = False) -> PlayerDefinition:
+        include_state_observation = False,
+        disable_hud = False) -> PlayerDefinition:
     player_def = PlayerDefinition()
 
     player_def.client_config.player_type = player_type
@@ -96,6 +97,7 @@ def get_player_def(
     player_def.renderer_config.sound_enabled =sound_enabled
     player_def.renderer_config.show_console =show_console
     player_def.renderer_config.enable_resize = enable_resize
+    player_def.renderer_config.disable_hud = disable_hud
     return player_def
 
 def get_arguments(override_args=None):
@@ -120,6 +122,7 @@ def get_arguments(override_args=None):
     parser.add_argument("--disable_sound", action="store_true", help="disable_sound")
     parser.add_argument("--draw_grid", action="store_true", help="draw_grid")
     parser.add_argument("--show_console", action="store_true", help="Show on screen info")
+    parser.add_argument("--disable_hud", action="store_true", help="Disable all screen printing")
     parser.add_argument("--enable_resize", action="store_true", help="Enable Screen Resize")
 
     # used for both client and server
@@ -189,7 +192,9 @@ def run(args):
         view_type = args.view_type,
         sound_enabled= not args.disable_sound,
         show_console= args.show_console,
-        enable_resize = args.enable_resize
+        enable_resize = args.enable_resize,
+        disable_hud = args.disable_hud
+
     )
 
     content: Content = load_game_content(game_def)
