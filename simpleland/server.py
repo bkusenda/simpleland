@@ -100,6 +100,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
         client.last_snapshot_time_ms = snapshot_timestamp
 
 
+# TODO: Have a thread snapshot at regular intervals
 class GameUDPServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
 
     def __init__(self, conn, config, handler = UDPHandler):

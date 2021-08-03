@@ -11,14 +11,11 @@
     "energy_decay_period": 1,
     "energy_decay": 1,
     "low_energy_health_penalty": 1,
-    "strength": 1,
+    "attack_strength": 20,
     "inventory_size": 1,
     "walk_speed": 1.25,
     "walk_stamina_usage": 2,
     "attack_speed": 0.75,
     "vision_radius": 4,
-    "start_inventory": {},
-    "craft_items": [
-        "wall1", "human1"
-    ]
+    "start_inventory": {}
 }

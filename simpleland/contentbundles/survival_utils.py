@@ -49,6 +49,7 @@ def int_map_to_onehot_map(name_int_map,max_id=None):
     empty_vec = np.zeros(max_id)
     vec_map = defaultdict(lambda:empty_vec)
     vec_map[None] = empty_vec
+    vec_map[""] = empty_vec
     for i, (name, idx) in enumerate(name_int_map.items()):
         v = np.zeros(max_id)
         v[idx] = 1
@@ -82,7 +83,9 @@ def ints_to_multi_hot(ints,max_id):
 #         angle = 0
 #     return angle
 
-def normalized_direction(orig_direction):
+def normalized_direction(orig_direction:Vector2):
+    if orig_direction.length() ==0:
+        return orig_direction
     direction = orig_direction.normalize()
     updated_x = 0
     updated_y = 0

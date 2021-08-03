@@ -108,7 +108,7 @@ def get_arguments(override_args=None):
     parser.add_argument("--enable_client",  action="store_true", help="Run Client")
     parser.add_argument("--remote_client",   action="store_true", help="client uses server")
 
-    parser.add_argument("--resolution", default="1280x720", help="resolution eg, [f,640x480]")
+    parser.add_argument("--resolution", default="800x600", help="resolution eg, [f,640x480]")
     parser.add_argument("--hostname", default="localhost", help="hostname or ip, default is localhost")
     parser.add_argument("--client_id", default=gen_id(), help="user id, default is random")
     parser.add_argument("--render_shapes", action='store_true', help="render actual shapes")
@@ -129,7 +129,7 @@ def get_arguments(override_args=None):
     parser.add_argument("--enable_profiler", action="store_true", help="Enable Performance profiler")
     parser.add_argument("--tick_rate", default=60, type=int, help="tick_rate")
 
-    parser.add_argument("--game_id", default="space_grid1", help="id of game")
+    parser.add_argument("--game_id", default="survival_grid", help="id of game")
     parser.add_argument("--content_overrides", default="{}", type=str,help="JSON string containing content updates. eg --content_overrides='{\"player_start_energy\":35}'")
     parser.add_argument("--log_level",default="info",help=", ".join(list(LOG_LEVELS.keys())),type=str)
     return  parser.parse_args(override_args)

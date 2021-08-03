@@ -114,7 +114,7 @@ class PhysicalObject(GObject):
         self.collision_type = self.config.get('collision_type', 1)
         self.height = self.config.get('height', 1)
         self.tags = set(self.config.get('tags', []))
-
+        self.tag_effect_map = self._l_content.config.get("tag_effect_map",{})
         self.collectable = self.config.get('collectable', False)
         self.count_max = self.config.get('count_max', 1)
         self.count = self.config.get('count', 1)
@@ -171,9 +171,15 @@ class PhysicalObject(GObject):
         del self._l_triggers.get(fn_name)[id]
 
     def add_tag(self,tag):
+        print(self.tags)
         self.tags.add(tag)
+        if tag in self.tag_effect_map:
+            self.add_effect(Effect(self.tag_effect_map.get(tag)))
+        
     def remove_tag(self,tag):
         self.tags.discard(tag)
+        if tag in self.tag_effect_map:
+            self.remove_effect(self.tag_effect_map.get(tag))
 
     def add_effect(self, effect: Effect):
         self._effects[effect.config_id] = effect
@@ -645,7 +651,7 @@ class AnimateObject(PhysicalObject):
         self.velocity_multiplier = 1
         self.walk_speed = 1/3
 
-        self.attack_strength = 1
+        self.attack_strength = self.config.get('attack_strength', 10)
         self.energy_max = self.config.get('energy_max', 100)
         self.stamina_max = self.config.get('stamina_max', 100)
         self.energy = 0
@@ -707,9 +713,9 @@ class AnimateObject(PhysicalObject):
             self.drop()
         elif 18 in keydown:
             self.use()
-        elif 26 in keydown:
-            self.select_item()
         elif 3 in keydown:
+            self.select_item()
+        elif 26 in keydown:
             self.select_item(prev=True)
         elif 2 in keydown:
             self.select_craft_type()
@@ -779,6 +785,7 @@ class AnimateObject(PhysicalObject):
     def get_object_observation(self, obj: PhysicalObject):
 
         obj_vec = self._l_content.obj_vec_map.get(obj.config_id)
+
         group_vec = self._l_content.create_tags_vec(obj.tags)  # TODO: memoize
         return np.concatenate([obj_vec, group_vec])
 
@@ -852,11 +859,8 @@ class AnimateObject(PhysicalObject):
         self.energy += food_obj.energy
         self.energy = min(self.energy,self.energy_max)
         self.play_sound("eat")
-        ticks_in_action = self._l_content.step_duration()/0.5
-        
-
-        # self._action = Action(ACTION_EAT, ticks=ticks_in_action, step_size=self._l_content.tile_size/ticks_in_action)
-        self.queue_action(Action(ACTION_EAT, ticks=ticks_in_action, step_size=self._l_content.tile_size/ticks_in_action))
+        # ticks_in_action = self._l_content.step_duration()/0.5
+        self.queue_action(Action(ACTION_EAT, ticks=0, step_size=0))
 
     @invoke_triggers
     def walk(self, direction, angle_update):
@@ -1053,7 +1057,7 @@ class AnimateObject(PhysicalObject):
             lives_used += 1
             p.set_data_value("lives_used", lives_used)
             p.set_data_value("allow_input", False)
-            self._l_content.message_player(p,"You Died!",10)
+            self._l_content.message_player(p,"You Died!",20)
             delay = 10*self._l_content.step_duration()
 
             def event_fn(event: DelayedEvent, data):
@@ -1231,7 +1235,8 @@ class Tree(PhysicalObject):
             gamectx.remove_object(self)
             obj = self._l_content.create_object_from_config_id('wood1')
             obj.spawn(self.position)
-        elif self.health < 20:
+        
+        if self.health < 30:
             gamectx.remove_object_by_id(self.top_id)
             self.child_object_ids.discard(self.top_id)
             for fruit in self.__fruit:

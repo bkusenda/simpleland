@@ -52,7 +52,7 @@
 
                 "obj": "rock1"},
             "static_layers": [
-                "map_9x9_vwall.txt"
+                "map_layer_1.txt"
             ],
             "index": {
                 "s0": {
@@ -111,6 +111,9 @@
         "blue":{
         }
     },
+    "tag_effect_map":{
+        "infected":"blue"
+    },
     "objects": {
         "human1": {
             "class": "Human",
@@ -118,7 +121,10 @@
             "config": {
                 "disabled_actions":[],
                 "show_info_bar":true,
-                "start_inventory":{"wall1":4}
+                "start_inventory":{"wall1":4},
+                "craft_items": [
+                    "wall1", "human1", "tree1"
+                ]
             }
         },
         "monster1": {
@@ -143,7 +149,21 @@
             "class": "Animal"
         },
         "rock1": {
-            "class": "Rock"
+            "class": "Rock",
+            "config":{
+                "collectable": true,
+                "pushable": false,
+                "count_max": 10,
+                "permanent": true,
+                "health":100,
+                "remove_on_destroy":true,
+                "collision_type":1,
+                "count":1,
+                "default_action": "idle"
+            },
+            "model": { 
+                "default": ["rock"]
+               }
         },
         "perm_stone1": {
             "class": "Rock"

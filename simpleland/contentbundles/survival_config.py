@@ -27,8 +27,8 @@ def read_game_config(sub_dir, game_config):
             obj_data['config'] = read_json_file(os.path.join(sub_dir,obj_data.get('config',f"{id}_config.json")))
     for id, obj_data in game_config['objects'].items():
         obj_data['config'] = merged_dict(obj_data.get('config',{}),read_json_file(os.path.join(sub_dir,obj_data.get('config_file',f"{id}_config.json"))))
-        obj_data['sounds'] = read_json_file(os.path.join(sub_dir,obj_data.get('sounds_file',f"{id}_sounds.json")))
-        obj_data['model'] = read_json_file(os.path.join(sub_dir,obj_data.get('model_file',f"{id}_model.json")))
+        obj_data['sounds'] = merged_dict(obj_data.get('sounds',{}),read_json_file(os.path.join(sub_dir,obj_data.get('sounds_file',f"{id}_sounds.json"))))
+        obj_data['model'] = merged_dict(obj_data.get('model',{}),read_json_file(os.path.join(sub_dir,obj_data.get('model_file',f"{id}_model.json"))))
     for id, data in game_config['effects'].items():
         data['config'] = read_json_file(os.path.join(sub_dir,data.get('config_file',f"{id}_config.json")))
         data['sounds'] = read_json_file(os.path.join(sub_dir,data.get('sounds_file',f"{id}_sounds.json")))

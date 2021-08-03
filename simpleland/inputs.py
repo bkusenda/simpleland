@@ -16,7 +16,7 @@ def get_default_key_map():
     key_map[pygame.K_e] = 5
     key_map[pygame.K_f] = 6
     key_map[pygame.K_g] = 7
-    key_map[pygame.K_h] = 8
+    key_map[pygame.K_h] = 99
     key_map[pygame.K_i] = 9
     key_map[pygame.K_j] = 10
     key_map[pygame.K_k] = 11
@@ -99,6 +99,7 @@ def get_input_events(player:Player) -> List[Event]:
                     player.set_data_value("CONSOLE_RUN",True)
                     events.append(AdminCommandEvent(value=text,player_id=player_id))
                     player.set_data_value("CONSOLE_TEXT","")
+                    player.set_data_value("INPUT_MODE","PLAY")
                     break
                 elif event.key == pygame.K_BACKSPACE:
                     player.set_data_value("CONSOLE_TEXT",text[:-1]) 

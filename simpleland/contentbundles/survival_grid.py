@@ -36,7 +36,7 @@ from .survival_assets import load_asset_bundle
 from .survival_map import GameMap
 from .survival_controllers import FoodCollectController,ObjectCollisionController, PlayerSpawnController, TagController,InfectionController
 from .survival_objects import *
-from .survival_utils import int_map_to_onehot_map,ints_to_multi_hot
+from .survival_utils import int_map_to_onehot_map,ints_to_multi_hot, vec_to_coord
 import time
 
 ############################
@@ -153,6 +153,17 @@ class GameContent(SurvivalContent):
                 point = coord_to_vec(coord)
         return point
 
+    def get_near_location(self,point):
+        coord = vec_to_coord(point)
+
+        neighs = self.gamemap.get_neigh_coords(coord)
+        point = None
+        for neigh in neighs:
+            objs = gamectx.physics_engine.space.get_objs_at(neigh)
+            if len(objs) == 0:
+                point = coord_to_vec(neigh)
+        return point
+
     # Factory Methods
     def create_behavior(self,name,*args,**kwargs):
         return self.bevavior_class_map[name](*args,**kwargs)
@@ -222,7 +233,6 @@ class GameContent(SurvivalContent):
 
         gamectx.remove_all_events()
         self.reset_controllers()
-
 
     #####################
     # RL AGENT METHODS
@@ -300,12 +310,84 @@ class GameContent(SurvivalContent):
         if old_scoord != new_scoord:
             self.gamemap.load_sectors_near_coord(new_scoord)
 
-
     def process_admin_command_event(self,admin_event:AdminCommandEvent):
-        self.log_console(f"RUNNING COMMAND: {admin_event.value}")
+        value = admin_event.value
+        error_message = None
+        if value == "reset":
+            self.request_reset()
+            self.log_console(f"RUNNING COMMAND: {value}")
+        elif value.startswith("input_mode"):
+            args = value.split(" ")
+            if len(args) >1:
+                input_mode_name = args[1]
+                if input_mode_name.lower() in set("play","console","admin"):
+                    p = gamectx.player_manager.get_player(admin_event.player_id)
+                    p.set_data_value("INPUT_MODE", input_mode_name.upper())
+                else:
+                    error_message=f"invalid input mode {input_mode_name}"
+            else:
+                error_message="missing argument"
+
+        elif value.startswith("spawn"):
+            command_parts = value.split(" ")
+            p = gamectx.player_manager.get_player(admin_event.player_id)
+            o = gamectx.object_manager.get_by_id(p.get_object_id())
+            pos = o.get_view_position()
+            print(pos)
+            spawn_pos = self.get_near_location(pos)
+            if spawn_pos is not None:
+                config_id = command_parts[1]
+                obj = self.create_object_from_config_id(config_id)
+                obj.spawn(spawn_pos)
+        elif value.startswith("controller"):
+            command_parts = value.split(" ")
+            action =command_parts[1]
+            controller =command_parts[1]
+            if action == "add":
+                pass
+            p = gamectx.player_manager.get_player(admin_event.player_id)
+            o = gamectx.object_manager.get_by_id(p.get_object_id())
+            pos = o.get_view_position()
+            print(pos)
+            spawn_pos = self.get_near_location(pos)
+            if spawn_pos is not None:
+                config_id = command_parts[1]
+                obj = self.create_object_from_config_id(config_id)
+                obj.spawn(spawn_pos)
+        else:
+            error_message = "Invalid or unknown"
+        
+        self.log_console(f"Command failed :\"{value}\"  Message:{error_message}")
+
         events = []
         return events
-                
+
+    def camera_update(self,player:Player,input_event:InputEvent):
+        keydown = input_event.input_data['keydown']
+        events = []
+        direction = Vector2(0,0)
+        if 23 in keydown:
+            # W UP
+            direction = Vector2(0, -1)
+            angle_update = 180
+        if 19 in keydown:
+            # S DOWN
+            direction = Vector2(0, 1)
+            angle_update = 0
+        if 4 in keydown:
+            # D RIGHT
+            direction = Vector2(1, 0)
+            angle_update = 270
+        if 1 in keydown:
+            # A LEFT
+            direction = Vector2(-1, 0)
+            angle_update = 90
+        
+        camera = player.get_camera()
+        camera.position_offset -= direction
+
+        return events
+
 
     def process_input_event(self, input_event:InputEvent):
         events= []
@@ -320,11 +402,6 @@ class GameContent(SurvivalContent):
 
         # TODO: only check for admin client events if player is human
         mode = player.get_data_value("INPUT_MODE","PLAY")
-        
-        
-        if mode == "CONSOLE":
-            return events
-
         # Client Events
         if 27 in keydown:
             logging.info("QUITTING")
@@ -333,13 +410,20 @@ class GameContent(SurvivalContent):
             else:
                 player.set_data_value("INPUT_MODE","PLAY")
             return events
-        if 31 in keydown:
-            logging.info("Zoom Out")
+        # ZOOM
+        if 32 in keydown:
             events.append(ViewEvent(player.get_id(), 50, Vector2(0,0)))
             
-        if 32 in keydown:
-            logging.info("Zoom in")
+        if 31 in keydown:
             events.append(ViewEvent(player.get_id(), -50, Vector2(0,0)))
+        
+
+
+        if mode == "CONSOLE":
+            return events
+        elif mode == "ADMIN":
+            events.extend(self.camera_update(player,input_event))
+            return events
 
         # minus        
         if 80 in keydown:
@@ -352,8 +436,8 @@ class GameContent(SurvivalContent):
             self._step_duration = None
 
         if 13 in keydown:
-            logging.info("MAP")
-            player.set_data_value("INPUT_MODE","MAP")
+            logging.info("ADMIN")
+            player.set_data_value("INPUT_MODE","ADMIN")
 
         if 99 in keydown:
             logging.info("CONSOLE")
@@ -381,7 +465,8 @@ class GameContent(SurvivalContent):
             obj.assign_input_event(input_event)     
 
         return events
-    
+
+    # Messaging/Loggin Functions
     def message_player(self,p:Player,message, duration=0):
 
         delay = duration*self.step_duration()
@@ -396,6 +481,7 @@ class GameContent(SurvivalContent):
                 log.append(f"{clock.get_ticks()}: {message}")
                 p.set_data_value("log",log)
 
+    # Main UPDATE Function
     def update(self):
         objs = list(gamectx.object_manager.get_objects().values())
         for o in objs:
@@ -438,7 +524,10 @@ class GameContent(SurvivalContent):
                     logging.info(f"{k}:".ljust(10)+ f"at:{v[1]}".rjust(15) +f"v:{v[0]}".rjust(15))
                 self.console_report_last = time.time()
 
+    # Function to manually draw to frame
     def post_process_frame(self, player: Player, renderer: Renderer):
+        pad = round(renderer.resolution[0]/30)
+        cpad = round(pad/4)
         if player is not None and player.player_type == 0:
             input_mode = player.get_data_value("INPUT_MODE", "")
             
@@ -449,6 +538,7 @@ class GameContent(SurvivalContent):
 
             obj:AnimateObject = gamectx.object_manager.get_by_id(player.get_object_id())
             obj_health = 0
+            show_console = input_mode == "CONSOLE" or renderer.config.show_console
             #TODO: instead render as part of hud via infobox
             if obj is not None:
                 obj_health = obj.health
@@ -481,7 +571,11 @@ class GameContent(SurvivalContent):
             
             
 
-            if renderer.config.show_console:
+            if show_console:
+
+                lines.append("FPS:{}".format(renderer.fps_clock.get_fps()))
+                if renderer.log_info is not None:
+                    lines.append(renderer.log_info)
                 log = player.get_data_value("log",[])
                 if len(log) > 5:
                     log = log[-5:]
@@ -491,7 +585,27 @@ class GameContent(SurvivalContent):
                 lines.extend(log)
                 if input_mode == "CONSOLE":
                     lines.append("$> {}".format(player.get_data_value("CONSOLE_TEXT", "_")))
-                renderer.render_to_console(lines, x=5, y=5)
+                    lines.append("")
+                    lines.append("--------- HELP ---------")
+                    lines.append(" ")
+                    lines.append("  CONTROLS:")
+                    lines.append("    console/show help   : ` or h (ESC to return to PLAY MODE")
+                    lines.append("    camera mode         : m (ESC to return to PLAY MODE")
+                    lines.append("    move                : w,s,d,a or UP,DOWN,LEFT,RIGHT")
+                    lines.append("    push                : g")
+                    lines.append("    grab                : e")
+                    lines.append("    item  - menu select : z,c")
+                    lines.append("    item  - use         : r")
+                    lines.append("    craft - menu select : v,b")
+                    lines.append("    craft - create      : q")
+                    lines.append("    game step duration   : \"-\" (faster)/\"=\" (slower) ")
+                    lines.append("")
+                    lines.append("  CONSOLE COMMANDS:")
+                    lines.append("    reset             : Reset Game")
+                    lines.append("    spawn <object_id> : Spawn Object")
+                    # lines.append("    controller disable <controler_id>  : ")
+                    
+            renderer.render_to_console(lines, x=cpad, y=cpad)
 
             # Show Messages
             message_output=[]
@@ -504,5 +618,5 @@ class GameContent(SurvivalContent):
             
             if len(remaining_messages)>0:
                 player.set_data_value("messages",remaining_messages[-3:])
-                renderer.render_to_console(message_output, x=50, y=50, fsize=50)
+                renderer.render_to_console(message_output, x=pad, y=round(renderer.resolution[1]/2), fsize=50)
             

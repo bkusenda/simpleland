@@ -14,6 +14,7 @@ from .asset_bundle import AssetBundle
 from .player import Player
 from . import gamectx
 import math
+from math import ceil
 import time
 import pkg_resources
 import logging
@@ -48,7 +49,7 @@ class Renderer:
         # These will be source object properties eventually
         self.view_height = 600000.0
         self.view_width = self.view_height * self.aspect_ratio
-        self.min_distance = self.config.tile_size*4
+        self.min_distance = self.config.tile_size*5
         self.max_distance = self.config.tile_size*100
 
         self.images = {}
@@ -116,7 +117,7 @@ class Renderer:
             if img_orig is None:
                 return None
             body_w, body_h = img_orig.get_size()
-            image_size = int(body_w*scale_x), int(body_h*scale_y)
+            image_size = ceil(body_w*scale_x), ceil(body_h*scale_y)
             if image_size[0] > 500:
                 image_size = 500, 500
             img = pygame.transform.scale(img_orig, image_size)
@@ -147,10 +148,10 @@ class Renderer:
 
         self.initialized = True
 
-    def render_to_console(self, lines, x, y, fsize=18, spacing=12, color=(255, 255, 255)):
+    def render_to_console(self, lines, x, y, fsize=14, spacing=12, color=(255, 255, 255)):
         font = self.font.get(fsize)
         if font is None:
-            font = pygame.font.SysFont(None, fsize)
+            font = pygame.font.SysFont("consolas", fsize)
             self.font[fsize] = font
         for i, l in enumerate(lines):
             self._display_surf.blit(font.render(l, True, color), (x, y + spacing * i))
@@ -517,12 +518,6 @@ class Renderer:
                 if not obj.enabled or not obj.is_visible():
                     continue
                 self._draw_object(center, obj, angle, screen_factor, screen_view_center, obj.shape_color)
-
-        if self.config.show_console:
-            lines = ["FPS2:{}".format(self.fps_clock.get_fps())]
-            if self.log_info is not None:
-                lines.append(self.log_info)
-            self.render_to_console(lines, x=5, y=int(self.width / 2))
 
         if self.debug:
             pygame.draw.rect(self._display_surf,
