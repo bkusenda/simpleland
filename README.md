@@ -1,1 +1,1 @@
-Moved to http://github.com/pistarlab/simpleland
+Moved to http://github.com/pistarlab/landia
