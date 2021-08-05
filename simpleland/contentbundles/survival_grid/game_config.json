@@ -10,7 +10,7 @@
             "config_id": "human1"
         }
     },
-    "active_controllers":["pspawn","foodcollect","objcollision","infect1"],
+    "active_controllers":["pspawn","foodcollect","objcollision"],
     "controllers":{
         "pspawn":{
             "class":"PlayerSpawnController",

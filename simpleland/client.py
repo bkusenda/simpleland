@@ -133,7 +133,7 @@ class ClientConnector:
         self.last_latency_ms = None
         self.last_latency_ticks = None
         self.request_counter = 0
-        self.ticks_per_second = 60
+        self.ticks_per_second = 20
 
         self.connection_clock = StepClock(self.ticks_per_second)
         self.tick_counter = TickPerSecCounter(2)

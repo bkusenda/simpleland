@@ -55,10 +55,12 @@ class SimplelandEnv:
         gamectx.initialize(
             game_def = game_def,
             content=self.content)
+        logging.info(game_def)
 
         # Build Clients
         self.agent_map = agent_map
         self.agent_clients = {}
+        self.remote_client = remote_client
 
         # PISTARLAB REQUIREMENTS
         self.players= list(self.agent_map.keys())
@@ -71,7 +73,7 @@ class SimplelandEnv:
             player_def = get_player_def(
                 enable_client=True,
                 client_id = agent_id,
-                remote_client=False,
+                remote_client=remote_client,
                 hostname=hostname,
                 port = port,
                 resolution = resolution,
@@ -88,6 +90,7 @@ class SimplelandEnv:
             # player_def.renderer_config.sdl_video_driver = 'dummy'
             player_def.renderer_config.sound_enabled = False
             player_def.renderer_config.show_console = False
+
             
 
             renderer = Renderer(
@@ -95,6 +98,7 @@ class SimplelandEnv:
                 asset_bundle=self.content.get_asset_bundle()
                 )
 
+            print(player_def.client_config)
             client = GameClient(
                     renderer=renderer,
                     config=player_def.client_config)
@@ -109,7 +113,6 @@ class SimplelandEnv:
             self.observation_spaces = {agent_id:self.content.get_observation_space() for agent_id in self.agent_clients.keys()}
         else: 
             self.observation_spaces = {agent_id:spaces.Box(low=0, high=255, shape=(resolution[0],resolution[1], 3)) for agent_id in self.agent_clients.keys()}
-        
         
         self.step_counter = 0
         
@@ -130,6 +133,7 @@ class SimplelandEnv:
             server_thread.daemon = True
             server_thread.start()
             logging.info("Server started at {} port {}".format(game_def.server_config.hostname, game_def.server_config.port))
+        
 
     def step(self, actions):
 
@@ -150,7 +154,8 @@ class SimplelandEnv:
                         'focused': ""
                         })
                 client.player.add_event(event)
-                client.run_step()
+            client.run_step()
+                
             
         gamectx.run_step()
 
@@ -202,7 +207,8 @@ class SimplelandEnv:
             return client.get_rgb_array()
 
     def reset(self) -> Dict[str,Any]:
-        self.content.reset()
+        if not self.remote_client:
+            self.content.reset()
         self.obs, _, _, _ = self.step({})
         return self.obs
 
@@ -260,6 +266,8 @@ if __name__ == "__main__":
     parser.add_argument("--time_profile", action="store_true")
     parser.add_argument("--agent_count", default=1, type=int, help="Number test of agents")
     parser.add_argument("--verbose",action="store_true")
+    parser.add_argument("--remote_client",action="store_true")
+    parser.add_argument("--tick_rate", default=0, type=int)
     parser.add_argument("--log_level",default="info",help=", ".join(list(LOG_LEVELS.keys())),type=str)
 
     args =  parser.parse_args()
@@ -276,7 +284,13 @@ if __name__ == "__main__":
     if mem_profile:
         import tracemalloc
         tracemalloc.start()
-    env = SimplelandEnv(agent_map=agent_map,dry_run=False)
+
+    env = SimplelandEnv(
+        agent_map=agent_map,
+        remote_client=args.remote_client,
+        dry_run=False,
+        tick_rate=args.tick_rate)
+
     done_agents = set()
     start_time = time.time()
     max_steps = args.max_steps
@@ -295,8 +309,10 @@ if __name__ == "__main__":
     logging.info("ACTION SPACES")
     for name, space in env.action_spaces.items():
         logging.info(f"\t{name}: {space}")
+    # for cid,clients in env.agent_clients.items():
 
-    for i in range(0,max_steps):
+    i = 0
+    while i < max_steps or max_steps ==0:
         if dones.get('__all__'):
             obs = env.reset()
             rewards, dones, infos = {}, {'__all__':False},{}
@@ -320,6 +336,7 @@ if __name__ == "__main__":
                 action = env.action_spaces[id].sample() #input()
                 logging.info(f"Episode {episode_count} Game Step:{clock.get_ticks()}, Reward: {reward}, {done}, {info} -> Action {action}")
                 
+                
                 try:
                     action = int(action)
                 except:
@@ -332,6 +349,7 @@ if __name__ == "__main__":
         if mem_profile and (env.step_counter % 1000 == 0):
             current, peak = tracemalloc.get_traced_memory()
             logging.info(f"Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
+        i+=1
 
     if mem_profile:
         current, peak = tracemalloc.get_traced_memory()

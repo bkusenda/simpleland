@@ -296,7 +296,7 @@ class Renderer:
 
     def _draw_object(self, center, obj: GObject, screen_angle, screen_factor, screen_view_center, color=None):
 
-        renderables = obj.get_renderables(screen_angle)
+        renderables = obj.get_renderables(screen_angle,exclude_info=self.config.exclude_info_box)
         for renderable in renderables:
             if renderable.get("type") is "text":
                 fsize = round(3 * screen_factor[0])
@@ -407,6 +407,7 @@ class Renderer:
         return ((bv - bs/2) >= (cv - cs/2)) or ((bv+bs/2) <= (cv + cs/2))
 
     def get_background_image(self, center, screen_factor):
+        #TODO: occationally shows black areas when moving right or down, but only during movement
 
         # Align with tile coords
         center = Vector2(self.ta(center.x), self.ta(center.y))

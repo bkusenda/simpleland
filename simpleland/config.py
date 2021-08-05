@@ -27,6 +27,7 @@ class RendererConfig(Base):
         self.view_type = 0
         self.debug_render_bodies = False
         self.enable_resize = False
+        self.exclude_info_box = True
 
 def __repr__(self) -> str:
     return pprint.pformat(self.__dict__)

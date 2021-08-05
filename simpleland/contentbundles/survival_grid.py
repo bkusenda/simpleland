@@ -294,6 +294,7 @@ class GameContent(SurvivalContent):
                 is_human = is_human)
             gamectx.add_player(player)
             for controller_id in self.active_controllers:
+                logging.info(f"Adding player to {controller_id}")
                 self.get_controller_by_id(controller_id).join(player)
             # self.get_controller_by_id("pspawn").spawn_player(player,reset=True)
         return player
@@ -416,8 +417,6 @@ class GameContent(SurvivalContent):
             
         if 31 in keydown:
             events.append(ViewEvent(player.get_id(), -50, Vector2(0,0)))
-        
-
 
         if mode == "CONSOLE":
             return events
@@ -567,15 +566,22 @@ class GameContent(SurvivalContent):
                 # Health
                 tlheight = tlheight - bar_height - bar_padding
                 bar_width = round(obj.health/obj.health_max * bar_width_max)
-                renderer.draw_rectangle(bar_padding,tlheight, bar_width,bar_height, color=(200,0,0))
+                renderer.draw_rectangle(
+                    bar_padding,
+                    tlheight, 
+                    bar_width,
+                    bar_height, 
+                    color=(200,0,0))
 
-                renderer.draw_rectangle(bar_width_max + bar_padding,tlheight, bar_padding/2,renderer.resolution[1] - tlheight - bar_padding, color=(200,200,200))
+                renderer.draw_rectangle(
+                    bar_width_max + bar_padding,
+                    tlheight, 
+                    bar_padding/2,
+                    renderer.resolution[1] - tlheight - bar_padding, 
+                    color=(200,200,200))
             
-            
-
             if show_console:
-
-                lines.append("FPS:{}".format(renderer.fps_clock.get_fps()))
+                lines.append("FPS:{}".format(round(renderer.fps_clock.get_fps())))
                 if renderer.log_info is not None:
                     lines.append(renderer.log_info)
                 log = player.get_data_value("log",[])

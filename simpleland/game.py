@@ -199,9 +199,11 @@ class GameContext:
             obj.set_last_change(clock.get_ticks())
             self.physics_engine.remove_object(obj)
             self.object_manager.remove_by_id(obj.get_id())
+            # print(f"****Object     found,     deleting {clock.get_ticks()} {e.object_id}")
         else:
             # TODO: Caused by multiple actions on same tick issue            
-            print(f"****Object not found, not deleting {clock.get_ticks()} {e.object_id}")
+            pass
+            # print(f"****Object not found, not deleting {clock.get_ticks()} {e.object_id}")
         
         return True
 
@@ -349,8 +351,6 @@ class GameContext:
                 print(f"Waiting for input: t={clock.get_ticks()}")
 
                 self.wait_for_input()
-
-               
 
 
 
